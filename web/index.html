@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Study — AWS資格対策</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☁️</text></svg>">
+</head>
+<body>
+  <header class="topbar">
+    <button class="brand" id="btn-home" title="ホームへ">☁️ <span>AWS Study</span></button>
+    <div class="topbar-right">
+      <span class="streak" id="streak-badge" hidden>🔥 <span id="streak-count">0</span></span>
+    </div>
+  </header>
+
+  <main id="app">
+    <!-- ホーム画面 -->
+    <section id="view-home" class="view">
+      <div class="hero">
+        <h1>AWS 資格対策クイズ</h1>
+        <p class="sub">SAA レベル 30 問 / 6 カテゴリ。解説を読んで理解を積み上げよう。</p>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat-tile">
+          <div class="stat-num" id="stat-answered">0</div>
+          <div class="stat-label">解答済み</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-num" id="stat-accuracy">–</div>
+          <div class="stat-label">正答率</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-num" id="stat-mastered">0</div>
+          <div class="stat-label">習得済み</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-num" id="stat-weak">0</div>
+          <div class="stat-label">要復習</div>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button class="action primary" id="btn-random">▶ ランダム10問</button>
+        <button class="action" id="btn-review">🔁 弱点復習 <span class="pill" id="review-count">0</span></button>
+        <button class="action" id="btn-flash">🃏 フラッシュカード</button>
+        <button class="action danger-ghost" id="btn-reset">進捗リセット</button>
+      </div>
+
+      <h2 class="section-title">カテゴリ別に学ぶ</h2>
+      <div class="category-grid" id="category-grid"></div>
+    </section>
+
+    <!-- クイズ画面 -->
+    <section id="view-quiz" class="view" hidden>
+      <div class="quiz-head">
+        <div class="quiz-meta">
+          <span class="badge" id="quiz-category"></span>
+          <span class="quiz-progress-text" id="quiz-progress-text"></span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="quiz-progress-bar"></div></div>
+      </div>
+      <div class="question-card">
+        <p class="question-text" id="question-text"></p>
+        <div class="choices" id="choices"></div>
+      </div>
+      <div class="explanation" id="explanation" hidden>
+        <div class="explanation-head" id="explanation-head"></div>
+        <p id="explanation-text"></p>
+      </div>
+      <div class="quiz-foot">
+        <button class="ghost" id="btn-quit">中断してホームへ</button>
+        <button class="action primary" id="btn-next" hidden>次の問題 ⏎</button>
+      </div>
+      <p class="hint">キー操作: <kbd>1</kbd>–<kbd>4</kbd> で解答、<kbd>Enter</kbd> で次へ</p>
+    </section>
+
+    <!-- 結果画面 -->
+    <section id="view-result" class="view" hidden>
+      <div class="result-card">
+        <div class="result-emoji" id="result-emoji"></div>
+        <h2 id="result-title"></h2>
+        <p class="result-score"><span id="result-correct"></span> / <span id="result-total"></span> 問正解</p>
+        <p class="result-msg" id="result-msg"></p>
+        <div class="result-actions">
+          <button class="action" id="btn-retry-wrong" hidden>間違えた問題をやり直す</button>
+          <button class="action primary" id="btn-result-home">ホームへ戻る</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- フラッシュカード画面 -->
+    <section id="view-flash" class="view" hidden>
+      <div class="quiz-head">
+        <div class="quiz-meta">
+          <span class="badge">フラッシュカード</span>
+          <span class="quiz-progress-text" id="flash-progress-text"></span>
+        </div>
+      </div>
+      <div class="flashcard" id="flashcard" tabindex="0">
+        <div class="flashcard-inner" id="flashcard-inner">
+          <div class="flashcard-face flashcard-front">
+            <span class="flash-label">問題</span>
+            <p id="flash-front-text"></p>
+            <span class="flash-tap">タップ / Space で答えを見る</span>
+          </div>
+          <div class="flashcard-face flashcard-back">
+            <span class="flash-label">答えと解説</span>
+            <p class="flash-answer" id="flash-answer-text"></p>
+            <p class="flash-exp" id="flash-exp-text"></p>
+          </div>
+        </div>
+      </div>
+      <div class="quiz-foot flash-foot">
+        <button class="ghost" id="btn-flash-quit">終了</button>
+        <div>
+          <button class="action" id="btn-flash-prev">← 前へ</button>
+          <button class="action primary" id="btn-flash-next">次へ →</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">ゼロコスト静的アプリ — データはこの端末の localStorage にのみ保存されます</footer>
+
+  <script src="data/questions.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
