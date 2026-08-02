@@ -70,3 +70,16 @@
 - 図解: ホームの「図解つき問題」から出題し、解説の下に図が出ることを Web・iOS 両方で確認。
 - iOS: Xcode で `ios/AWSStudy.swiftpm` を開きシミュレータでビルド確認(Mac 上で可能な場合)。
 - 進捗データのスキーマ(`{attempts, correct, wrongStreak}`)を変更する場合は、Web と iOS の両方を同時に変更し、ストレージキーのバージョン(`awsstudy.progress.v1`)を上げる。
+
+## 7. 図解作成ルーティン(2026-08-02 開始)
+
+- **内容**: 図解が未作成の問題を問題ID昇順で10問選び、[DIAGRAM-WORKFLOW.md](DIAGRAM-WORKFLOW.md) の手順で図解を作って main へ直接コミット・push する。
+- **頻度**: 毎日 04:00(Asia/Tokyo)。cron は UTC のため `0 19 * * *`。
+- **実施方法**: Claude Code の**クラウドルーティン**(routine ID `trig_014JLgEcTdJ8wcDPaW9AQ9J7`、モデル Opus 5)。
+  - 第4節の旧レビュールーチンと違い、ローカルセッションに依存せずクラウド側で実行される。
+  - 管理画面: <https://claude.ai/code/routines/trig_014JLgEcTdJ8wcDPaW9AQ9J7>
+- **前提**: クラウド側は GitHub の `main` を取得して動く。ローカルの変更は push しておくこと。
+- **中断条件**: `npm install` 失敗など SVG を生成できない場合は何もコミットせず中止する
+  (ブリーフだけが入って生成物と食い違う状態を残さないため)。
+- **確認**: 実行後は [図解ギャラリー](diagrams/README.md)で内容を確認し、品質基準(第5節)から外れた図は作り直す。
+- **終了処理**: 全400問の図解が揃ったらルーティンを停止し、本節に完了日を追記する。
