@@ -1,0 +1,197 @@
+{
+  "question_id": "cmp03",
+  "purpose": "ALB と NLB の使い分けを「HTTPの中身で振り分けるか、TCP/UDPをそのまま流すか」という1つの分岐に還元して示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、ELB の種類は知っているがレイヤーと機能の対応が混ざる人。",
+  "message": "HTTPの中身で振り分けるなら L7 の ALB、TCP/UDP の性能と静的IPが要るなら L4 の NLB。",
+  "source_summary": "ALB はレイヤー7(HTTP/HTTPS)でパス・ホストヘッダー・クエリ文字列に基づくルーティングが可能。NLB はレイヤー4(TCP/UDP)で数百万リクエスト/秒・超低レイテンシ・AZ ごとの静的IP(Elastic IP 割当可)。「静的IPが必要」「TCP負荷分散」と来たら NLB。",
+  "elements": [
+    {
+      "id": "CLIENT",
+      "label": "クライアント",
+      "type": "actor",
+      "priority": "secondary"
+    },
+    {
+      "id": "Q",
+      "label": "何を見て振り分けるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ALB",
+      "label": "Application Load Balancer(L7)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "PATH",
+      "label": "パスによるルーティング",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "HOST",
+      "label": "ホストヘッダーによるルーティング",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "QS",
+      "label": "クエリ文字列によるルーティング",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "TG7",
+      "label": "ターゲットグループ(アプリごと)",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "NLB",
+      "label": "Network Load Balancer(L4)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "EIP",
+      "label": "AZごとの静的IP(Elastic IP 割当可)",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "TG4",
+      "label": "ターゲットグループ(TCP/UDP転送)",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "NOTE",
+      "label": "誤答パターンと合言葉",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "CLIENT",
+      "to": "Q",
+      "verb": "リクエストが届く",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "ALB",
+      "verb": "HTTPの中身で振り分けたい",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NLB",
+      "verb": "TCP/UDP・静的IPが必要",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "ALB",
+      "to": "PATH",
+      "verb": "解釈する",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "ALB",
+      "to": "HOST",
+      "verb": "解釈する",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "ALB",
+      "to": "QS",
+      "verb": "解釈する",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "PATH",
+      "to": "TG7",
+      "verb": "振り分ける",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "HOST",
+      "to": "TG7",
+      "verb": "振り分ける",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "QS",
+      "to": "TG7",
+      "verb": "振り分ける",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "NLB",
+      "to": "EIP",
+      "verb": "AZごとに持てる",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "EIP",
+      "to": "TG4",
+      "verb": "そのまま転送する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "NOTE",
+      "verb": "誤読しやすい点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "ALB — レイヤー7(HTTP/HTTPS)",
+      "element_ids": [
+        "ALB",
+        "PATH",
+        "HOST",
+        "QS",
+        "TG7"
+      ]
+    },
+    {
+      "label": "NLB — レイヤー4(TCP/UDP)",
+      "element_ids": [
+        "NLB",
+        "EIP",
+        "TG4"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "対比(左右2グループ)+ 分岐: 1つの判断から L7 側 / L4 側へ分ける",
+    "レイヤー図: OSI の L7 / L4 を上下に積み、各層に該当サービスを置く"
+  ],
+  "selected_pattern": "対比(左右2グループ)+ 分岐。試験では「どちらを選ぶか」を問われるので、層の上下関係より選択の分かれ目を主役にした方が主メッセージに直結する。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "この問題は「正しい説明を選ぶ」形式のため、誤答選択肢に対応する構成要素が図中に存在しない。誤答は注釈(L7とL4を逆にした説明)で補っている。",
+    "Gateway Load Balancer / Classic Load Balancer は解説の範囲外のため描いていない。"
+  ],
+  "mermaid": "flowchart TB\n    CLIENT[\"クライアント\"]:::svc\n    Q{\"何を見て<br/>振り分けるか?\"}:::judge\n    NOTE[\"誤答は L7 と L4 を入れ替えた説明<br/>「静的IPが必要」「TCP負荷分散」と来たら NLB\"]:::note\n\n    CLIENT --> Q\n\n    subgraph L7[\"ALB — レイヤー7(HTTP/HTTPS)\"]\n        ALB[\"Application Load Balancer\"]:::best\n        PATH[\"パス<br/>/api/*\"]:::svc\n        HOST[\"ホストヘッダー<br/>shop.example.com\"]:::svc\n        QS[\"クエリ文字列<br/>?ver=2\"]:::svc\n        TG7[\"ターゲットグループ<br/>アプリごとに振り分け\"]:::svc\n        ALB --> PATH --> TG7\n        ALB --> HOST --> TG7\n        ALB --> QS --> TG7\n    end\n\n    subgraph L4[\"NLB — レイヤー4(TCP/UDP)\"]\n        NLB[\"Network Load Balancer<br/>数百万リクエスト/秒・超低レイテンシ\"]:::best\n        EIP[\"AZごとの静的IP<br/>Elastic IP を割り当て可\"]:::svc\n        TG4[\"ターゲットグループ<br/>TCP/UDP をそのまま転送\"]:::svc\n        NLB --> EIP --> TG4\n    end\n\n    Q -->|\"HTTPの中身で選ぶ\"| ALB\n    Q -->|\"TCP/UDP・静的IP\"| NLB\n    Q -.- NOTE"
+}

@@ -1,0 +1,147 @@
+{
+  "question_id": "cmp02",
+  "purpose": "Auto Scaling のポリシー選択が「自分で設計する量」の差であることを示し、目標値を維持したい場合にターゲット追跡が最小の設定で済むことを理解させる。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、4つのスケーリングポリシー名は知っているが違いを説明できない人。",
+  "message": "目標値の維持が要件なら、目標を1つ与えるだけで AWS が増減を計算するターゲット追跡が最も運用負荷が低い。",
+  "source_summary": "平均CPU使用率を50%前後に自動維持したい場合、ターゲット追跡が最も運用負荷が低い。ステップ/シンプルはしきい値とアクションを自分で設計する必要があり、スケジュールは予測可能な負荷変動向け。",
+  "elements": [
+    {
+      "id": "GOAL",
+      "label": "運用要件: 平均CPUを50%前後に自動維持",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "何を設定してスケールさせるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CALC",
+      "label": "AWS が目標との差分を自動計算",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CW",
+      "label": "CloudWatch(平均CPUの実測値)",
+      "type": "data",
+      "priority": "primary"
+    },
+    {
+      "id": "ASG",
+      "label": "Auto Scaling グループ(台数の増減)",
+      "type": "actor",
+      "priority": "primary"
+    },
+    {
+      "id": "SIMPLE",
+      "label": "シンプルスケーリング",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "STEP",
+      "label": "ステップスケーリング",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SCHED",
+      "label": "スケジュールスケーリング",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "違いは「自分で設計する量」",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "GOAL",
+      "to": "Q",
+      "verb": "何を設定するかを問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "CALC",
+      "verb": "目標値をひとつ与えるだけ",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SIMPLE",
+      "verb": "しきい値・段階・時刻を自分で設計",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "CW",
+      "to": "CALC",
+      "verb": "実測を渡す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CALC",
+      "to": "ASG",
+      "verb": "増減量を指示する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ASG",
+      "to": "CW",
+      "verb": "負荷が変わり実測に反映される",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "NOTE",
+      "verb": "選択基準を補足する",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "ターゲット追跡ポリシー(運用負荷 最小)",
+      "element_ids": [
+        "CW",
+        "CALC",
+        "ASG"
+      ]
+    },
+    {
+      "label": "自分でしきい値や時刻を設計するポリシー",
+      "element_ids": [
+        "SIMPLE",
+        "STEP",
+        "SCHED"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "循環(フィードバックループ)+ 対比: 自動で回る制御ループと、手で設計するポリシー群を並べる",
+    "テーブル: 4ポリシー × 設定項目 / 向くケースの比較表"
+  ],
+  "selected_pattern": "循環(フィードバックループ)+ 対比。「AWS が代わりに回してくれる輪」が絵として見えることが主メッセージそのものであり、表では運用負荷の差が伝わりにくい。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "スケジュールスケーリングは「運用負荷が高い」のではなく「用途が違う(予測可能な変動向け)」。図ではグレー群に入れているため、ラベルで用途を明示している。"
+  ],
+  "mermaid": "flowchart TB\n    GOAL[\"運用要件<br/>平均CPUを50%前後に自動維持したい\"]:::req\n    Q{\"何を設定して<br/>スケールさせるか?\"}:::judge\n    NOTE[\"違いは「自分で設計する量」\"]:::note\n\n    GOAL --> Q\n\n    subgraph TT[\"ターゲット追跡ポリシー(運用負荷 最小)\"]\n        direction LR\n        CALC[\"AWS が目標との差分を自動計算\"]:::best\n        ASG[\"Auto Scaling グループ<br/>台数を増減\"]:::svc\n        CW[\"CloudWatch<br/>平均CPUの実測値\"]:::svc\n        CALC -->|\"増減量を指示\"| ASG\n        ASG -->|\"負荷が変わる\"| CW\n        CW -->|\"実測を渡す\"| CALC\n    end\n\n    subgraph MANUAL[\"自分で設計するポリシー\"]\n        SIMPLE[\"シンプルスケーリング<br/>しきい値 + 固定アクション\"]:::alt\n        STEP[\"ステップスケーリング<br/>しきい値の段階 + 増減量\"]:::alt\n        SCHED[\"スケジュールスケーリング<br/>時刻 + 台数(予測できる変動向け)\"]:::alt\n    end\n\n    Q -->|\"目標値をひとつ与えるだけ\"| CALC\n    Q -->|\"しきい値や時刻をすべて設計\"| MANUAL\n    Q -.- NOTE"
+}

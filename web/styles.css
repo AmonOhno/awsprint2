@@ -213,6 +213,18 @@ body {
 .explanation-head.ng { color: var(--wrong); }
 .explanation p { color: var(--text); font-size: 0.93rem; }
 
+/* 図解(diagrams/<問題ID>.svg・事前生成)。白背景の図版なのでカードとして見せる */
+.diagram { margin-top: 14px; }
+.diagram img {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.diagram figcaption { color: var(--text-dim); font-size: 0.78rem; margin-top: 6px; }
+
 @keyframes slideIn {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }

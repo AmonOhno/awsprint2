@@ -1,10 +1,13 @@
 /* AWS Study — ゼロコスト静的クイズアプリ
  * データ: window.QUIZ_DATA(data/questions.js、単一ソースは data/questions.json)
+ * 図解: window.QUIZ_DIAGRAMS(data/diagrams.js)+ diagrams/<問題ID>.svg(事前生成)
  * 進捗: localStorage のみ(サーバー通信なし) */
 (() => {
   "use strict";
 
   const QUESTIONS = window.QUIZ_DATA.questions;
+  // 図解を持つ問題ID。file:// でも動くよう、存在確認は fetch ではなくこの一覧で行う
+  const DIAGRAM_IDS = new Set(window.QUIZ_DIAGRAMS || []);
   const STORAGE_KEY = "awsstudy.progress.v1";
 
   // ---- 進捗ストア -------------------------------------------------------
@@ -169,10 +172,25 @@
     head.textContent = isCorrect ? "✓ 正解!" : "✗ 不正解";
     head.className = `explanation-head ${isCorrect ? "ok" : "ng"}`;
     $("explanation-text").textContent = q.explanation;
+    showDiagram(q);
     $("explanation").hidden = false;
     $("btn-next").hidden = false;
     $("btn-next").textContent = quiz.index + 1 < quiz.list.length ? "次の問題 ⏎" : "結果を見る ⏎";
     $("btn-next").focus();
+  }
+
+  // 図解は全問には付いていないため、ある問題だけ解説の下に表示する
+  function showDiagram(q) {
+    const fig = $("diagram");
+    const img = $("diagram-img");
+    if (!DIAGRAM_IDS.has(q.id)) {
+      fig.hidden = true;
+      img.removeAttribute("src");
+      return;
+    }
+    img.src = `diagrams/${q.id}.svg`;
+    img.alt = `${q.choices[q.answer]} を選ぶ判断の分かれ目を示した図解`;
+    fig.hidden = false;
   }
 
   function next() {

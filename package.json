@@ -1,0 +1,11 @@
+{
+  "name": "awsprint2",
+  "private": true,
+  "description": "AWS Study — 図解ビルド用の開発依存のみ。アプリ本体(web/ ios/)は依存ゼロで動作する。",
+  "scripts": {
+    "build:diagrams": "python3 scripts/build-diagrams.py"
+  },
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.4.2"
+  }
+}

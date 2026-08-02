@@ -135,6 +135,7 @@ struct QuizView: View {
                 .foregroundStyle(isCorrect ? .green : .red)
             Text(current.explanation)
                 .font(.subheadline)
+            DiagramCard(questionID: current.id)
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)

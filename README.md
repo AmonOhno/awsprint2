@@ -26,10 +26,15 @@ App Playground 形式のため、有料の Apple Developer Program は不要で�
 
 ```
 data/questions.json         問題データの単一ソース(編集はここだけ)
+data/diagrams/<問題ID>.json  問題ごとの図解ブリーフ(単一ソース)
 scripts/sync-questions.sh   Web / iOS へ問題データを配布
-web/                        Web版(静的 HTML/CSS/JS)
+scripts/build-diagrams.py   図解の検証 + SVG生成 + Web/iOS へ配布 + ギャラリー生成
+web/                        Web版(静的 HTML/CSS/JS + 生成済み SVG)
 ios/AWSStudy.swiftpm/       iOS版(SwiftUI App Playground)
+.claude/skills/zukai-creator/ 図解作成スキル(出典: github.com/53able/skills)
 docs/architecture.md        アーキテクチャ図(毎時レビュー対象)
+docs/DIAGRAM-WORKFLOW.md    問題図解の作り方・スキーマ・共通スタイル
+docs/diagrams/README.md     問題図解ギャラリー(自動生成)
 docs/RULES.md               運用規約(ブランチ運用・データ管理・レビュールーチン)
 docs/archive/               旧計画ドキュメント(2026-07-04 時点の未実装構想)
 ```
@@ -39,3 +44,21 @@ docs/archive/               旧計画ドキュメント(2026-07-04 時点の未�
 1. `data/questions.json` に問題を追記(書式と品質基準は [docs/RULES.md](docs/RULES.md) 参照)
 2. `scripts/sync-questions.sh` を実行
 3. 生成物ごとコミット
+
+## 問題の図解を追加するには
+
+判断構造を1枚にまとめた図解を、問題ごとに付けていく(現在 3 問 / 400 問)。
+図解は**ビルド時に SVG へ変換**され、クイズの解説欄に表示される(Web版・iOS版とも)。
+アプリは出来上がった SVG を表示するだけなので、実行時の依存は増えない。
+
+```bash
+npm install                        # 初回のみ(mermaid-cli / 開発時だけの無料依存)
+python3 scripts/build-diagrams.py  # 検証 → SVG生成 → Web・iOS へ配布 → ギャラリー生成
+```
+
+1. Claude Code で `zukai-creator` スキルを使い、`data/diagrams/<問題ID>.json` にブリーフを書く
+2. `python3 scripts/build-diagrams.py` を実行(`--force` で全 SVG を再生成)
+3. ブリーフと生成物をコミット
+
+手順とスタイルルールの詳細は [docs/DIAGRAM-WORKFLOW.md](docs/DIAGRAM-WORKFLOW.md)、
+できた図は[図解ギャラリー](docs/diagrams/README.md)で確認できる。

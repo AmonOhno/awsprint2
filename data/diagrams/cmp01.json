@@ -1,0 +1,124 @@
+{
+  "question_id": "cmp01",
+  "purpose": "EC2 の購入オプション選択が「中断耐性」と「稼働の継続性」の2つの問いで決まることを、学習者が一目で追えるようにする。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、購入オプションの名前は知っているが選び分けの基準が曖昧な人。",
+  "message": "中断されても再実行できるワークロードなら、最安のスポットインスタンスを選ぶ。",
+  "source_summary": "夜間バッチのように中断されても再実行可能な処理を最も低コストで EC2 実行したい。正解はスポットインスタンス(余剰キャパシティを最大90%引き、中断は2分前に通知)。常時稼働かつ中断不可ならリザーブド/Savings Plans、短期かつ中断不可ならオンデマンド。",
+  "elements": [
+    {
+      "id": "START",
+      "label": "夜間バッチ処理(再実行可能・低コスト最優先)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q1",
+      "label": "中断されてもやり直せるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "SPOT",
+      "label": "スポットインスタンス",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "2分前の中断通知とチェックポイント保存",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "Q2",
+      "label": "常時稼働で1年以上使い続けるか?",
+      "type": "process",
+      "priority": "secondary"
+    },
+    {
+      "id": "RI",
+      "label": "リザーブド / Savings Plans",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "OD",
+      "label": "オンデマンドインスタンス",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DH",
+      "label": "Dedicated Hosts",
+      "type": "artifact",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "START",
+      "to": "Q1",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q1",
+      "to": "SPOT",
+      "verb": "やり直せる→スポット",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q1",
+      "to": "Q2",
+      "verb": "やり直せない→次の問いへ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q2",
+      "to": "RI",
+      "verb": "はい→継続割引",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q2",
+      "to": "OD",
+      "verb": "いいえ→都度課金",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "START",
+      "to": "DH",
+      "verb": "物理占有要件がある場合だけ",
+      "direction": "one-way",
+      "kind": "other"
+    },
+    {
+      "from": "SPOT",
+      "to": "NOTE",
+      "verb": "設計上の前提を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 2つの問いで4つの選択肢に振り分ける",
+    "マトリクス: 中断耐性 × 稼働期間の2軸に4オプションを配置"
+  ],
+  "selected_pattern": "分岐(判断フロー)。試験本番の判断順序(まず中断耐性、次に稼働の継続性)をそのままなぞれるため、2軸マトリクスより解読が少なくて済む。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Savings Plans はリザーブドと1ノードにまとめている(解説の粒度に合わせた)。両者の違いを問う問題を追加する場合は分割が必要。"
+  ],
+  "mermaid": "flowchart TD\n    START[\"夜間バッチ処理<br/>中断されても再実行できる / 低コスト最優先\"]:::req\n    Q1{\"中断されても<br/>やり直せるか?\"}:::judge\n    SPOT[\"スポットインスタンス<br/>余剰キャパシティを最大90%引き\"]:::best\n    NOTE[\"中断は2分前に通知される<br/>チェックポイント保存で再実行に備える\"]:::note\n    Q2{\"常時稼働で<br/>1年以上使い続けるか?\"}:::judge\n    RI[\"リザーブド / Savings Plans<br/>継続利用を前提に割引\"]:::alt\n    OD[\"オンデマンドインスタンス<br/>短期かつ中断不可ならこれ\"]:::alt\n    DH[\"Dedicated Hosts<br/>物理サーバ占有・ライセンス持込用\"]:::alt\n\n    START --> Q1\n    Q1 -->|\"やり直せる\"| SPOT\n    Q1 -->|\"やり直せない\"| Q2\n    Q2 -->|\"はい\"| RI\n    Q2 -->|\"いいえ\"| OD\n    START -.->|\"物理占有の要件がある場合だけ\"| DH\n    SPOT -.- NOTE"
+}

@@ -1,0 +1,18 @@
+{
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "\"Hiragino Sans\", \"Noto Sans JP\", -apple-system, BlinkMacSystemFont, sans-serif",
+    "fontSize": "15px",
+    "lineColor": "#607d8b",
+    "primaryTextColor": "#22303a",
+    "edgeLabelBackground": "#ffffff"
+  },
+  "flowchart": {
+    "htmlLabels": false,
+    "useMaxWidth": true,
+    "padding": 12,
+    "wrappingWidth": 400,
+    "nodeSpacing": 40,
+    "rankSpacing": 50
+  }
+}

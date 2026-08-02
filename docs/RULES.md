@@ -41,9 +41,32 @@
   3. 生成物を直接編集した痕跡がないか(あれば同期スクリプトで復元)
   4. 修正した場合は `docs/architecture.md` の「最終レビュー」日時を更新
 - **終了処理**: 2026-07-19 の最終レビュー後にジョブを削除する(セッション終了でも自動的に消える)。削除・終了したら本節に完了日を追記する。
+- **完了**: 2026-07-19 のセッション終了に伴いジョブは停止済み(2026-08-02 確認)。
+  以降 `docs/architecture.md` は定期レビューではなく、構成を変えたコミットの中で更新する。
 
-## 5. 変更時の確認事項
+## 5. 問題図解データの管理(単一ソース)
+
+- 図解の単一ソースは `data/diagrams/<問題ID>.json`(zukai-creator 形式のブリーフ + `question_id` + `mermaid`)。
+- 次はすべて自動生成物。**直接編集しない。**
+  - `web/diagrams/<問題ID>.svg` / `ios/AWSStudy.swiftpm/Resources/diagrams/<問題ID>.svg`(アプリが表示する図)
+  - `web/data/diagrams.js`(図解を持つ問題IDの一覧)
+  - `docs/diagrams/README.md`(ギャラリー)
+- 図解を追加・変更したら必ず `python3 scripts/build-diagrams.py` を実行し、生成物も同じコミットに含める。
+- Mermaid はビルド時に SVG 化し、アプリは SVG を表示するだけにする(実行時に Mermaid ランタイムを読み込まない)。
+  そのため `npm install` で入る mermaid-cli は**開発時のみの依存**であり、アプリ本体の依存はゼロのまま。
+- 図解の作成手順・共通スタイルルールは [DIAGRAM-WORKFLOW.md](DIAGRAM-WORKFLOW.md)、
+  設計手順そのものは同梱スキル `.claude/skills/zukai-creator/SKILL.md` に従う。
+- 品質基準:
+  - 主メッセージは「なぜその選択肢が最適か」の判断軸に固定し、1文で言えること。
+  - `data/questions.json` の問題文・解説に書かれていない性能値・制約・因果を図に足さない。
+  - 全問で同じ意味に同じ見た目を使う(スタイルクラスは `req` / `judge` / `best` / `alt` / `svc` / `note` の6種のみ)。
+  - 問題文・選択肢・解説を図解ブリーフ側に複製しない(ギャラリー生成時に単一ソースから引く)。
+- スキル本体(`.claude/skills/zukai-creator/`)は外部リポジトリ由来。更新する場合は
+  <https://github.com/53able/skills> から取得し直し、ローカル改変を加えないこと。
+
+## 6. 変更時の確認事項
 
 - Web: `web/index.html` をブラウザで開き、クイズ1周・弱点復習・フラッシュカードの動作を確認。
+- 図解: 図解のある問題(例 `cmp01`)に正解/誤答し、解説の下に図が出ることを Web・iOS 両方で確認。
 - iOS: Xcode で `ios/AWSStudy.swiftpm` を開きシミュレータでビルド確認(Mac 上で可能な場合)。
 - 進捗データのスキーマ(`{attempts, correct, wrongStreak}`)を変更する場合は、Web と iOS の両方を同時に変更し、ストレージキーのバージョン(`awsstudy.progress.v1`)を上げる。
