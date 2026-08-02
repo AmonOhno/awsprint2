@@ -1,0 +1,134 @@
+{
+  "question_id": "cmp08",
+  "purpose": "プレイスメントグループの選択が「インスタンスを近づけたいか離したいか」の一点で決まると示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、3種のプレイスメントグループの名前と効果が結び付かない人。",
+  "message": "ノード間を速くしたいなら、物理的に近くへ集めるクラスタープレイスメントグループを選ぶ。",
+  "source_summary": "HPC でノード間通信のレイテンシーを最小化したい問題。正解はクラスタープレイスメントグループ。単一 AZ 内の物理的に近いハードウェアに配置し、低レイテンシー・高スループット通信を実現する。HPC や分散機械学習に最適。耐障害性を高めたい場合はスプレッド(別ハードウェアに分散)、Hadoop などはパーティションを選ぶ。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "HPC ワークロード / ノード間通信のレイテンシーを最小化",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "インスタンスを近づけるか離すか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CLUSTER",
+      "label": "クラスタープレイスメントグループ",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "EFFECT",
+      "label": "低レイテンシー・高スループットのノード間通信",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "SPREAD",
+      "label": "スプレッドプレイスメントグループ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "PART",
+      "label": "パーティションプレイスメントグループ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DEF",
+      "label": "デフォルト配置(グループなし)",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "NOTE",
+      "label": "近づける=速い / 離す=壊れにくい",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "CLUSTER",
+      "verb": "近づけるならクラスター",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CLUSTER",
+      "to": "EFFECT",
+      "verb": "もたらす",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "Q",
+      "to": "SPREAD",
+      "verb": "離す目的なら別解",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "PART",
+      "verb": "分割する目的なら別解",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "DEF",
+      "verb": "配置を指定しない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "配置を離す / 分ける選択肢",
+      "element_ids": [
+        "SPREAD",
+        "PART",
+        "DEF"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「近づけるか離すか」の1問で3種のプレイスメントグループを振り分ける",
+    "対比(左右2枚): 集約配置と分散配置の物理イメージを並べ、ノード間距離の違いを描く"
+  ],
+  "selected_pattern": "分岐(判断フロー)。物理イメージの対比は絵として分かりやすい反面、ラック配置を図示すると解説にない構造まで描くことになる。分岐なら「目的が速さか耐障害性か」という解説どおりの判断軸で済む。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "デフォルト配置が非最適な理由は解説に明示がないため、「配置を指定しない」という事実のみを示している。",
+    "パーティションの用途は解説の「Hadoop など」をそのまま使い、それ以上の説明は足していない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"HPC ワークロード<br/>ノード間通信のレイテンシーを最小化したい\"]:::req\n    Q{\"インスタンスを<br/>近づけるか離すか?\"}:::judge\n    CLUSTER[\"クラスタープレイスメントグループ<br/>単一 AZ 内の物理的に近いハードウェアに配置\"]:::best\n    EFFECT[\"ノード間が低レイテンシー・高スループット<br/>HPC・分散機械学習に最適\"]:::best\n\n    subgraph FAR[\"離す / 分ける選択肢\"]\n        SPREAD[\"スプレッド<br/>別ハードウェアに分散(耐障害性向け)\"]:::alt\n        PART[\"パーティション<br/>Hadoop などで使う\"]:::alt\n        DEF[\"デフォルト配置(グループなし)\"]:::alt\n    end\n\n    NOTE[\"近づける=速い / 離す=壊れにくい<br/>今回の要件は速さなのでクラスター\"]:::note\n\n    REQ --> Q\n    Q -->|\"近づける\"| CLUSTER\n    CLUSTER --> EFFECT\n    Q -->|\"離す\"| SPREAD\n    Q -->|\"分割する\"| PART\n    Q -.->|\"指定しない\"| DEF\n    Q -.- NOTE"
+}

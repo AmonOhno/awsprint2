@@ -13,6 +13,7 @@ SVG は内容ハッシュが変わったときだけ再生成する(--force で�
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -26,6 +27,7 @@ QUESTIONS = ROOT / "data" / "questions.json"
 CHECKER = ROOT / ".claude" / "skills" / "zukai-creator" / "scripts" / "check-diagram-brief.py"
 MMDC = ROOT / "node_modules" / ".bin" / "mmdc"
 MERMAID_CONFIG = ROOT / "scripts" / "mermaid.config.json"
+PUPPETEER_CONFIG = ROOT / "scripts" / "puppeteer.config.json"
 WEB_SVG_DIR = ROOT / "web" / "diagrams"
 IOS_SVG_DIR = ROOT / "ios" / "AWSStudy.swiftpm" / "Resources" / "diagrams"
 WEB_MANIFEST = ROOT / "web" / "data" / "diagrams.js"
@@ -97,11 +99,14 @@ def render_svg(qid: str, source: str, digest: str, svg_path: Path) -> None:
         mmd = Path(tmp) / f"{qid}.mmd"
         out = Path(tmp) / f"{qid}.svg"
         mmd.write_text(source, encoding="utf-8")
-        result = subprocess.run(
-            [str(MMDC), "-i", str(mmd), "-o", str(out),
-             "-c", str(MERMAID_CONFIG), "-I", f"diagram-{qid}", "-b", "white", "-q"],
-            capture_output=True, text=True,
-        )
+        cmd = [str(MMDC), "-i", str(mmd), "-o", str(out),
+               "-c", str(MERMAID_CONFIG), "-I", f"diagram-{qid}", "-b", "white", "-q"]
+        # root で走る環境(クラウドルーティンのコンテナ)では Chromium がサンドボックス無しの
+        # 起動を拒否するため、そのときだけ --no-sandbox を渡す。手元の非 root 実行では
+        # 従来どおりサンドボックス有効のまま動かす。
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            cmd += ["-p", str(PUPPETEER_CONFIG)]
+        result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0 or not out.exists():
             die(f"{qid}: SVG 生成に失敗しました\n{result.stdout}\n{result.stderr}")
         svg = out.read_text(encoding="utf-8")

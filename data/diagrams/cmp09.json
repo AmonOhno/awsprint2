@@ -1,0 +1,160 @@
+{
+  "question_id": "cmp09",
+  "purpose": "同時障害を避ける要件が「別々のラックへ配置することを保証する構成」を求めていると示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、AZ を分ければ十分だと考えて物理ラック単位の分離を見落とす人。",
+  "message": "同一ハードウェア障害で共倒れさせないなら、各インスタンスを別ラックへ置くスプレッドを選ぶ。",
+  "source_summary": "重要な7台を同一ハードウェア障害で同時停止させないよう配置する問題。正解はスプレッドプレイスメントグループ。各インスタンスを別々のラック(独立した電源・ネットワーク)に配置し、ハードウェア障害の同時影響を防ぐ。1 AZ あたり7インスタンスまでという制限も頻出。クラスターは逆に近くに集める構成なので障害分離には不向き。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "重要なインスタンス7台 / 同一ハードウェア障害で同時停止させない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "同じハードウェアに相乗りしてよいか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "SPREAD",
+      "label": "スプレッドプレイスメントグループ",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "RACK1",
+      "label": "ラック1(独立した電源・ネットワーク)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "RACK2",
+      "label": "ラック2",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "RACK3",
+      "label": "ラック3 …(7台まで)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "LIMIT",
+      "label": "1 AZ あたり7インスタンスまで",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "CLUSTER",
+      "label": "クラスタープレイスメントグループ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SUBNET",
+      "label": "同一 AZ の同一サブネットに配置",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DH",
+      "label": "Dedicated Hosts に集約",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "SPREAD",
+      "verb": "相乗り不可ならスプレッド",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "SPREAD",
+      "to": "RACK1",
+      "verb": "1台ずつ置く",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "SPREAD",
+      "to": "RACK2",
+      "verb": "1台ずつ置く",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "SPREAD",
+      "to": "RACK3",
+      "verb": "1台ずつ置く",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "SPREAD",
+      "to": "LIMIT",
+      "verb": "制限を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "Q",
+      "to": "CLUSTER",
+      "verb": "逆に近くへ集めてしまう",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SUBNET",
+      "verb": "ラック分離は保証されない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "DH",
+      "verb": "ラック分離は保証されない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "別ラックへの分離を保証しない選択肢",
+      "element_ids": [
+        "CLUSTER",
+        "SUBNET",
+        "DH"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "包含(分離の可視化): スプレッドの配下に独立したラックを並べ、1ラック1台であることを枠で示す",
+    "対比(スプレッド vs クラスター): 同じ7台を集約配置と分散配置で並べて比べる"
+  ],
+  "selected_pattern": "包含(分離の可視化)。この問題の要点は「別ラックに1台ずつ」という配置そのものなので、ラックを枠として描くと主メッセージが図の形と一致する。対比は cmp08 と絵が重複し、同じ絵を2問で使うことになる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "同一サブネット配置と Dedicated Hosts が非最適な理由は解説に明示がない。解説が示す「スプレッドだけが別ラック配置を保証する」という点から、『分離は保証されない』とだけ書いている。",
+    "ラックは図の都合で3つに省略している(実際の要件は7台)。ノード側に「7台まで」と明記して補った。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"重要なインスタンス7台<br/>同一ハードウェア障害で同時停止させたくない\"]:::req\n    Q{\"同じハードウェアに<br/>相乗りしてよいか?\"}:::judge\n\n    subgraph SP[\"スプレッドプレイスメントグループ\"]\n        SPREAD[\"各インスタンスを別々のラックへ配置\"]:::best\n        RACK1[\"ラック1<br/>独立した電源・ネットワーク\"]:::best\n        RACK2[\"ラック2\"]:::best\n        RACK3[\"ラック3 …(7台まで)\"]:::best\n        SPREAD --> RACK1\n        SPREAD --> RACK2\n        SPREAD --> RACK3\n    end\n\n    subgraph NG[\"別ラックへの分離を保証しない選択肢\"]\n        CLUSTER[\"クラスタープレイスメントグループ<br/>逆に近くへ集める構成\"]:::alt\n        SUBNET[\"同一 AZ の同一サブネットに配置\"]:::alt\n        DH[\"Dedicated Hosts に集約\"]:::alt\n    end\n\n    LIMIT[\"1 AZ あたり7インスタンスまで\"]:::note\n\n    REQ --> Q\n    Q -->|\"相乗り不可\"| SPREAD\n    SPREAD -.- LIMIT\n    Q -->|\"集めてしまう\"| CLUSTER\n    Q -.->|\"保証されない\"| SUBNET\n    Q -.->|\"保証されない\"| DH"
+}

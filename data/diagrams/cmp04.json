@@ -1,0 +1,168 @@
+{
+  "question_id": "cmp04",
+  "purpose": "EC2 Web アプリの高可用性が「台数や性能」ではなく「分散先の AZ を増やすこと」で決まると示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、可用性を上げる=サーバーを強く/多くすることだと考えがちな人。",
+  "message": "AZ 障害で全滅しないのは、複数 AZ に分散して ALB が生存インスタンスにだけ流す構成だけ。",
+  "source_summary": "単一 AZ 障害に耐える EC2 Web アプリの構成を選ぶ問題。正解は「複数 AZ にまたがる Auto Scaling グループ + ALB」。ALB が正常なインスタンスにのみトラフィックを流し、AZ 障害時も他 AZ が処理を継続、Auto Scaling が台数を回復する。垂直スケーリングや単一 AZ 構成は AZ 障害で全滅するため高可用性にならない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "EC2 ベースの Web アプリ / 単一 AZ の障害でも止めない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "AZ が1つ落ちても処理が残るか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ALB",
+      "label": "Application Load Balancer",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "AZA",
+      "label": "AZ-a のインスタンス",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "AZB",
+      "label": "AZ-b のインスタンス",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ASG",
+      "label": "複数 AZ にまたがる Auto Scaling グループ",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "VERT",
+      "label": "垂直スケーリング(同一 AZ で大型化)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ONE",
+      "label": "単一 AZ の Auto Scaling グループ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DR",
+      "label": "別リージョンへ AMI をコピーし手動フェイルオーバー",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "台数・性能を上げても AZ 障害は防げない",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "ALB",
+      "verb": "AZ をまたぐなら残る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ALB",
+      "to": "AZA",
+      "verb": "正常なものにだけ流す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ALB",
+      "to": "AZB",
+      "verb": "正常なものにだけ流す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ASG",
+      "to": "AZA",
+      "verb": "減った台数を回復する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ASG",
+      "to": "AZB",
+      "verb": "減った台数を回復する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "VERT",
+      "verb": "単一 AZ なら全滅する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "ONE",
+      "verb": "単一 AZ なら全滅する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "DR",
+      "verb": "復旧が手動になる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NOTE",
+      "verb": "誤読しやすい点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "マルチ AZ + ALB + Auto Scaling",
+      "element_ids": [
+        "ALB",
+        "AZA",
+        "AZB",
+        "ASG"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「AZ 障害で処理が残るか」の1問で正解と誤答を振り分け、正解側だけ構成を展開する",
+    "対比(左右2枚): 単一 AZ 構成とマルチ AZ 構成を並べ、同じ AZ 障害を当てて結果を比べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。対比は2つの構成図を描き分ける必要があり密になる。判断は「AZ をまたいでいるか」の一点なので、分岐1つに還元した方が解読が少ない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "ALB のヘルスチェック機構そのもの(間隔・閾値)は解説の範囲外のため描いていない。",
+    "別リージョンへの AMI コピーは「手動フェイルオーバー」という選択肢の記述だけを根拠に非最適としている。RTO の数値は解説にないため図に入れていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"EC2 ベースの Web アプリ<br/>単一 AZ の障害でも止めたくない\"]:::req\n    Q{\"AZ が1つ落ちても<br/>処理が残るか?\"}:::judge\n\n    subgraph HA[\"マルチ AZ + ALB + Auto Scaling\"]\n        ALB[\"Application Load Balancer<br/>正常なインスタンスにだけ流す\"]:::best\n        AZA[\"AZ-a のインスタンス\"]:::best\n        AZB[\"AZ-b のインスタンス\"]:::best\n        ASG[\"Auto Scaling グループ<br/>減った台数を自動で回復\"]:::best\n        ALB --> AZA\n        ALB --> AZB\n        ASG --> AZA\n        ASG --> AZB\n    end\n\n    subgraph NG[\"AZ 障害に耐えられない選択肢\"]\n        VERT[\"垂直スケーリング<br/>同一 AZ でインスタンスを大型化\"]:::alt\n        ONE[\"単一 AZ の Auto Scaling<br/>最小台数を増やす\"]:::alt\n        DR[\"別リージョンへ AMI をコピー<br/>手動フェイルオーバー\"]:::alt\n    end\n\n    NOTE[\"台数を増やしても性能を上げても<br/>その AZ が落ちれば全滅する\"]:::note\n\n    REQ --> Q\n    Q -->|\"AZ をまたぐ\"| ALB\n    Q -->|\"全滅する\"| VERT\n    Q -->|\"全滅する\"| ONE\n    Q -.->|\"復旧が手動\"| DR\n    Q -.- NOTE"
+}

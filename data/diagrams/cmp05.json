@@ -1,0 +1,161 @@
+{
+  "question_id": "cmp05",
+  "purpose": "ECS の起動タイプ選択が「ホストとなる EC2 を自分で持つかどうか」の一点で決まると示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、ECS と Fargate の関係(どちらが何を担うか)が曖昧な人。",
+  "message": "サーバー管理をなくしたいなら、ホストを持たない Fargate 起動タイプを選ぶ。",
+  "source_summary": "コンテナ化アプリを EC2 の管理なしで実行したい問題。正解は ECS + Fargate 起動タイプ。Fargate はサーバーレスなコンテナ実行基盤で、ホスト OS のパッチ適用・キャパシティ管理が不要。EC2 起動タイプはインスタンス管理が必要になる代わりに細かいカスタマイズや GPU 利用が可能。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "コンテナ化アプリを EC2 の管理なしで実行したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "ホストとなる EC2 を自分で持つか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "FARGATE",
+      "label": "ECS + Fargate 起動タイプ",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "FREE",
+      "label": "ホスト OS のパッチ適用・キャパシティ管理が不要",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "EC2T",
+      "label": "ECS + EC2 起動タイプ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "MANUAL",
+      "label": "EC2 に Docker を手動インストール",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "EB",
+      "label": "Elastic Beanstalk の EC2 プラットフォーム",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "HOST",
+      "label": "ホストの管理責任が残る",
+      "type": "concept",
+      "priority": "support"
+    },
+    {
+      "id": "NOTE",
+      "label": "合言葉: コンテナ + インフラ管理不要 = Fargate",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "FARGATE",
+      "verb": "持たないなら Fargate",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "FARGATE",
+      "to": "FREE",
+      "verb": "もたらす",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "Q",
+      "to": "EC2T",
+      "verb": "持つなら EC2 起動タイプ",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "MANUAL",
+      "verb": "持つ側に落ちる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "EB",
+      "verb": "持つ側に落ちる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "EC2T",
+      "to": "HOST",
+      "verb": "残る",
+      "direction": "one-way",
+      "kind": "depend"
+    },
+    {
+      "from": "MANUAL",
+      "to": "HOST",
+      "verb": "残る",
+      "direction": "one-way",
+      "kind": "depend"
+    },
+    {
+      "from": "EB",
+      "to": "HOST",
+      "verb": "残る",
+      "direction": "one-way",
+      "kind": "depend"
+    },
+    {
+      "from": "FARGATE",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "ホストを自分で持つ選択肢",
+      "element_ids": [
+        "EC2T",
+        "MANUAL",
+        "EB"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「ホスト EC2 を自分で持つか」の1問で Fargate 側と EC2 側に分ける",
+    "レイヤー図: オーケストレーション層(ECS)と実行基盤層(Fargate / EC2)を上下に積む"
+  ],
+  "selected_pattern": "分岐(判断フロー)。この問題は層の理解ではなく起動タイプの二択そのものを問うており、分かれ目を主役にした方が主メッセージに直結する。レイヤー図は cmp13 側で使う。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Elastic Beanstalk の EC2 プラットフォームが非最適な理由は解説に明示がないため、「ホストの管理責任が残る」という共通の理由に寄せている。",
+    "cmp13 も Fargate が正解の問題で、判断軸が重なる。cmp05 は ECS の起動タイプ二択、cmp13 は ECS/EKS 共通の実行基盤としての Fargate、と描き分けている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"コンテナ化されたアプリを実行<br/>EC2 インスタンスの管理はしたくない\"]:::req\n    Q{\"ホストとなる EC2 を<br/>自分で持つか?\"}:::judge\n    FARGATE[\"ECS + Fargate 起動タイプ<br/>サーバーレスなコンテナ実行基盤\"]:::best\n    FREE[\"ホスト OS のパッチ適用が不要<br/>キャパシティ管理も不要\"]:::best\n\n    subgraph OWN[\"ホストを自分で持つ選択肢\"]\n        EC2T[\"ECS + EC2 起動タイプ<br/>細かいカスタマイズ・GPU 利用が可能\"]:::alt\n        MANUAL[\"EC2 に Docker を手動インストール\"]:::alt\n        EB[\"Elastic Beanstalk の EC2 プラットフォーム\"]:::alt\n    end\n\n    HOST[\"ホストの管理責任が残る\"]:::note\n    NOTE[\"「コンテナ + インフラ管理不要」と来たら Fargate<br/>ECS でも EKS でも組み合わせられる\"]:::note\n\n    REQ --> Q\n    Q -->|\"持たない\"| FARGATE\n    FARGATE --> FREE\n    Q -->|\"持つ\"| EC2T\n    Q -->|\"持つ\"| MANUAL\n    Q -->|\"持つ\"| EB\n    EC2T -.- HOST\n    MANUAL -.- HOST\n    EB -.- HOST\n    FARGATE -.- NOTE"
+}

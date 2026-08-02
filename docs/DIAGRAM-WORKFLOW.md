@@ -10,6 +10,7 @@
 data/diagrams/<問題ID>.json           図解ブリーフ = 単一ソース(手で編集するのはここだけ)
 scripts/build-diagrams.py             ブリーフの検証 + SVG生成 + 配布 + ギャラリー生成
 scripts/mermaid.config.json           mermaid-cli のテーマ設定(フォント・線色・折り返し幅)
+scripts/puppeteer.config.json         Chromium の起動オプション(root 実行時のみ使う)
 web/diagrams/<問題ID>.svg              自動生成(Web版が表示する)
 web/data/diagrams.js                  自動生成(図解を持つ問題IDの一覧)
 ios/.../Resources/diagrams/<問題ID>.svg 自動生成(iOS版が表示する)
@@ -18,6 +19,11 @@ docs/diagrams/README.md               自動生成ギャラリー(GitHub 上で 
 
 初回だけ、リポジトリ直下で `npm install` を実行して mermaid-cli(開発依存・無料)を入れる。
 アプリ本体は SVG を表示するだけなので、実行時の依存は増えない([RULES.md](RULES.md) 第2節のゼロコスト原則を満たす)。
+
+mermaid-cli は内部で Chromium を起動する。root で走る環境(クラウドルーティンのコンテナ)では
+Chromium がサンドボックス無しの起動を拒否するため、`scripts/build-diagrams.py` は
+実効UIDが 0 のときだけ `scripts/puppeteer.config.json`(`--no-sandbox`)を渡す。
+手元の非 root 実行ではサンドボックスは有効なまま。
 
 問題文・選択肢・解説は `data/questions.json` にしかない。ブリーフには `question_id` だけを持たせ、
 文面はギャラリー生成時に単一ソースから引く(二重管理を作らない)。

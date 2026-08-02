@@ -1,0 +1,134 @@
+{
+  "question_id": "cmp10",
+  "purpose": "スケーリングポリシーの選択が「増減の計算を AWS に任せるか自分で定義するか」で決まると示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Auto Scaling のポリシー4種の違いが整理できていない人。",
+  "message": "メトリクスを目標値に保ちたいだけなら、目標を宣言するターゲット追跡が最も簡単。",
+  "source_summary": "Auto Scaling グループの平均 CPU 使用率を常に 50% 前後に保つ最も簡単なポリシーを選ぶ問題。正解はターゲット追跡スケーリング。目標値を宣言するだけで増減の計算を AWS が自動で行う、サーモスタットのような動作で最も推奨される。ステップスケーリングは閾値ごとの増減数を自分で細かく定義する必要がある。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "平均 CPU 使用率を常に 50% 前後に保ちたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "増減の計算を誰がやるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "TT",
+      "label": "ターゲット追跡スケーリング",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "DECL",
+      "label": "目標値(CPU 50%)を宣言するだけ",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "THERMO",
+      "label": "サーモスタットのような動作・最も推奨されるポリシー",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "STEP",
+      "label": "ステップスケーリング",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SCHED",
+      "label": "スケジュールスケーリング",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "MANUAL",
+      "label": "手動スケーリング",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "TT",
+      "verb": "AWS が計算するなら追跡",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "TT",
+      "to": "DECL",
+      "verb": "必要な設定はこれだけ",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "TT",
+      "to": "THERMO",
+      "verb": "性格を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "Q",
+      "to": "STEP",
+      "verb": "増減数を自分で定義する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SCHED",
+      "verb": "台数を自分で決める",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "MANUAL",
+      "verb": "台数を自分で決める",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "増減を自分で決める選択肢",
+      "element_ids": [
+        "STEP",
+        "SCHED",
+        "MANUAL"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「増減の計算を誰がやるか」でターゲット追跡と他ポリシーを分ける",
+    "循環(制御ループ): メトリクス測定 → 目標との差 → 台数調整 → 再測定 のフィードバックを描く"
+  ],
+  "selected_pattern": "分岐(判断フロー)。制御ループはターゲット追跡の仕組みは説明できるが、他の3ポリシーを同じ図に置けず「なぜこれを選ぶか」に答えられない。設問は選択理由を問うているので分岐を採る。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "手動スケーリングとスケジュールスケーリングが非最適な理由は解説に明示がないため、「台数を自分で決める」という共通点でまとめている。",
+    "スケジュールスケーリングの詳細な使いどころは cmp11 側で扱う。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"Auto Scaling グループの平均 CPU 使用率を<br/>常に 50% 前後に保ちたい\"]:::req\n    Q{\"増減の計算を<br/>誰がやるか?\"}:::judge\n    TT[\"ターゲット追跡スケーリング\"]:::best\n    DECL[\"目標値(CPU 50%)を宣言するだけ<br/>増減の計算は AWS が自動で行う\"]:::best\n\n    subgraph SELF[\"増減を自分で決める選択肢\"]\n        STEP[\"ステップスケーリング<br/>閾値ごとの増減数を自分で定義\"]:::alt\n        SCHED[\"スケジュールスケーリング<br/>指定した時刻に台数を変える\"]:::alt\n        MANUAL[\"手動スケーリング\"]:::alt\n    end\n\n    THERMO[\"サーモスタットのような動作<br/>最も推奨されるポリシー\"]:::note\n\n    REQ --> Q\n    Q -->|\"AWS が計算\"| TT\n    TT --> DECL\n    TT -.- THERMO\n    Q -->|\"自分で定義\"| STEP\n    Q -->|\"自分で決める\"| SCHED\n    Q -->|\"自分で決める\"| MANUAL"
+}

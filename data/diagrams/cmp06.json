@@ -1,0 +1,147 @@
+{
+  "question_id": "cmp06",
+  "purpose": "URL パスによる振り分けが「HTTP の中身を読めるロードバランサーかどうか」で決まると示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、ELB の4種類の名前は知っているが動作レイヤーとの対応が曖昧な人。",
+  "message": "URL の中身を読んで振り分けられるのはレイヤー7の ALB だけ。",
+  "source_summary": "URL パス(/api, /images)ごとに別のターゲットグループへ振り分けたい問題。正解は ALB。ALB はレイヤー7(HTTP/HTTPS)で動作し、パスベース・ホストベース・ヘッダーベースのルーティングが可能。NLB はレイヤー4(TCP/UDP)のため URL の中身を見た振り分けはできない。合言葉は「HTTP の内容で振り分け = ALB」「超低レイテンシー・固定 IP = NLB」。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "URL パスごとに別のターゲットグループへ振り分けたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "URL の中身を読む必要があるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ALB",
+      "label": "Application Load Balancer(レイヤー7)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "TG1",
+      "label": "ターゲットグループ A",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "TG2",
+      "label": "ターゲットグループ B",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NLB",
+      "label": "Network Load Balancer(レイヤー4)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CLB",
+      "label": "Classic Load Balancer",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "GWLB",
+      "label": "Gateway Load Balancer",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "NOTE",
+      "label": "合言葉: HTTP の内容で振り分け = ALB",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "ALB",
+      "verb": "読む必要がある→ALB",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ALB",
+      "to": "TG1",
+      "verb": "/api を振り分ける",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ALB",
+      "to": "TG2",
+      "verb": "/images を振り分ける",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "NLB",
+      "verb": "レイヤー4は中身を見ない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "CLB",
+      "verb": "この要件では選ばない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "GWLB",
+      "verb": "この要件では選ばない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "URL の中身では振り分けられない/この用途向けでない",
+      "element_ids": [
+        "NLB",
+        "CLB",
+        "GWLB"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「URL の中身を読む必要があるか」で ALB と他の ELB に分ける",
+    "レイヤー図: OSI の L7 / L4 / L3 を積み、各層に該当する ELB を配置する"
+  ],
+  "selected_pattern": "分岐(判断フロー)。レイヤー図は4種すべての層を正確に置く必要があり、解説に記述のない GWLB / CLB の層まで断定してしまう。分岐なら解説にある「L7 か否か」だけで判断でき、創作を避けられる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Gateway Load Balancer と Classic Load Balancer は解説に説明がないため、名称のみを置きグループの枠で「この要件では選ばない」ことだけを示している。",
+    "cmp03 / cmp07 も ALB と NLB の使い分けを扱う。cmp06 は「L7 側から見る」視点に固定して重複を避けている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"URL パス(/api, /images)ごとに<br/>別のターゲットグループへ振り分けたい\"]:::req\n    Q{\"URL の中身を<br/>読む必要があるか?\"}:::judge\n    ALB[\"Application Load Balancer(L7)<br/>パス / ホスト / ヘッダーで振り分け\"]:::best\n    TG1[\"ターゲットグループ A\"]:::svc\n    TG2[\"ターゲットグループ B\"]:::svc\n\n    subgraph OTHERS[\"この要件では選ばない\"]\n        NLB[\"Network Load Balancer(L4)<br/>TCP/UDP を転送し URL の中身は見ない\"]:::alt\n        CLB[\"Classic Load Balancer\"]:::alt\n        GWLB[\"Gateway Load Balancer\"]:::alt\n    end\n\n    NOTE[\"HTTP の内容で振り分け = ALB<br/>超低レイテンシー・固定 IP = NLB\"]:::note\n\n    REQ --> Q\n    Q -->|\"読む\"| ALB\n    ALB -->|\"/api\"| TG1\n    ALB -->|\"/images\"| TG2\n    Q -->|\"読まない\"| NLB\n    Q -.-> CLB\n    Q -.-> GWLB\n    Q -.- NOTE"
+}

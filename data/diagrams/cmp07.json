@@ -1,0 +1,160 @@
+{
+  "question_id": "cmp07",
+  "purpose": "「超低レイテンシーな TCP 処理」と「固定 IP」という2つの要件が、同時に NLB を指すことを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、ロードバランサーを HTTP 前提で考えがちな人。",
+  "message": "TCP の超低レイテンシーと固定 IP を同時に満たすのはレイヤー4の NLB だけ。",
+  "source_summary": "毎秒数百万リクエストの TCP トラフィックを超低レイテンシーで処理し、かつ固定 IP を顧客に案内したい問題。正解は NLB。レイヤー4で動作し超低レイテンシーかつ大規模スループットに対応、AZ ごとに静的 IP(または Elastic IP)を割り当てられるため IP 許可リストが必要な場合にも最適。ALB は IP が変動するため固定 IP 要件に向かない。",
+  "elements": [
+    {
+      "id": "R1",
+      "label": "毎秒数百万リクエストの TCP を超低レイテンシーで処理",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "R2",
+      "label": "顧客に案内する固定 IP アドレスが必要",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "2つの要件を同時に満たすのはどれか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "NLB",
+      "label": "Network Load Balancer(レイヤー4)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "PERF",
+      "label": "レイヤー4動作・大規模スループット・超低レイテンシー",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "EIP",
+      "label": "AZ ごとの静的 IP(Elastic IP 割当可)",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "FW",
+      "label": "顧客のファイアウォールで IP 許可リストを組める",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "ALB",
+      "label": "Application Load Balancer",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CLB",
+      "label": "Classic Load Balancer",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "CF",
+      "label": "Amazon CloudFront",
+      "type": "artifact",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "R1",
+      "to": "Q",
+      "verb": "要件として合流する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "R2",
+      "to": "Q",
+      "verb": "要件として合流する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "NLB",
+      "verb": "両方を満たす",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "NLB",
+      "to": "PERF",
+      "verb": "備える",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "NLB",
+      "to": "EIP",
+      "verb": "備える",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "EIP",
+      "to": "FW",
+      "verb": "運用上の利点になる",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "Q",
+      "to": "ALB",
+      "verb": "IP が変動するため不可",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "CLB",
+      "verb": "この要件では選ばない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "CF",
+      "verb": "この要件では選ばない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "固定 IP 要件を満たさない選択肢",
+      "element_ids": [
+        "ALB",
+        "CLB",
+        "CF"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "合流(2要件 → 1解): 2つの要件を1つの判断へ集め、両方を満たす NLB を導く",
+    "マトリクス: 「TCP 性能」×「固定 IP」の2軸に4選択肢を配置する"
+  ],
+  "selected_pattern": "合流(2要件 → 1解)。マトリクスは CLB / CloudFront の位置を解説にない根拠で決める必要が出る。合流なら「2つの要件が同じ答えを指す」という主メッセージがそのまま線の形になる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Classic Load Balancer と CloudFront が非最適な理由は解説に記述がないため、グループの枠で示すにとどめている。",
+    "「毎秒数百万リクエスト」は問題文の数値をそのまま使っており、図側で独自の性能値は足していない。"
+  ],
+  "mermaid": "flowchart TD\n    R1[\"毎秒数百万リクエストの TCP を<br/>超低レイテンシーで処理したい\"]:::req\n    R2[\"顧客に案内する<br/>固定 IP アドレスが必要\"]:::req\n    Q{\"2つの要件を<br/>同時に満たすのは?\"}:::judge\n    NLB[\"Network Load Balancer(L4)\"]:::best\n    PERF[\"レイヤー4で動作<br/>大規模スループット・超低レイテンシー\"]:::best\n    EIP[\"AZ ごとに静的 IP<br/>Elastic IP も割り当て可\"]:::best\n    FW[\"顧客のファイアウォールで<br/>IP 許可リストを組める\"]:::note\n\n    subgraph NG[\"固定 IP 要件を満たさない選択肢\"]\n        ALB[\"Application Load Balancer<br/>IP が変動する\"]:::alt\n        CLB[\"Classic Load Balancer\"]:::alt\n        CF[\"Amazon CloudFront\"]:::alt\n    end\n\n    R1 --> Q\n    R2 --> Q\n    Q -->|\"両方満たす\"| NLB\n    NLB --> PERF\n    NLB --> EIP\n    EIP -.- FW\n    Q -->|\"IP が変わる\"| ALB\n    Q -.-> CLB\n    Q -.-> CF"
+}

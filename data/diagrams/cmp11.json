@@ -1,0 +1,160 @@
+{
+  "question_id": "cmp11",
+  "purpose": "スパイク対策の選択が「増加の時刻を事前に知っているか」で決まることを、時間軸の上で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Auto Scaling は自動なのだから何もしなくてよいと考えがちな人。",
+  "message": "急増の時刻が分かっているなら、起こる前に台数を増やすスケジュールスケーリングを選ぶ。",
+  "source_summary": "毎週月曜9時に必ずアクセスが急増する業務アプリで、スパイク発生前にキャパシティを確保する方式を選ぶ問題。正解はスケジュールスケーリングで、「月曜 8:45 に希望台数を増やす」と予約する。ターゲット追跡は負荷が実際に上がってから反応するため、急激なスパイクには起動が間に合わないことがある。「予測可能 = スケジュール、予測不能 = ターゲット追跡」。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "毎週月曜9時に必ずアクセスが急増する",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "急増の時刻が事前に分かるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "SCHED",
+      "label": "スケジュールスケーリング",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "T845",
+      "label": "月曜 8:45 — 予約した希望台数へ増やす",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "T900",
+      "label": "月曜 9:00 — アクセス急増を受け止める",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "TT",
+      "label": "ターゲット追跡スケーリング",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "LATE",
+      "label": "負荷が上がってから反応するため起動が間に合わないことがある",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "SIMPLE",
+      "label": "簡易スケーリング",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "HC",
+      "label": "ヘルスチェックによる置き換え",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "NOTE",
+      "label": "予測可能=スケジュール / 予測不能=ターゲット追跡",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "SCHED",
+      "verb": "分かるならスケジュール",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "SCHED",
+      "to": "T845",
+      "verb": "予約で先に増やす",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "T845",
+      "to": "T900",
+      "verb": "スパイクを迎える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "TT",
+      "verb": "分からないなら追跡",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "TT",
+      "to": "LATE",
+      "verb": "弱点を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "Q",
+      "to": "SIMPLE",
+      "verb": "事前確保はできない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "HC",
+      "verb": "事前確保はできない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "スパイク前にキャパシティを確保できない選択肢",
+      "element_ids": [
+        "TT",
+        "SIMPLE",
+        "HC"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐 + 短い時間軸: 判断を1問に絞り、正解側だけ 8:45 → 9:00 の順序を描いて『前に増やす』を見せる",
+    "タイムライン2本: スケジュールとターゲット追跡の台数推移を同じ時間軸に並べて比較する"
+  ],
+  "selected_pattern": "分岐 + 短い時間軸。タイムライン2本は台数の推移カーブを描くことになるが、解説に台数や所要時間の数値はなく創作になる。分岐に 8:45 → 9:00 の2ステップだけ添えれば「スパイク前」という要点が数値を作らずに伝わる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "簡易スケーリングとヘルスチェック置き換えが非最適な理由は解説に明示がないため、グループの枠で「事前確保できない」とだけ示している。",
+    "ターゲット追跡が間に合わない度合い(起動時間)は解説に数値がないため図に入れていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"業務アプリは毎週月曜9時に<br/>必ずアクセスが急増する\"]:::req\n    Q{\"急増の時刻が<br/>事前に分かるか?\"}:::judge\n    SCHED[\"スケジュールスケーリング<br/>希望台数の変更を時刻で予約する\"]:::best\n    T845[\"月曜 8:45<br/>予約した台数まで先に増やす\"]:::best\n    T900[\"月曜 9:00<br/>アクセス急増を受け止められる\"]:::best\n\n    subgraph NG[\"スパイク前にキャパシティを確保できない選択肢\"]\n        TT[\"ターゲット追跡スケーリング<br/>負荷が上がってから反応する\"]:::alt\n        SIMPLE[\"簡易スケーリング\"]:::alt\n        HC[\"ヘルスチェックによる置き換え\"]:::alt\n    end\n\n    LATE[\"急激なスパイクでは<br/>起動が間に合わないことがある\"]:::note\n    NOTE[\"予測可能 = スケジュール<br/>予測不能 = ターゲット追跡\"]:::note\n\n    REQ --> Q\n    Q -->|\"分かる\"| SCHED\n    SCHED --> T845 --> T900\n    Q -->|\"分からない\"| TT\n    TT -.- LATE\n    Q -.-> SIMPLE\n    Q -.-> HC\n    Q -.- NOTE"
+}

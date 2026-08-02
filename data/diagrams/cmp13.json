@@ -1,0 +1,160 @@
+{
+  "question_id": "cmp13",
+  "purpose": "Fargate が ECS / EKS 共通の「起動タイプ」であり、ホスト管理の有無だけが分かれ目だと示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Fargate を ECS/EKS と並ぶ別サービスだと誤解しがちな人。",
+  "message": "サーバー管理をゼロにしたいなら、ECS でも EKS でもホストを持たない Fargate を選ぶ。",
+  "source_summary": "コンテナを実行したいがプロビジョニングやパッチ適用などのサーバー管理を一切したくない問題。正解は AWS Fargate。コンテナ向けのサーバーレスコンピューティングエンジンで、ECS・EKS の起動タイプとして選択でき、ホストの管理・スケーリング・パッチ適用が不要になる。EC2 起動タイプはホストを自分で管理する分、細かいチューニングやコスト最適化が可能。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "コンテナを実行したい / プロビジョニングもパッチ適用もしたくない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "ORCH",
+      "label": "ECS / EKS(オーケストレーション)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "Q",
+      "label": "ホスト EC2 の運用を引き受けるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "FARGATE",
+      "label": "AWS Fargate(サーバーレスな起動タイプ)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "FREE",
+      "label": "ホストの管理・スケーリング・パッチ適用が不要",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "ECSEC2",
+      "label": "ECS on EC2",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "EKSSELF",
+      "label": "EKS のセルフマネージドノード",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DOCKER",
+      "label": "EC2 上に Docker を手動インストール",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "TUNE",
+      "label": "自分で管理する分、細かいチューニングやコスト最適化が可能",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "NOTE",
+      "label": "合言葉: サーバー管理不要のコンテナ = Fargate",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "ORCH",
+      "to": "FARGATE",
+      "verb": "起動タイプとして選べる",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "Q",
+      "to": "FARGATE",
+      "verb": "引き受けないなら Fargate",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "FARGATE",
+      "to": "FREE",
+      "verb": "もたらす",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "Q",
+      "to": "ECSEC2",
+      "verb": "引き受ける側に落ちる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "EKSSELF",
+      "verb": "引き受ける側に落ちる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "DOCKER",
+      "verb": "引き受ける側に落ちる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "ECSEC2",
+      "to": "TUNE",
+      "verb": "見返りを補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "FARGATE",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "ホストの運用を自分で引き受ける選択肢",
+      "element_ids": [
+        "ECSEC2",
+        "EKSSELF",
+        "DOCKER"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "レイヤー図 + 分岐: ECS/EKS の下に起動タイプを置き、その選択を1つの判断で決める",
+    "分岐のみ: 4選択肢を「ホストを持つ/持たない」で二分する"
+  ],
+  "selected_pattern": "レイヤー図 + 分岐。分岐のみだと Fargate が ECS/EKS と並ぶ別サービスに見えてしまい、解説の「ECS・EKS の起動タイプとして選択できる」を伝えられない。オーケストレーション層を1ノード足すだけで誤読を防げる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "EKS + Fargate の組み合わせは解説に「ECS・EKS の起動タイプ」とあることを根拠に、オーケストレーション層を ECS/EKS の1ノードにまとめて表現している。EC2 起動タイプ側への線は交差が増えるため引いていない。",
+    "cmp05 と正解サービスが同じ。cmp05 は ECS の起動タイプ二択、本問は ECS/EKS 共通の実行基盤という視点で描き分けている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"コンテナを実行したい<br/>プロビジョニングもパッチ適用もしたくない\"]:::req\n    ORCH[\"ECS / EKS(オーケストレーション)\"]:::svc\n    Q{\"ホスト EC2 の運用を<br/>引き受けるか?\"}:::judge\n    FARGATE[\"AWS Fargate<br/>コンテナ向けサーバーレス実行エンジン\"]:::best\n    FREE[\"ホストの管理・スケーリング・<br/>パッチ適用が不要\"]:::best\n\n    subgraph OWN[\"ホストの運用を自分で引き受ける選択肢\"]\n        ECSEC2[\"ECS on EC2\"]:::alt\n        EKSSELF[\"EKS のセルフマネージドノード\"]:::alt\n        DOCKER[\"EC2 上に Docker を手動インストール\"]:::alt\n    end\n\n    TUNE[\"自分で管理する分<br/>細かいチューニングやコスト最適化が可能\"]:::note\n    NOTE[\"サーバー管理不要のコンテナ = Fargate\"]:::note\n\n    REQ --> Q\n    Q -->|\"引き受けない\"| FARGATE\n    ORCH -.->|\"起動タイプ\"| FARGATE\n    FARGATE --> FREE\n    Q -->|\"引き受ける\"| ECSEC2\n    Q -->|\"引き受ける\"| EKSSELF\n    Q -->|\"引き受ける\"| DOCKER\n    ECSEC2 -.- TUNE\n    FARGATE -.- NOTE"
+}

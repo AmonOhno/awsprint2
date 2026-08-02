@@ -1,0 +1,147 @@
+{
+  "question_id": "cmp12",
+  "purpose": "Savings Plans の2種類が「割引の適用先を固定するか否か」で分かれることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、リザーブドと Savings Plans の違い、および Compute と EC2 Instance の違いが混ざる人。",
+  "message": "ファミリーやリージョンを変えたいなら、適用先を固定しない Compute Savings Plans を選ぶ。",
+  "source_summary": "3年 EC2 を使い続けるがファミリー・リージョンは柔軟に変えたい場合の購入オプションを選ぶ問題。正解は Compute Savings Plans。1時間あたりの利用金額にコミットする方式で、インスタンスファミリー・リージョン・OS を問わず割引が適用され、Fargate や Lambda にも有効。EC2 Instance Savings Plans は割引率が高い代わりに特定リージョン・ファミリーに固定される。「柔軟性重視 = Compute、割引率重視 = EC2 Instance」。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "今後3年 EC2 を使い続ける / ファミリー・リージョンは柔軟に変えたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "割引の適用先を固定してよいか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CSP",
+      "label": "Compute Savings Plans",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "COMMIT",
+      "label": "1時間あたりの利用金額にコミットする",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "SCOPE",
+      "label": "ファミリー・リージョン・OS を問わず適用(Fargate / Lambda にも有効)",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "EISP",
+      "label": "EC2 Instance Savings Plans",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "RI",
+      "label": "スタンダードリザーブドインスタンス",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SPOT",
+      "label": "スポットインスタンス",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "柔軟性重視=Compute / 割引率重視=EC2 Instance",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "CSP",
+      "verb": "固定しないなら Compute",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CSP",
+      "to": "COMMIT",
+      "verb": "コミットの単位",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "COMMIT",
+      "to": "SCOPE",
+      "verb": "その結果こう適用される",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "Q",
+      "to": "EISP",
+      "verb": "固定してよいなら割引率優先",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "RI",
+      "verb": "柔軟性の要件に合わない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SPOT",
+      "verb": "柔軟性の要件に合わない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "適用先が固定される / 要件に合わない選択肢",
+      "element_ids": [
+        "EISP",
+        "RI",
+        "SPOT"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「適用先を固定してよいか」の1問で Compute と他オプションを分ける",
+    "マトリクス: 「柔軟性」×「割引率」の2軸に4オプションを配置する"
+  ],
+  "selected_pattern": "分岐(判断フロー)。マトリクスはリザーブドとスポットの割引率を解説にない根拠で位置づけることになる。分岐なら解説にある「柔軟性か割引率か」という一点だけで判断でき、創作せずに済む。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "スタンダードリザーブドインスタンスとスポットインスタンスが非最適な理由は解説に明示がないため、グループの枠で示すにとどめている。",
+    "cmp01 では『リザーブド / Savings Plans』を1ノードにまとめている。本問で両者を分けたことで粒度が異なるが、いずれも各問の解説の粒度に合わせた結果。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"今後3年 EC2 を使い続ける<br/>ファミリーやリージョンは柔軟に変えたい\"]:::req\n    Q{\"割引の適用先を<br/>固定してよいか?\"}:::judge\n    CSP[\"Compute Savings Plans\"]:::best\n    COMMIT[\"1時間あたりの利用金額にコミット\"]:::best\n    SCOPE[\"ファミリー・リージョン・OS を問わず適用<br/>Fargate や Lambda にも有効\"]:::best\n\n    subgraph NG[\"適用先が固定される / 要件に合わない選択肢\"]\n        EISP[\"EC2 Instance Savings Plans<br/>割引率は高いがリージョン・ファミリーに固定\"]:::alt\n        RI[\"スタンダードリザーブドインスタンス\"]:::alt\n        SPOT[\"スポットインスタンス\"]:::alt\n    end\n\n    NOTE[\"柔軟性重視 = Compute<br/>割引率重視 = EC2 Instance\"]:::note\n\n    REQ --> Q\n    Q -->|\"固定しない\"| CSP\n    CSP --> COMMIT --> SCOPE\n    Q -->|\"固定してよい\"| EISP\n    Q -.-> RI\n    Q -.-> SPOT\n    Q -.- NOTE"
+}
