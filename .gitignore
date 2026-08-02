@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# 図解ビルド用の開発依存(mermaid-cli)。生成した SVG 自体はコミットする
+node_modules/
+
+# Xcode / SwiftPM のローカル生成物
+ios/AWSStudy.swiftpm/.build/
+ios/AWSStudy.swiftpm/.swiftpm/
+*.xcuserdatad
+
+# Claude Code のセッション生成物
+.claude/scheduled_tasks.lock
