@@ -1,0 +1,147 @@
+{
+  "question_id": "cmp14",
+  "purpose": "コンテナオーケストレーターの選択を「既存の Kubernetes 資産をそのまま使えるか」という1つの分岐に還元して示す。",
+  "audience": "AWS 認定を学習中で、ECS と EKS の名前は知っているが選択の決め手を言語化できていない人。",
+  "message": "既存の Kubernetes 資産をそのまま使うことが要件なら、標準 Kubernetes API と完全互換の EKS を選ぶ。",
+  "source_summary": "EKS はマネージド Kubernetes サービスで標準の Kubernetes API と完全互換。既存のマニフェスト・kubectl・Helm チャートをそのまま利用できる。ECS は AWS 独自のオーケストレーターなので Kubernetes 資産は流用できない。判断の合言葉は「Kubernetes 互換が要件 = EKS」。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "オンプレミスの Kubernetes 資産をそのまま使いたい",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "Kubernetes API との互換が要るか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "EKS",
+      "label": "Amazon EKS(マネージド Kubernetes)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "COMPAT",
+      "label": "標準の Kubernetes API と完全互換",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "ASSETS",
+      "label": "既存のマニフェスト・kubectl・Helm がそのまま動く",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "ECS",
+      "label": "Amazon ECS(AWS 独自のオーケストレーター)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "EB",
+      "label": "AWS Elastic Beanstalk",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "AR",
+      "label": "AWS App Runner",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "NOTE",
+      "label": "合言葉「Kubernetes 互換が要件 = EKS」",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "EKS",
+      "verb": "互換が要る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "EKS",
+      "to": "COMPAT",
+      "verb": "備える",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "COMPAT",
+      "to": "ASSETS",
+      "verb": "そのまま流用できる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "ECS",
+      "verb": "互換が要らない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "EB",
+      "verb": "Kubernetes 資産は流用できない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "AR",
+      "verb": "Kubernetes 資産は流用できない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "EKS",
+      "to": "NOTE",
+      "verb": "誤読しやすい点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "Kubernetes 資産を流用できない選択肢",
+      "element_ids": [
+        "ECS",
+        "EB",
+        "AR"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐: 「Kubernetes 互換が要るか」の1判断から EKS 側と非 Kubernetes 側へ分ける",
+    "対比(左右2グループ): Kubernetes 互換陣営と AWS 独自陣営を並べて特徴を比べる"
+  ],
+  "selected_pattern": "分岐。対比だと ECS / Beanstalk / App Runner それぞれの特徴を解説にない根拠で書き分ける必要が出る。分岐なら解説が示す唯一の判断軸(互換が要るか)がそのまま線の形になる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Elastic Beanstalk と App Runner が非最適な理由は解説に記述がないため、個別の理由を書かずグループの枠で位置づけるにとどめている。",
+    "EKS のコントロールプレーン運用やコスト面は解説の範囲外のため描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"オンプレミスで運用してきた<br/>Kubernetes のマニフェスト・ツールを<br/>そのまま使って移行したい\"]:::req\n    Q{\"Kubernetes API との<br/>互換が要るか?\"}:::judge\n    EKS[\"Amazon EKS<br/>マネージド Kubernetes\"]:::best\n    COMPAT[\"標準の Kubernetes API と完全互換\"]:::best\n    ASSETS[\"既存のマニフェスト・kubectl・<br/>Helm チャートをそのまま利用\"]:::best\n    NOTE[\"Kubernetes 互換が要件 = EKS\"]:::note\n\n    subgraph NG[\"Kubernetes 資産を流用できない選択肢\"]\n        ECS[\"Amazon ECS<br/>AWS 独自のオーケストレーター\"]:::alt\n        EB[\"AWS Elastic Beanstalk\"]:::alt\n        AR[\"AWS App Runner\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"互換が要る\"| EKS\n    EKS --> COMPAT --> ASSETS\n    Q -->|\"AWS 独自でよい\"| ECS\n    Q -.-> EB\n    Q -.-> AR\n    EKS -.- NOTE"
+}

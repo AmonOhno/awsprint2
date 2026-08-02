@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 13 問 / 全 400 問
+収録: 23 問 / 全 400 問
 
 ---
 
@@ -695,3 +695,534 @@ flowchart TD
 **解説**: Fargate はコンテナ向けのサーバーレスコンピューティングエンジンで、ECS・EKS の起動タイプとして選択でき、ホストの管理・スケーリング・パッチ適用が不要になります。EC2 起動タイプはホストを自分で管理する分、細かいチューニングやコスト最適化が可能です。「サーバー管理不要のコンテナ = Fargate」が鉄板です。
 
 **確認事項**: EKS + Fargate の組み合わせは解説に「ECS・EKS の起動タイプ」とあることを根拠に、オーケストレーション層を ECS/EKS の1ノードにまとめて表現している。EC2 起動タイプ側への線は交差が増えるため引いていない。 / cmp05 と正解サービスが同じ。cmp05 は ECS の起動タイプ二択、本問は ECS/EKS 共通の実行基盤という視点で描き分けている。
+
+---
+
+## cmp14 — コンピューティング / level 2
+
+**問題**: オンプレミスで Kubernetes を運用してきたチームが、既存のマニフェストやツールをそのまま使いながら AWS へ移行したい。どのサービスが適切か?
+
+**正解**: Amazon EKS
+
+**他の選択肢**: Amazon ECS / AWS Elastic Beanstalk / AWS App Runner
+
+**図解の主メッセージ**: 既存の Kubernetes 資産をそのまま使うことが要件なら、標準 Kubernetes API と完全互換の EKS を選ぶ。
+
+**採用パターン**: 分岐。対比だと ECS / Beanstalk / App Runner それぞれの特徴を解説にない根拠で書き分ける必要が出る。分岐なら解説が示す唯一の判断軸(互換が要るか)がそのまま線の形になる。(候補: 分岐: 「Kubernetes 互換が要るか」の1判断から EKS 側と非 Kubernetes 側へ分ける / 対比(左右2グループ): Kubernetes 互換陣営と AWS 独自陣営を並べて特徴を比べる)
+
+```mermaid
+flowchart TD
+    REQ["オンプレミスで運用してきた<br/>Kubernetes のマニフェスト・ツールを<br/>そのまま使って移行したい"]:::req
+    Q{"Kubernetes API との<br/>互換が要るか?"}:::judge
+    EKS["Amazon EKS<br/>マネージド Kubernetes"]:::best
+    COMPAT["標準の Kubernetes API と完全互換"]:::best
+    ASSETS["既存のマニフェスト・kubectl・<br/>Helm チャートをそのまま利用"]:::best
+    NOTE["Kubernetes 互換が要件 = EKS"]:::note
+
+    subgraph NG["Kubernetes 資産を流用できない選択肢"]
+        ECS["Amazon ECS<br/>AWS 独自のオーケストレーター"]:::alt
+        EB["AWS Elastic Beanstalk"]:::alt
+        AR["AWS App Runner"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"互換が要る"| EKS
+    EKS --> COMPAT --> ASSETS
+    Q -->|"AWS 独自でよい"| ECS
+    Q -.-> EB
+    Q -.-> AR
+    EKS -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp14.svg`](../../web/diagrams/cmp14.svg)
+
+**解説**: EKS はマネージド Kubernetes サービスで、標準の Kubernetes API と完全互換のため、既存のマニフェスト・kubectl・Helm チャートをそのまま利用できます。ECS は AWS 独自のオーケストレーターなので Kubernetes 資産は流用できません。「Kubernetes 互換が要件 = EKS」で判断します。
+
+**確認事項**: Elastic Beanstalk と App Runner が非最適な理由は解説に記述がないため、個別の理由を書かずグループの枠で位置づけるにとどめている。 / EKS のコントロールプレーン運用やコスト面は解説の範囲外のため描いていない。
+
+---
+
+## cmp15 — コンピューティング / level 1
+
+**問題**: EC2 で一時的なスクラッチデータに対し最高レベルの IOPS が必要だが、インスタンス停止時にデータが消えても構わない。どのストレージが適切か?
+
+**正解**: インスタンスストア
+
+**他の選択肢**: EBS io2 ボリューム / EFS / S3
+
+**図解の主メッセージ**: データが消えてよいという条件があって初めて、ホスト直結 NVMe のインスタンスストアが最高 IOPS の答えになる。
+
+**採用パターン**: 合流(2要件 → 1解)。マトリクスは EFS と S3 の IOPS を解説にない根拠で位置づける必要が出る。合流なら「消えてよい、が効いて初めてインスタンスストアが選べる」という主メッセージがそのまま線の形になる。(候補: 合流(2要件 → 1解): 性能要件と永続性要件を1つの判断へ集め、両方を満たすインスタンスストアを導く / マトリクス: 「IOPS の高さ」×「永続性」の2軸に4つの選択肢を配置する)
+
+```mermaid
+flowchart TD
+    R1["一時的なスクラッチデータに<br/>最高レベルの IOPS が必要"]:::req
+    R2["インスタンス停止で<br/>データが消えても構わない"]:::req
+    Q{"2つの要件を<br/>同時に満たすのは?"}:::judge
+    IS["インスタンスストア"]:::best
+    NVME["ホストに物理接続された NVMe<br/>EBS を上回る数百万 IOPS"]:::best
+    EPH["インスタンスの停止・終了で<br/>データは失われる(エフェメラル)"]:::best
+    USE["キャッシュ・バッファ・<br/>一時計算領域に最適"]:::note
+    NOTE["永続化が必要なら EBS を選ぶ"]:::note
+
+    subgraph KEEP["データを永続化する選択肢"]
+        IO2["EBS io2 ボリューム"]:::alt
+        EFS["Amazon EFS"]:::alt
+        S3["Amazon S3"]:::alt
+    end
+
+    R1 --> Q
+    R2 --> Q
+    Q -->|"両方満たす"| IS
+    IS --> NVME
+    IS --> EPH
+    EPH -.- USE
+    Q -->|"永続化が前提"| IO2
+    Q -.-> EFS
+    Q -.-> S3
+    IO2 -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp15.svg`](../../web/diagrams/cmp15.svg)
+
+**解説**: インスタンスストアはホストに物理接続された NVMe ディスクで、EBS を上回る数百万 IOPS を実現できますが、インスタンスの停止・終了でデータが失われるエフェメラル(一時)ストレージです。キャッシュ・バッファ・一時計算領域に最適です。永続化が必要なら EBS を選びます。
+
+**確認事項**: EFS と S3 が非最適な理由は解説に記述がないため、「永続化する選択肢」という枠の位置づけにとどめている。 / インスタンスストアを持つインスタンスファミリーの限定や、再起動(reboot)ではデータが残る点は解説の範囲外のため描いていない。
+
+---
+
+## cmp16 — コンピューティング / level 2
+
+**問題**: EC2 インスタンス内のアプリが自身のインスタンス ID や IAM ロールの一時認証情報を取得する際、SSRF 攻撃への耐性を高めるために使用すべき方式はどれか?
+
+**正解**: IMDSv2(セッショントークン方式)
+
+**他の選択肢**: IMDSv1(リクエスト/レスポンス方式) / 認証情報をユーザーデータに埋め込む / アクセスキーを環境変数にハードコード
+
+**図解の主メッセージ**: 単純な GET だけで読めるか、先にセッショントークンを取る必要があるか — その一手間の差が SSRF 耐性の差になる。
+
+**採用パターン**: 対比 + 分岐。直列だと v2 の手順は分かっても「なぜ v1 では駄目か」が図に現れず、主メッセージ(一手間の差が耐性の差)を伝えられない。手順を左右に並べて初めて差が見える。(候補: 対比(上下2グループ)+ 分岐: v2 と v1 の取得手順を並べ、1つの判断から分ける / 直列: IMDSv2 の PUT → ヘッダー付与 → 取得の3ステップだけをタイムラインで描く)
+
+```mermaid
+flowchart TD
+    REQ["EC2 内のアプリが<br/>インスタンス ID や IAM 一時認証情報を<br/>メタデータから取得する"]:::req
+    Q{"トークン無しで<br/>読み出せるか?"}:::judge
+
+    subgraph V2["IMDSv2 — セッショントークン方式"]
+        PUT["PUT でセッショントークンを取得"]:::best
+        HDR["トークンをヘッダーに付けて<br/>メタデータへアクセス"]:::best
+        HARD["SSRF 経由の認証情報窃取が<br/>大幅に困難"]:::best
+        PUT --> HDR --> HARD
+    end
+
+    subgraph V1["IMDSv1 — リクエスト/レスポンス方式"]
+        GET["単純な GET だけで取得できる"]:::alt
+        LEAK["SSRF から同じ GET を<br/>踏ませるだけで漏れる"]:::alt
+        GET --> LEAK
+    end
+
+    subgraph OWN["認証情報をインスタンスに直接持たせる選択肢"]
+        UD["ユーザーデータに埋め込む"]:::alt
+        ENV["環境変数にハードコード"]:::alt
+    end
+
+    NOTE["新規インスタンスでは<br/>IMDSv2 の強制が推奨"]:::note
+
+    REQ --> Q
+    Q -->|"要トークン"| PUT
+    Q -->|"素の GET"| GET
+    Q -.-> UD
+    Q -.-> ENV
+    HARD -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp16.svg`](../../web/diagrams/cmp16.svg)
+
+**解説**: IMDSv2 はまず PUT リクエストでセッショントークンを取得し、それをヘッダーに付けてメタデータへアクセスする方式です。単純な GET だけで取得できる IMDSv1 と異なり、SSRF 経由での認証情報窃取を大幅に困難にします。新規インスタンスでは IMDSv2 の強制が推奨されます。
+
+**確認事項**: ユーザーデータ埋め込みとアクセスキーのハードコードが不適切な理由は解説に記述がないため、選択肢の文面だけを置き、理由は書いていない。 / IMDSv2 のホップ制限(既定 1)は SSRF 耐性に関わるが解説に記述がないため描いていない。
+
+---
+
+## cmp17 — コンピューティング / level 2
+
+**問題**: 起動に 20 分かかる分析アプリを載せた EC2 を夜間停止してコスト削減したいが、翌朝はメモリ上の状態を保ったまま数分で再開したい。どの機能を使うべきか?
+
+**正解**: EC2 Hibernate(休止)
+
+**他の選択肢**: 通常の停止と起動 / AMI を作成して毎朝復元 / リザーブドインスタンスへ変更
+
+**図解の主メッセージ**: メモリ上の状態を翌朝へ持ち越すのは、RAM を EBS へ保存して復元する Hibernate だけ。
+
+**採用パターン**: 対比(2経路)+ 分岐。タイムラインは時刻の目盛りが必要になり要素が増える割に、判断軸(メモリ状態を持ち越すか)が図の中心に来ない。分岐なら1つの問いから2経路へ分かれ、主メッセージがそのまま構造になる。(候補: 対比(2経路)+ 分岐: メモリ状態を持ち越す経路と持ち越さない経路を並べる / タイムライン: 夜(停止)→ 朝(起動)の時間軸に、Hibernate と通常停止の2本を敷く)
+
+```mermaid
+flowchart TD
+    REQ["起動に 20 分かかる分析アプリ<br/>夜間は停止してコスト削減<br/>翌朝は数分で再開したい"]:::req
+    Q{"メモリ上の状態を<br/>持ち越すか?"}:::judge
+
+    subgraph HIB["EC2 Hibernate(休止)"]
+        SAVE["RAM の内容を<br/>EBS ルートボリュームへ保存"]:::best
+        RESTORE["次回起動時に<br/>メモリ状態ごと復元"]:::best
+        FAST["再初期化とキャッシュの<br/>ウォームアップが不要"]:::best
+        SAVE --> RESTORE --> FAST
+    end
+
+    subgraph PLAIN["メモリ状態が復元されない選択肢"]
+        STOP["通常の停止と起動"]:::alt
+        AMI["AMI を作成して毎朝復元"]:::alt
+        RI["リザーブドインスタンスへ変更"]:::alt
+    end
+
+    COST["RAM 保存分の EBS 容量と<br/>暗号化が必要"]:::note
+
+    REQ --> Q
+    Q -->|"持ち越す"| SAVE
+    Q -->|"持ち越さない"| STOP
+    Q -.-> AMI
+    Q -.-> RI
+    SAVE -.- COST
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp17.svg`](../../web/diagrams/cmp17.svg)
+
+**解説**: Hibernate は RAM の内容を EBS ルートボリュームへ保存してから停止し、次回起動時にメモリ状態ごと復元します。アプリの再初期化やキャッシュのウォームアップが不要になるため、起動準備が長いワークロードに有効です。RAM 保存分の EBS 容量と暗号化が必要な点に注意します。
+
+**確認事項**: 通常の停止/起動・AMI 復元・リザーブドインスタンスが要件を満たさない理由は解説に個別記述がないため、Hibernate 側の説明の裏返し(メモリ状態が復元されない)としてグループ名で示すにとどめている。 / Hibernate の対象インスタンスタイプや RAM サイズの上限といった前提条件は解説の範囲外のため描いていない。
+
+---
+
+## cmp18 — コンピューティング / level 1
+
+**問題**: 開発者がコードをアップロードするだけで、EC2・ALB・Auto Scaling などのインフラを自動構築・管理してくれるサービスはどれか?
+
+**正解**: AWS Elastic Beanstalk
+
+**他の選択肢**: AWS CloudFormation / AWS Systems Manager / Amazon Lightsail
+
+**図解の主メッセージ**: 渡すのがコードだけなら PaaS の Elastic Beanstalk、インフラ定義のテンプレートを書くなら CloudFormation。
+
+**採用パターン**: 分岐 + 包含。レイヤー図は Beanstalk の内部構造の説明になり、試験で問われる「CloudFormation との使い分け」が図から消える。分岐にすれば判断軸が主役のまま、自動化の範囲は1ノードで足りる。(候補: 分岐 + 包含: 「渡すもの」の1判断で分け、Beanstalk が面倒を見る範囲を枠で囲う / レイヤー図: 開発者 / PaaS / 実リソース(EC2・ALB・ASG)を上下に積む)
+
+```mermaid
+flowchart TD
+    REQ["開発者はコードをアップロードするだけ<br/>EC2・ALB・Auto Scaling は<br/>自動で構築・管理してほしい"]:::req
+    Q{"渡すのはコードか<br/>インフラ定義か?"}:::judge
+    EB["AWS Elastic Beanstalk<br/>コードを渡すだけの PaaS"]:::best
+    AUTO["キャパシティ調整・ロードバランシング・<br/>ヘルスモニタリングまで自動化"]:::best
+    CFN["AWS CloudFormation<br/>テンプレートでインフラを定義する IaC"]:::alt
+    NOTE["裏側は通常の EC2 等なので<br/>必要なら細かい設定変更も可能"]:::note
+
+    subgraph OTHER["用途が異なる選択肢"]
+        SSM["AWS Systems Manager"]:::alt
+        LS["Amazon Lightsail"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"コードだけ"| EB
+    EB --> AUTO
+    EB -.- NOTE
+    Q -->|"テンプレート"| CFN
+    Q -.-> SSM
+    Q -.-> LS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp18.svg`](../../web/diagrams/cmp18.svg)
+
+**解説**: Elastic Beanstalk はコードをデプロイするだけで、キャパシティ調整・ロードバランシング・ヘルスモニタリングまで自動化する PaaS です。裏側のリソースは通常の EC2 等なので、必要なら細かい設定変更も可能です。CloudFormation は「テンプレートでインフラを定義する IaC」であり、コードだけ渡す使い方とは異なります。
+
+**確認事項**: Systems Manager と Lightsail が非最適な理由は解説に記述がないため、個別の理由を書かず「用途が異なる選択肢」の枠に置くにとどめている。 / Beanstalk が構築するリソース名(EC2・ALB・Auto Scaling)は問題文に挙がっているものだけを自動化の対象として記載している。
+
+---
+
+## cmp19 — コンピューティング / level 2
+
+**問題**: 東京リージョンで稼働中の EC2 環境を、災害対策として大阪リージョンでも起動できるようにしたい。カスタム AMI についてまず行うべきことは?
+
+**正解**: AMI を大阪リージョンへコピーする
+
+**他の選択肢**: AMI はグローバルリソースなのでそのまま使える / EBS スナップショットを S3 にエクスポートする / 大阪で新規にインスタンスを手動構築する
+
+**図解の主メッセージ**: AMI はリージョン単位のリソースなので、大阪で使うにはまず AMI のコピーが要る。
+
+**採用パターン**: 包含 + コピー矢印。分岐だけだと「リージョン単位」という言葉を読ませるだけになるが、枠を2つ描けばスコープが図形として伝わり、コピーが枠をまたぐ操作であることも同時に分かる。(候補: 包含(リージョン枠2つ)+ コピー矢印: リソースのスコープを枠そのもので表す / 分岐: 「AMI はグローバルかリージョン単位か」の判断から正解と誤答へ分ける)
+
+```mermaid
+flowchart TD
+    REQ["東京リージョンで稼働中の EC2 環境を<br/>災害対策として大阪でも起動したい"]:::req
+    Q{"AMI はそのまま<br/>他リージョンで使えるか?"}:::judge
+    NOTE["AMI・EBS スナップショットは<br/>リージョン単位(グローバルではない)"]:::note
+
+    subgraph TOKYO["東京リージョン"]
+        AMI_T["カスタム AMI"]:::svc
+    end
+
+    subgraph OSAKA["大阪リージョン"]
+        AMI_O["コピーされた AMI<br/>新しい AMI ID が割り振られる"]:::best
+        EC2_O["DR 用インスタンスを起動できる"]:::best
+        AMI_O --> EC2_O
+    end
+
+    KMS["KMS 暗号化 AMI は<br/>コピー先リージョンのキーで再暗号化"]:::note
+
+    subgraph NG["まず行うべきことにならない選択肢"]
+        GLOBAL["AMI はグローバルなので<br/>そのまま使える"]:::alt
+        EXP["EBS スナップショットを<br/>S3 にエクスポート"]:::alt
+        MANUAL["大阪で新規に手動構築"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"使えない"| AMI_T
+    AMI_T -->|"AMI をコピー"| AMI_O
+    Q -.-> GLOBAL
+    Q -.-> EXP
+    Q -.-> MANUAL
+    AMI_O -.- KMS
+    Q -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp19.svg`](../../web/diagrams/cmp19.svg)
+
+**解説**: AMI はリージョンローカルなリソースであり、別リージョンで使うには明示的なコピーが必要です。コピー先で新しい AMI ID が割り振られます。KMS 暗号化された AMI をコピーする場合は、コピー先リージョンのキーを指定して再暗号化します。「AMI・EBS スナップショットはリージョン単位」は頻出ポイントです。
+
+**確認事項**: EBS スナップショットの S3 エクスポートと手動構築が非最適な理由は解説に記述がないため、枠の位置づけにとどめている。 / コピー後のインスタンス起動は DR の目的から自明な後続として1ノードだけ置いた。実際の DR 手順(起動テンプレート等)は解説の範囲外のため描いていない。
+
+---
+
+## cmp20 — コンピューティング / level 2
+
+**問題**: Auto Scaling によるスケールイン時、インスタンスが終了する前にログを S3 へ退避する処理を確実に実行したい。どの機能を使うべきか?
+
+**正解**: ライフサイクルフック
+
+**他の選択肢**: 終了保護(Termination Protection) / スケールインクールダウン / CloudWatch アラーム
+
+**図解の主メッセージ**: 終了を Terminating:Wait で待たせて自前の処理を挟めるのはライフサイクルフックだけ。
+
+**採用パターン**: 直列(状態遷移)。対比は他3つの役割を解説にない根拠で書き分ける必要が出るうえ、「どこで処理が走るのか」という肝心の一点が図に現れない。直列なら待ち状態が流れの中の一区間として見える。(候補: 直列(状態遷移): スケールイン → Terminating:Wait → 処理 → continue → 終了 の順に並べる / 対比: 4つの選択肢の役割を並べ、終了前に割り込めるものを1つ選ばせる)
+
+```mermaid
+flowchart TD
+    REQ["スケールイン時、インスタンスが<br/>終了する前にログを S3 へ退避したい"]:::req
+    Q{"終了を待たせて<br/>処理を挟めるか?"}:::judge
+    HOOK["ライフサイクルフック"]:::best
+    WAIT["Terminating:Wait で一時停止"]:::best
+    JOB["ログ退避・接続のドレインなど<br/>カスタム処理を実行"]:::best
+    CONT["continue を通知すると<br/>終了が進む"]:::best
+    LAUNCH["起動時(Pending:Wait)にも<br/>同様のフックを設定できる"]:::note
+
+    subgraph NG["終了前に処理を挟めない選択肢"]
+        PROT["終了保護"]:::alt
+        COOL["スケールインクールダウン"]:::alt
+        CWA["CloudWatch アラーム"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"挟める"| HOOK
+    HOOK --> WAIT --> JOB --> CONT
+    Q -.-> PROT
+    Q -.-> COOL
+    Q -.-> CWA
+    HOOK -.- LAUNCH
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp20.svg`](../../web/diagrams/cmp20.svg)
+
+**解説**: ライフサイクルフックを使うと、インスタンスが Terminating:Wait 状態で一時停止し、その間にログ退避や接続のドレインなどのカスタム処理を実行できます。処理完了後に continue を通知すると終了が進みます。起動時(Pending:Wait)にも同様のフックを設定できます。
+
+**確認事項**: 終了保護・クールダウン・CloudWatch アラームが要件を満たさない理由は解説に記述がないため、「終了前に処理を挟めない」という共通点だけで枠にまとめている。 / フックのタイムアウト時間や既定の継続動作(ABANDON / CONTINUE)は解説の範囲外のため描いていない。
+
+---
+
+## cmp21 — コンピューティング / level 2
+
+**問題**: セッション情報をローカルに保持するレガシー Web アプリを ALB 配下で動かしたところ、リクエストごとに別サーバーへ振られてログインが切れる。応急対応として有効な ALB の機能はどれか?
+
+**正解**: スティッキーセッション(セッションアフィニティ)
+
+**他の選択肢**: クロスゾーン負荷分散 / 接続ドレイン / ホストベースルーティング
+
+**図解の主メッセージ**: ローカルにセッションを持つアプリの応急対応は、Cookie で同じターゲットへ固定するスティッキーセッション。
+
+**採用パターン**: 直列(症状 → 応急対応 → 恒久対応)。対比では解説が明示する「応急と恒久は別物」という前提が図から抜ける。直列なら正解が応急対応の位置に置かれ、外部化がその先にあることも同じ1枚で伝わる。(候補: 直列(症状 → 応急対応 → 恒久対応): 時間軸に沿って対応の段階を並べる / 対比: ALB の4機能を並べ、セッション固定に効くものを1つ選ばせる)
+
+```mermaid
+flowchart TD
+    REQ["セッション情報をローカルに保持する<br/>レガシー Web アプリを ALB 配下で稼働"]:::req
+    SYM["リクエストごとに別サーバーへ振られ<br/>ログインが切れる"]:::req
+    Q{"同じターゲットへ<br/>固定できるか?"}:::judge
+    STICKY["スティッキーセッション<br/>(セッションアフィニティ)"]:::best
+    COOKIE["ALB が Cookie で同一クライアントを<br/>同じターゲットへ振り続ける"]:::best
+    LIMIT["負荷の偏り・インスタンス障害時の<br/>セッション消失は残る"]:::note
+    PERM["ElastiCache や DynamoDB へ<br/>セッションを外部化"]:::svc
+
+    subgraph NG["振り先を固定しない選択肢"]
+        XZ["クロスゾーン負荷分散"]:::alt
+        DRAIN["接続ドレイン"]:::alt
+        HOST["ホストベースルーティング"]:::alt
+    end
+
+    REQ --> SYM --> Q
+    Q -->|"応急対応"| STICKY
+    STICKY --> COOKIE
+    COOKIE -.- LIMIT
+    LIMIT -.->|"恒久対応"| PERM
+    Q -.-> XZ
+    Q -.-> DRAIN
+    Q -.-> HOST
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp21.svg`](../../web/diagrams/cmp21.svg)
+
+**解説**: スティッキーセッションを有効にすると、ALB が Cookie を使って同一クライアントを同じターゲットへ振り続けるため、ローカルセッション依存のアプリでも動作します。ただし負荷の偏りやインスタンス障害時のセッション消失は残るため、恒久対応としては ElastiCache や DynamoDB へのセッション外部化が推奨されます。
+
+**確認事項**: クロスゾーン負荷分散・接続ドレイン・ホストベースルーティングが要件を満たさない理由は解説に記述がないため、「振り先を固定しない」という共通点だけで枠にまとめている。 / セッション外部化は正解の選択肢ではないが解説が推奨として挙げているため、緑(正解の構成要素)ではなく白のサービスとして応急対応の先に置いている。
+
+---
+
+## cmp22 — コンピューティング / level 1
+
+**問題**: スケールアウト(水平分散)に対応していないモノリシックなデータベースサーバーの性能が不足してきた。まず取れる対応はどれか?
+
+**正解**: より大きいインスタンスタイプへ変更する(スケールアップ)
+
+**他の選択肢**: インスタンスを複数台に増やす / スポットインスタンスに変更する / AZ を追加する
+
+**図解の主メッセージ**: アプリが分散に対応していないなら台数は増やせない。まずインスタンスタイプを上げる垂直スケーリング。
+
+**採用パターン**: 分岐(前提の確認 → 2経路)。対比だと2つのやり方が対等に見え、「今回は前提を満たさないから垂直しかない」という主メッセージが弱まる。判断を先頭に置けば前提が効いていることが線で分かる。(候補: 分岐(前提の確認 → 2経路): 「水平分散できるか」を先に問い、垂直側と水平側へ分ける / 対比(左右2グループ): 垂直スケーリングと水平スケーリングの特徴を並べて比べる)
+
+```mermaid
+flowchart TD
+    REQ["スケールアウトに対応していない<br/>モノリシックな DB サーバー<br/>性能が不足してきた"]:::req
+    Q{"アプリは水平分散<br/>できるか?"}:::judge
+    UP["より大きいインスタンスタイプへ変更<br/>(垂直スケーリング / スケールアップ)"]:::best
+    STEP["停止 → タイプ変更 → 起動"]:::best
+    PRE["水平スケーリングはアプリが<br/>ステートレスであることが前提"]:::note
+
+    subgraph NG["今回は性能不足を解決しない選択肢"]
+        MULTI["インスタンスを複数台に増やす<br/>(水平スケーリング)"]:::alt
+        AZ["AZ を追加する"]:::alt
+        SPOT["スポットインスタンスに変更"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"できない"| UP
+    UP --> STEP
+    Q -->|"前提が不成立"| MULTI
+    Q -.-> AZ
+    Q -.-> SPOT
+    MULTI -.- PRE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp22.svg`](../../web/diagrams/cmp22.svg)
+
+**解説**: 分散処理に対応していないアプリの性能向上は、インスタンスタイプを上位に変更する垂直スケーリング(スケールアップ)が基本です。EC2 は停止→タイプ変更→起動で簡単に変更できます。台数を増やす水平スケーリングはアプリ側がステートレスであることが前提です。
+
+**確認事項**: スポットインスタンスへの変更と AZ 追加が性能不足の解決にならない理由は解説に記述がないため、共通の枠に置くにとどめている。 / 水平スケーリング自体は正当な手段だが、本問はアプリが対応していない前提のため誤答側に置き、その前提を注釈で明示している。
+
+---
+
+## cmp23 — コンピューティング / level 2
+
+**問題**: 稼働中の EC2 群に対し、CloudWatch メトリクスの実績に基づいて「過剰・過小プロビジョニング」を判定し、最適なインスタンスタイプを提案してほしい。どのサービスを使うか?
+
+**正解**: AWS Compute Optimizer
+
+**他の選択肢**: AWS Cost Explorer / AWS Budgets / Amazon Inspector
+
+**図解の主メッセージ**: 利用実績のメトリクスから最適なインスタンスタイプを出すのは Compute Optimizer。コストの可視化とは役割が違う。
+
+**採用パターン**: 直列(入力 → 分析 → 推奨)+ 分岐。対比表は Budgets の役割を解説にない根拠で書く必要が出る。直列にすれば「CloudWatch の実績が入力で、推奨が出力」という Compute Optimizer 固有の働きが主役になり、他サービスは経路の違いとして片付く。(候補: 直列(入力 → 分析 → 推奨)+ 分岐: 実績が推奨に変わる流れを描き、他サービスは別経路にする / テーブル/対比: 4サービスの役割を並べて比較する)
+
+```mermaid
+flowchart TD
+    REQ["稼働中の EC2 群について<br/>過剰・過小プロビジョニングを判定し<br/>最適なインスタンスタイプを提案してほしい"]:::req
+    Q{"利用実績から<br/>サイズを判定するか?"}:::judge
+    CW["CloudWatch メトリクス<br/>CPU・メモリなどの利用実績"]:::svc
+    CO["AWS Compute Optimizer"]:::best
+    ML["機械学習で分析"]:::best
+    REC["EC2・Auto Scaling・EBS・Lambda の<br/>最適なサイズを推奨"]:::best
+    NOTE["Cost Explorer もライトサイジング推奨を持つが<br/>体系的な性能分析は Compute Optimizer"]:::note
+
+    subgraph NG["役割が異なる選択肢"]
+        CE["AWS Cost Explorer<br/>コストの可視化"]:::alt
+        BUD["AWS Budgets"]:::alt
+        INSP["Amazon Inspector<br/>脆弱性診断"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"実績で判定"| CO
+    CW --> CO
+    CO --> ML --> REC
+    Q -.-> CE
+    Q -.-> BUD
+    Q -.-> INSP
+    CE -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp23.svg`](../../web/diagrams/cmp23.svg)
+
+**解説**: Compute Optimizer は CPU・メモリなどの利用実績を機械学習で分析し、EC2・Auto Scaling・EBS・Lambda の最適なサイズを推奨します。Cost Explorer もライトサイジング推奨を持ちますが、体系的な性能分析は Compute Optimizer が担当です。Inspector は脆弱性診断でありサイジングとは無関係です。
+
+**確認事項**: Budgets が非最適な理由は解説に記述がないため、名前だけを「役割が異なる選択肢」の枠に置いている。 / Compute Optimizer の推奨対象(EC2・Auto Scaling・EBS・Lambda)は解説の記述をそのまま使い、精度や有効化手順は描いていない。

@@ -1,0 +1,160 @@
+{
+  "question_id": "cmp20",
+  "purpose": "スケールイン時に自前の処理を挟む場所が「Terminating:Wait」であることを状態の流れで示す。",
+  "audience": "AWS 認定を学習中で、Auto Scaling の基本は分かるが終了直前の処理の挟み方を知らない人。",
+  "message": "終了を Terminating:Wait で待たせて自前の処理を挟めるのはライフサイクルフックだけ。",
+  "source_summary": "ライフサイクルフックを使うと、インスタンスが Terminating:Wait 状態で一時停止し、その間にログ退避や接続のドレインなどのカスタム処理を実行できる。処理完了後に continue を通知すると終了が進む。起動時(Pending:Wait)にも同様のフックを設定できる。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "スケールイン時、終了前にログを S3 へ退避したい",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "終了を待たせて処理を挟めるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "HOOK",
+      "label": "ライフサイクルフック",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "WAIT",
+      "label": "Terminating:Wait で一時停止する状態",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "JOB",
+      "label": "ログ退避・接続ドレインなどのカスタム処理",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CONT",
+      "label": "continue 通知で終了が進む",
+      "type": "process",
+      "priority": "secondary"
+    },
+    {
+      "id": "PROT",
+      "label": "終了保護",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "COOL",
+      "label": "スケールインクールダウン",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CWA",
+      "label": "CloudWatch アラーム",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "LAUNCH",
+      "label": "起動時(Pending:Wait)にも同じフックを設定できる",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "HOOK",
+      "verb": "処理を挟める",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "HOOK",
+      "to": "WAIT",
+      "verb": "終了を止める",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "WAIT",
+      "to": "JOB",
+      "verb": "この間に実行する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "JOB",
+      "to": "CONT",
+      "verb": "完了を通知する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "PROT",
+      "verb": "処理を挟めない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "COOL",
+      "verb": "処理を挟めない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "CWA",
+      "verb": "処理を挟めない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "HOOK",
+      "to": "LAUNCH",
+      "verb": "対称の使い方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "終了前に処理を挟めない選択肢",
+      "element_ids": [
+        "PROT",
+        "COOL",
+        "CWA"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "直列(状態遷移): スケールイン → Terminating:Wait → 処理 → continue → 終了 の順に並べる",
+    "対比: 4つの選択肢の役割を並べ、終了前に割り込めるものを1つ選ばせる"
+  ],
+  "selected_pattern": "直列(状態遷移)。対比は他3つの役割を解説にない根拠で書き分ける必要が出るうえ、「どこで処理が走るのか」という肝心の一点が図に現れない。直列なら待ち状態が流れの中の一区間として見える。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "終了保護・クールダウン・CloudWatch アラームが要件を満たさない理由は解説に記述がないため、「終了前に処理を挟めない」という共通点だけで枠にまとめている。",
+    "フックのタイムアウト時間や既定の継続動作(ABANDON / CONTINUE)は解説の範囲外のため描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"スケールイン時、インスタンスが<br/>終了する前にログを S3 へ退避したい\"]:::req\n    Q{\"終了を待たせて<br/>処理を挟めるか?\"}:::judge\n    HOOK[\"ライフサイクルフック\"]:::best\n    WAIT[\"Terminating:Wait で一時停止\"]:::best\n    JOB[\"ログ退避・接続のドレインなど<br/>カスタム処理を実行\"]:::best\n    CONT[\"continue を通知すると<br/>終了が進む\"]:::best\n    LAUNCH[\"起動時(Pending:Wait)にも<br/>同様のフックを設定できる\"]:::note\n\n    subgraph NG[\"終了前に処理を挟めない選択肢\"]\n        PROT[\"終了保護\"]:::alt\n        COOL[\"スケールインクールダウン\"]:::alt\n        CWA[\"CloudWatch アラーム\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"挟める\"| HOOK\n    HOOK --> WAIT --> JOB --> CONT\n    Q -.-> PROT\n    Q -.-> COOL\n    Q -.-> CWA\n    HOOK -.- LAUNCH"
+}

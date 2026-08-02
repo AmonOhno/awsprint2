@@ -1,0 +1,133 @@
+{
+  "question_id": "cmp18",
+  "purpose": "Elastic Beanstalk と CloudFormation の違いを「開発者が渡すものは何か」という1点に絞って示す。",
+  "audience": "AWS 認定を学習中で、デプロイ系サービスの名前は知っているが PaaS と IaC の役割分担が混ざる人。",
+  "message": "渡すのがコードだけなら PaaS の Elastic Beanstalk、インフラ定義のテンプレートを書くなら CloudFormation。",
+  "source_summary": "Elastic Beanstalk はコードをデプロイするだけで、キャパシティ調整・ロードバランシング・ヘルスモニタリングまで自動化する PaaS。裏側のリソースは通常の EC2 等なので、必要なら細かい設定変更も可能。CloudFormation はテンプレートでインフラを定義する IaC であり、コードだけ渡す使い方とは異なる。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "コードをアップロードするだけでインフラを用意してほしい",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "渡すのはコードかインフラ定義か",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "EB",
+      "label": "AWS Elastic Beanstalk(PaaS)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "AUTO",
+      "label": "キャパシティ調整・ロードバランシング・ヘルスモニタリングの自動化",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "CFN",
+      "label": "AWS CloudFormation(テンプレートで定義する IaC)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SSM",
+      "label": "AWS Systems Manager",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "LS",
+      "label": "Amazon Lightsail",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "NOTE",
+      "label": "裏側は通常の EC2 等なので細かい設定変更も可能",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "EB",
+      "verb": "渡すのはコード",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "EB",
+      "to": "AUTO",
+      "verb": "まとめて自動化する",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "Q",
+      "to": "CFN",
+      "verb": "渡すのはインフラ定義",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SSM",
+      "verb": "用途が異なる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "LS",
+      "verb": "用途が異なる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "EB",
+      "to": "NOTE",
+      "verb": "誤読しやすい点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "用途が異なる選択肢",
+      "element_ids": [
+        "SSM",
+        "LS"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐 + 包含: 「渡すもの」の1判断で分け、Beanstalk が面倒を見る範囲を枠で囲う",
+    "レイヤー図: 開発者 / PaaS / 実リソース(EC2・ALB・ASG)を上下に積む"
+  ],
+  "selected_pattern": "分岐 + 包含。レイヤー図は Beanstalk の内部構造の説明になり、試験で問われる「CloudFormation との使い分け」が図から消える。分岐にすれば判断軸が主役のまま、自動化の範囲は1ノードで足りる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Systems Manager と Lightsail が非最適な理由は解説に記述がないため、個別の理由を書かず「用途が異なる選択肢」の枠に置くにとどめている。",
+    "Beanstalk が構築するリソース名(EC2・ALB・Auto Scaling)は問題文に挙がっているものだけを自動化の対象として記載している。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"開発者はコードをアップロードするだけ<br/>EC2・ALB・Auto Scaling は<br/>自動で構築・管理してほしい\"]:::req\n    Q{\"渡すのはコードか<br/>インフラ定義か?\"}:::judge\n    EB[\"AWS Elastic Beanstalk<br/>コードを渡すだけの PaaS\"]:::best\n    AUTO[\"キャパシティ調整・ロードバランシング・<br/>ヘルスモニタリングまで自動化\"]:::best\n    CFN[\"AWS CloudFormation<br/>テンプレートでインフラを定義する IaC\"]:::alt\n    NOTE[\"裏側は通常の EC2 等なので<br/>必要なら細かい設定変更も可能\"]:::note\n\n    subgraph OTHER[\"用途が異なる選択肢\"]\n        SSM[\"AWS Systems Manager\"]:::alt\n        LS[\"Amazon Lightsail\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"コードだけ\"| EB\n    EB --> AUTO\n    EB -.- NOTE\n    Q -->|\"テンプレート\"| CFN\n    Q -.-> SSM\n    Q -.-> LS"
+}

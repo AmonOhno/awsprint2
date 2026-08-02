@@ -1,0 +1,160 @@
+{
+  "question_id": "cmp21",
+  "purpose": "スティッキーセッションが「応急対応」であり、恒久対応はセッションの外部化であることを一続きの流れで示す。",
+  "audience": "AWS 認定を学習中で、ALB の機能名は挙げられるがセッション管理との関係を整理できていない人。",
+  "message": "ローカルにセッションを持つアプリの応急対応は、Cookie で同じターゲットへ固定するスティッキーセッション。",
+  "source_summary": "スティッキーセッションを有効にすると、ALB が Cookie を使って同一クライアントを同じターゲットへ振り続けるため、ローカルセッション依存のアプリでも動作する。ただし負荷の偏りやインスタンス障害時のセッション消失は残るため、恒久対応としては ElastiCache や DynamoDB へのセッション外部化が推奨される。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "セッションをローカルに保持するレガシー Web アプリ",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "SYM",
+      "label": "リクエストごとに別サーバーへ振られログインが切れる",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "同じターゲットへ固定できるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "STICKY",
+      "label": "ALB のスティッキーセッション",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "COOKIE",
+      "label": "Cookie で同一クライアントを同じターゲットへ振り続ける",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "LIMIT",
+      "label": "負荷の偏りと障害時のセッション消失は残る",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "PERM",
+      "label": "ElastiCache や DynamoDB へのセッション外部化",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "XZ",
+      "label": "クロスゾーン負荷分散",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "DRAIN",
+      "label": "接続ドレイン",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "HOST",
+      "label": "ホストベースルーティング",
+      "type": "artifact",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "SYM",
+      "verb": "症状として現れる",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "SYM",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "STICKY",
+      "verb": "応急対応として固定する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "STICKY",
+      "to": "COOKIE",
+      "verb": "仕組みを持つ",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "COOKIE",
+      "to": "LIMIT",
+      "verb": "残る課題を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "LIMIT",
+      "to": "PERM",
+      "verb": "恒久対応として推奨される",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "XZ",
+      "verb": "振り先を固定しない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "DRAIN",
+      "verb": "振り先を固定しない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "HOST",
+      "verb": "振り先を固定しない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "振り先を固定しない選択肢",
+      "element_ids": [
+        "XZ",
+        "DRAIN",
+        "HOST"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "直列(症状 → 応急対応 → 恒久対応): 時間軸に沿って対応の段階を並べる",
+    "対比: ALB の4機能を並べ、セッション固定に効くものを1つ選ばせる"
+  ],
+  "selected_pattern": "直列(症状 → 応急対応 → 恒久対応)。対比では解説が明示する「応急と恒久は別物」という前提が図から抜ける。直列なら正解が応急対応の位置に置かれ、外部化がその先にあることも同じ1枚で伝わる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "クロスゾーン負荷分散・接続ドレイン・ホストベースルーティングが要件を満たさない理由は解説に記述がないため、「振り先を固定しない」という共通点だけで枠にまとめている。",
+    "セッション外部化は正解の選択肢ではないが解説が推奨として挙げているため、緑(正解の構成要素)ではなく白のサービスとして応急対応の先に置いている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"セッション情報をローカルに保持する<br/>レガシー Web アプリを ALB 配下で稼働\"]:::req\n    SYM[\"リクエストごとに別サーバーへ振られ<br/>ログインが切れる\"]:::req\n    Q{\"同じターゲットへ<br/>固定できるか?\"}:::judge\n    STICKY[\"スティッキーセッション<br/>(セッションアフィニティ)\"]:::best\n    COOKIE[\"ALB が Cookie で同一クライアントを<br/>同じターゲットへ振り続ける\"]:::best\n    LIMIT[\"負荷の偏り・インスタンス障害時の<br/>セッション消失は残る\"]:::note\n    PERM[\"ElastiCache や DynamoDB へ<br/>セッションを外部化\"]:::svc\n\n    subgraph NG[\"振り先を固定しない選択肢\"]\n        XZ[\"クロスゾーン負荷分散\"]:::alt\n        DRAIN[\"接続ドレイン\"]:::alt\n        HOST[\"ホストベースルーティング\"]:::alt\n    end\n\n    REQ --> SYM --> Q\n    Q -->|\"応急対応\"| STICKY\n    STICKY --> COOKIE\n    COOKIE -.- LIMIT\n    LIMIT -.->|\"恒久対応\"| PERM\n    Q -.-> XZ\n    Q -.-> DRAIN\n    Q -.-> HOST"
+}

@@ -1,0 +1,134 @@
+{
+  "question_id": "cmp22",
+  "purpose": "水平スケーリングにはアプリ側の前提があり、それが無い場合は垂直スケーリングになることを示す。",
+  "audience": "AWS 認定を学習中で、スケールアップとスケールアウトの言葉は知っているが選択の前提条件を意識していない人。",
+  "message": "アプリが分散に対応していないなら台数は増やせない。まずインスタンスタイプを上げる垂直スケーリング。",
+  "source_summary": "分散処理に対応していないアプリの性能向上は、インスタンスタイプを上位に変更する垂直スケーリング(スケールアップ)が基本。EC2 は停止 → タイプ変更 → 起動で簡単に変更できる。台数を増やす水平スケーリングはアプリ側がステートレスであることが前提。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "スケールアウト非対応のモノリシックな DB サーバーの性能不足",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "アプリは水平分散できるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "UP",
+      "label": "より大きいインスタンスタイプへ変更(垂直スケーリング)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "STEP",
+      "label": "停止 → タイプ変更 → 起動という手順",
+      "type": "process",
+      "priority": "secondary"
+    },
+    {
+      "id": "PRE",
+      "label": "アプリがステートレスであることが前提",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "MULTI",
+      "label": "インスタンスを複数台に増やす(水平スケーリング)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SPOT",
+      "label": "スポットインスタンスに変更する案",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "AZ",
+      "label": "AZ を追加する案",
+      "type": "artifact",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "UP",
+      "verb": "分散できない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "UP",
+      "to": "STEP",
+      "verb": "この手順で行う",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "Q",
+      "to": "MULTI",
+      "verb": "前提を満たさない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SPOT",
+      "verb": "性能不足には効かない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "AZ",
+      "verb": "前提を満たさない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "MULTI",
+      "to": "PRE",
+      "verb": "前提条件を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "性能不足の解決にならない選択肢",
+      "element_ids": [
+        "MULTI",
+        "SPOT",
+        "AZ"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(前提の確認 → 2経路): 「水平分散できるか」を先に問い、垂直側と水平側へ分ける",
+    "対比(左右2グループ): 垂直スケーリングと水平スケーリングの特徴を並べて比べる"
+  ],
+  "selected_pattern": "分岐(前提の確認 → 2経路)。対比だと2つのやり方が対等に見え、「今回は前提を満たさないから垂直しかない」という主メッセージが弱まる。判断を先頭に置けば前提が効いていることが線で分かる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "スポットインスタンスへの変更と AZ 追加が性能不足の解決にならない理由は解説に記述がないため、共通の枠に置くにとどめている。",
+    "水平スケーリング自体は正当な手段だが、本問はアプリが対応していない前提のため誤答側に置き、その前提を注釈で明示している。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"スケールアウトに対応していない<br/>モノリシックな DB サーバー<br/>性能が不足してきた\"]:::req\n    Q{\"アプリは水平分散<br/>できるか?\"}:::judge\n    UP[\"より大きいインスタンスタイプへ変更<br/>(垂直スケーリング / スケールアップ)\"]:::best\n    STEP[\"停止 → タイプ変更 → 起動\"]:::best\n    PRE[\"水平スケーリングはアプリが<br/>ステートレスであることが前提\"]:::note\n\n    subgraph NG[\"今回は性能不足を解決しない選択肢\"]\n        MULTI[\"インスタンスを複数台に増やす<br/>(水平スケーリング)\"]:::alt\n        AZ[\"AZ を追加する\"]:::alt\n        SPOT[\"スポットインスタンスに変更\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"できない\"| UP\n    UP --> STEP\n    Q -->|\"前提が不成立\"| MULTI\n    Q -.-> AZ\n    Q -.-> SPOT\n    MULTI -.- PRE"
+}

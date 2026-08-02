@@ -1,0 +1,173 @@
+{
+  "question_id": "cmp15",
+  "purpose": "「最高 IOPS」と「消えてよい」という2つの要件が同じ答えを指すことを1枚で示す。",
+  "audience": "AWS 認定を学習中で、EC2 のストレージ選択肢は挙げられるが永続性と性能のトレードオフが整理できていない人。",
+  "message": "データが消えてよいという条件があって初めて、ホスト直結 NVMe のインスタンスストアが最高 IOPS の答えになる。",
+  "source_summary": "インスタンスストアはホストに物理接続された NVMe ディスクで、EBS を上回る数百万 IOPS を実現できる。ただしインスタンスの停止・終了でデータが失われるエフェメラルストレージであり、キャッシュ・バッファ・一時計算領域に最適。永続化が必要なら EBS を選ぶ。",
+  "elements": [
+    {
+      "id": "R1",
+      "label": "一時的なスクラッチデータに最高レベルの IOPS が必要",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "R2",
+      "label": "インスタンス停止でデータが消えても構わない",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "2つの要件を同時に満たすのは何か",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "IS",
+      "label": "インスタンスストア",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NVME",
+      "label": "ホスト直結の NVMe による数百万 IOPS",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "EPH",
+      "label": "停止・終了でデータが失われるエフェメラル特性",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "USE",
+      "label": "キャッシュ・バッファ・一時計算領域という用途",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "IO2",
+      "label": "EBS io2 ボリューム",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "EFS",
+      "label": "Amazon EFS",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "S3",
+      "label": "Amazon S3",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "NOTE",
+      "label": "永続化が必要なら EBS という対応関係",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "R1",
+      "to": "Q",
+      "verb": "要件として持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "R2",
+      "to": "Q",
+      "verb": "要件として持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "IS",
+      "verb": "両方を満たす",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "IS",
+      "to": "NVME",
+      "verb": "備える",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "IS",
+      "to": "EPH",
+      "verb": "引き換えに負う",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "EPH",
+      "to": "USE",
+      "verb": "用途を限定する",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "Q",
+      "to": "IO2",
+      "verb": "永続化が前提なら",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "EFS",
+      "verb": "永続化が前提なら",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "S3",
+      "verb": "永続化が前提なら",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "IO2",
+      "to": "NOTE",
+      "verb": "対応関係を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "データを永続化する選択肢",
+      "element_ids": [
+        "IO2",
+        "EFS",
+        "S3"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "合流(2要件 → 1解): 性能要件と永続性要件を1つの判断へ集め、両方を満たすインスタンスストアを導く",
+    "マトリクス: 「IOPS の高さ」×「永続性」の2軸に4つの選択肢を配置する"
+  ],
+  "selected_pattern": "合流(2要件 → 1解)。マトリクスは EFS と S3 の IOPS を解説にない根拠で位置づける必要が出る。合流なら「消えてよい、が効いて初めてインスタンスストアが選べる」という主メッセージがそのまま線の形になる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "EFS と S3 が非最適な理由は解説に記述がないため、「永続化する選択肢」という枠の位置づけにとどめている。",
+    "インスタンスストアを持つインスタンスファミリーの限定や、再起動(reboot)ではデータが残る点は解説の範囲外のため描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    R1[\"一時的なスクラッチデータに<br/>最高レベルの IOPS が必要\"]:::req\n    R2[\"インスタンス停止で<br/>データが消えても構わない\"]:::req\n    Q{\"2つの要件を<br/>同時に満たすのは?\"}:::judge\n    IS[\"インスタンスストア\"]:::best\n    NVME[\"ホストに物理接続された NVMe<br/>EBS を上回る数百万 IOPS\"]:::best\n    EPH[\"インスタンスの停止・終了で<br/>データは失われる(エフェメラル)\"]:::best\n    USE[\"キャッシュ・バッファ・<br/>一時計算領域に最適\"]:::note\n    NOTE[\"永続化が必要なら EBS を選ぶ\"]:::note\n\n    subgraph KEEP[\"データを永続化する選択肢\"]\n        IO2[\"EBS io2 ボリューム\"]:::alt\n        EFS[\"Amazon EFS\"]:::alt\n        S3[\"Amazon S3\"]:::alt\n    end\n\n    R1 --> Q\n    R2 --> Q\n    Q -->|\"両方満たす\"| IS\n    IS --> NVME\n    IS --> EPH\n    EPH -.- USE\n    Q -->|\"永続化が前提\"| IO2\n    Q -.-> EFS\n    Q -.-> S3\n    IO2 -.- NOTE"
+}

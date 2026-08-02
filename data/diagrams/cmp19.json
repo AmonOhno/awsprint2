@@ -1,0 +1,173 @@
+{
+  "question_id": "cmp19",
+  "purpose": "AMI がリージョンローカルなリソースであることを、2リージョンの枠とコピー矢印で一目で示す。",
+  "audience": "AWS 認定を学習中で、AMI は使えるがリソースのスコープ(グローバル/リージョン/AZ)を意識していない人。",
+  "message": "AMI はリージョン単位のリソースなので、大阪で使うにはまず AMI のコピーが要る。",
+  "source_summary": "AMI はリージョンローカルなリソースであり、別リージョンで使うには明示的なコピーが必要。コピー先で新しい AMI ID が割り振られる。KMS 暗号化された AMI をコピーする場合はコピー先リージョンのキーを指定して再暗号化する。「AMI・EBS スナップショットはリージョン単位」は頻出ポイント。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "東京の EC2 環境を大阪でも起動できるようにしたい",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "AMI はそのまま他リージョンで使えるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "AMI_T",
+      "label": "東京リージョンのカスタム AMI",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "AMI_O",
+      "label": "大阪へコピーされた AMI(新しい AMI ID)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "EC2_O",
+      "label": "大阪で起動できる DR 用インスタンス",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "GLOBAL",
+      "label": "AMI はグローバルなのでそのまま使えるという誤解",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "EXP",
+      "label": "EBS スナップショットを S3 へエクスポートする案",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "MANUAL",
+      "label": "大阪で新規に手動構築する案",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "KMS",
+      "label": "KMS 暗号化 AMI はコピー先のキーで再暗号化",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "NOTE",
+      "label": "AMI・EBS スナップショットはリージョン単位",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "AMI_T",
+      "verb": "そのままでは使えない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "AMI_T",
+      "to": "AMI_O",
+      "verb": "リージョンへコピーする",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "AMI_O",
+      "to": "EC2_O",
+      "verb": "起動元になる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "GLOBAL",
+      "verb": "誤答の前提",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "EXP",
+      "verb": "まず行うことではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "MANUAL",
+      "verb": "まず行うことではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "AMI_O",
+      "to": "KMS",
+      "verb": "暗号化時の注意を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "Q",
+      "to": "NOTE",
+      "verb": "頻出の合言葉を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "東京リージョン",
+      "element_ids": [
+        "AMI_T"
+      ]
+    },
+    {
+      "label": "大阪リージョン",
+      "element_ids": [
+        "AMI_O",
+        "EC2_O"
+      ]
+    },
+    {
+      "label": "まず行うべきことにならない選択肢",
+      "element_ids": [
+        "GLOBAL",
+        "EXP",
+        "MANUAL"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "包含(リージョン枠2つ)+ コピー矢印: リソースのスコープを枠そのもので表す",
+    "分岐: 「AMI はグローバルかリージョン単位か」の判断から正解と誤答へ分ける"
+  ],
+  "selected_pattern": "包含 + コピー矢印。分岐だけだと「リージョン単位」という言葉を読ませるだけになるが、枠を2つ描けばスコープが図形として伝わり、コピーが枠をまたぐ操作であることも同時に分かる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "EBS スナップショットの S3 エクスポートと手動構築が非最適な理由は解説に記述がないため、枠の位置づけにとどめている。",
+    "コピー後のインスタンス起動は DR の目的から自明な後続として1ノードだけ置いた。実際の DR 手順(起動テンプレート等)は解説の範囲外のため描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"東京リージョンで稼働中の EC2 環境を<br/>災害対策として大阪でも起動したい\"]:::req\n    Q{\"AMI はそのまま<br/>他リージョンで使えるか?\"}:::judge\n    NOTE[\"AMI・EBS スナップショットは<br/>リージョン単位(グローバルではない)\"]:::note\n\n    subgraph TOKYO[\"東京リージョン\"]\n        AMI_T[\"カスタム AMI\"]:::svc\n    end\n\n    subgraph OSAKA[\"大阪リージョン\"]\n        AMI_O[\"コピーされた AMI<br/>新しい AMI ID が割り振られる\"]:::best\n        EC2_O[\"DR 用インスタンスを起動できる\"]:::best\n        AMI_O --> EC2_O\n    end\n\n    KMS[\"KMS 暗号化 AMI は<br/>コピー先リージョンのキーで再暗号化\"]:::note\n\n    subgraph NG[\"まず行うべきことにならない選択肢\"]\n        GLOBAL[\"AMI はグローバルなので<br/>そのまま使える\"]:::alt\n        EXP[\"EBS スナップショットを<br/>S3 にエクスポート\"]:::alt\n        MANUAL[\"大阪で新規に手動構築\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"使えない\"| AMI_T\n    AMI_T -->|\"AMI をコピー\"| AMI_O\n    Q -.-> GLOBAL\n    Q -.-> EXP\n    Q -.-> MANUAL\n    AMI_O -.- KMS\n    Q -.- NOTE"
+}

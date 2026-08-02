@@ -1,0 +1,155 @@
+{
+  "question_id": "cmp17",
+  "purpose": "「翌朝も同じメモリ状態から始めたい」という要件が Hibernate 一択に行き着くことを示す。",
+  "audience": "AWS 認定を学習中で、EC2 の停止・起動は知っているが Hibernate の位置づけが曖昧な人。",
+  "message": "メモリ上の状態を翌朝へ持ち越すのは、RAM を EBS へ保存して復元する Hibernate だけ。",
+  "source_summary": "Hibernate は RAM の内容を EBS ルートボリュームへ保存してから停止し、次回起動時にメモリ状態ごと復元する。アプリの再初期化やキャッシュのウォームアップが不要になるため、起動準備が長いワークロードに有効。RAM 保存分の EBS 容量と暗号化が必要。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "起動 20 分のアプリを夜間停止し、翌朝は数分で再開したい",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "メモリ上の状態を持ち越すか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "SAVE",
+      "label": "RAM の内容を EBS ルートボリュームへ保存する手順",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "RESTORE",
+      "label": "次回起動時にメモリ状態ごと復元する手順",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "FAST",
+      "label": "再初期化とウォームアップが不要になる結果",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "STOP",
+      "label": "通常の停止と起動",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "AMI",
+      "label": "AMI を作成して毎朝復元する案",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "RI",
+      "label": "リザーブドインスタンスへ変更する案",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "COST",
+      "label": "RAM 保存分の EBS 容量と暗号化が必要",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "SAVE",
+      "verb": "持ち越す",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "SAVE",
+      "to": "RESTORE",
+      "verb": "保存した RAM を戻す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "RESTORE",
+      "to": "FAST",
+      "verb": "起動時間を縮める",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "Q",
+      "to": "STOP",
+      "verb": "持ち越さない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "AMI",
+      "verb": "持ち越さない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "RI",
+      "verb": "起動時間には効かない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "SAVE",
+      "to": "COST",
+      "verb": "前提条件を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "EC2 Hibernate(休止)",
+      "element_ids": [
+        "SAVE",
+        "RESTORE",
+        "FAST"
+      ]
+    },
+    {
+      "label": "メモリ状態が復元されない選択肢",
+      "element_ids": [
+        "STOP",
+        "AMI",
+        "RI"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "対比(2経路)+ 分岐: メモリ状態を持ち越す経路と持ち越さない経路を並べる",
+    "タイムライン: 夜(停止)→ 朝(起動)の時間軸に、Hibernate と通常停止の2本を敷く"
+  ],
+  "selected_pattern": "対比(2経路)+ 分岐。タイムラインは時刻の目盛りが必要になり要素が増える割に、判断軸(メモリ状態を持ち越すか)が図の中心に来ない。分岐なら1つの問いから2経路へ分かれ、主メッセージがそのまま構造になる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "通常の停止/起動・AMI 復元・リザーブドインスタンスが要件を満たさない理由は解説に個別記述がないため、Hibernate 側の説明の裏返し(メモリ状態が復元されない)としてグループ名で示すにとどめている。",
+    "Hibernate の対象インスタンスタイプや RAM サイズの上限といった前提条件は解説の範囲外のため描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"起動に 20 分かかる分析アプリ<br/>夜間は停止してコスト削減<br/>翌朝は数分で再開したい\"]:::req\n    Q{\"メモリ上の状態を<br/>持ち越すか?\"}:::judge\n\n    subgraph HIB[\"EC2 Hibernate(休止)\"]\n        SAVE[\"RAM の内容を<br/>EBS ルートボリュームへ保存\"]:::best\n        RESTORE[\"次回起動時に<br/>メモリ状態ごと復元\"]:::best\n        FAST[\"再初期化とキャッシュの<br/>ウォームアップが不要\"]:::best\n        SAVE --> RESTORE --> FAST\n    end\n\n    subgraph PLAIN[\"メモリ状態が復元されない選択肢\"]\n        STOP[\"通常の停止と起動\"]:::alt\n        AMI[\"AMI を作成して毎朝復元\"]:::alt\n        RI[\"リザーブドインスタンスへ変更\"]:::alt\n    end\n\n    COST[\"RAM 保存分の EBS 容量と<br/>暗号化が必要\"]:::note\n\n    REQ --> Q\n    Q -->|\"持ち越す\"| SAVE\n    Q -->|\"持ち越さない\"| STOP\n    Q -.-> AMI\n    Q -.-> RI\n    SAVE -.- COST"
+}

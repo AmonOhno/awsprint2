@@ -1,0 +1,174 @@
+{
+  "question_id": "cmp16",
+  "purpose": "IMDSv1 と IMDSv2 の取得手順の差が、そのまま SSRF 耐性の差になることを示す。",
+  "audience": "AWS 認定を学習中で、インスタンスメタデータの存在は知っているが v1 と v2 の違いを手順レベルで説明できない人。",
+  "message": "単純な GET だけで読めるか、先にセッショントークンを取る必要があるか — その一手間の差が SSRF 耐性の差になる。",
+  "source_summary": "IMDSv2 はまず PUT リクエストでセッショントークンを取得し、それをヘッダーに付けてメタデータへアクセスする。単純な GET だけで取得できる IMDSv1 と異なり、SSRF 経由での認証情報窃取を大幅に困難にする。新規インスタンスでは IMDSv2 の強制が推奨される。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "EC2 内のアプリがメタデータから ID と一時認証情報を取得する",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "トークン無しで読み出せるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "PUT",
+      "label": "PUT でセッショントークンを取得する手順",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "HDR",
+      "label": "トークンをヘッダーに付けてアクセスする手順",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "HARD",
+      "label": "SSRF 経由の窃取が大幅に困難になる結果",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "GET",
+      "label": "単純な GET だけで取得できる方式",
+      "type": "process",
+      "priority": "secondary"
+    },
+    {
+      "id": "LEAK",
+      "label": "SSRF から同じ GET を踏ませるだけで漏れる結果",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "UD",
+      "label": "ユーザーデータに認証情報を埋め込む案",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "ENV",
+      "label": "アクセスキーを環境変数にハードコードする案",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "NOTE",
+      "label": "新規インスタンスでは IMDSv2 の強制が推奨",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "PUT",
+      "verb": "トークンが要る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "PUT",
+      "to": "HDR",
+      "verb": "取得したトークンを使う",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "HDR",
+      "to": "HARD",
+      "verb": "耐性につながる",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "Q",
+      "to": "GET",
+      "verb": "トークン無しで読める",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "GET",
+      "to": "LEAK",
+      "verb": "窃取を許す",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "Q",
+      "to": "UD",
+      "verb": "メタデータを使わない案",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "ENV",
+      "verb": "メタデータを使わない案",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "HARD",
+      "to": "NOTE",
+      "verb": "運用上の推奨を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "IMDSv2 — セッショントークン方式",
+      "element_ids": [
+        "PUT",
+        "HDR",
+        "HARD"
+      ]
+    },
+    {
+      "label": "IMDSv1 — リクエスト/レスポンス方式",
+      "element_ids": [
+        "GET",
+        "LEAK"
+      ]
+    },
+    {
+      "label": "認証情報をインスタンスに直接持たせる選択肢",
+      "element_ids": [
+        "UD",
+        "ENV"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "対比(上下2グループ)+ 分岐: v2 と v1 の取得手順を並べ、1つの判断から分ける",
+    "直列: IMDSv2 の PUT → ヘッダー付与 → 取得の3ステップだけをタイムラインで描く"
+  ],
+  "selected_pattern": "対比 + 分岐。直列だと v2 の手順は分かっても「なぜ v1 では駄目か」が図に現れず、主メッセージ(一手間の差が耐性の差)を伝えられない。手順を左右に並べて初めて差が見える。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "ユーザーデータ埋め込みとアクセスキーのハードコードが不適切な理由は解説に記述がないため、選択肢の文面だけを置き、理由は書いていない。",
+    "IMDSv2 のホップ制限(既定 1)は SSRF 耐性に関わるが解説に記述がないため描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"EC2 内のアプリが<br/>インスタンス ID や IAM 一時認証情報を<br/>メタデータから取得する\"]:::req\n    Q{\"トークン無しで<br/>読み出せるか?\"}:::judge\n\n    subgraph V2[\"IMDSv2 — セッショントークン方式\"]\n        PUT[\"PUT でセッショントークンを取得\"]:::best\n        HDR[\"トークンをヘッダーに付けて<br/>メタデータへアクセス\"]:::best\n        HARD[\"SSRF 経由の認証情報窃取が<br/>大幅に困難\"]:::best\n        PUT --> HDR --> HARD\n    end\n\n    subgraph V1[\"IMDSv1 — リクエスト/レスポンス方式\"]\n        GET[\"単純な GET だけで取得できる\"]:::alt\n        LEAK[\"SSRF から同じ GET を<br/>踏ませるだけで漏れる\"]:::alt\n        GET --> LEAK\n    end\n\n    subgraph OWN[\"認証情報をインスタンスに直接持たせる選択肢\"]\n        UD[\"ユーザーデータに埋め込む\"]:::alt\n        ENV[\"環境変数にハードコード\"]:::alt\n    end\n\n    NOTE[\"新規インスタンスでは<br/>IMDSv2 の強制が推奨\"]:::note\n\n    REQ --> Q\n    Q -->|\"要トークン\"| PUT\n    Q -->|\"素の GET\"| GET\n    Q -.-> UD\n    Q -.-> ENV\n    HARD -.- NOTE"
+}

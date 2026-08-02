@@ -1,0 +1,160 @@
+{
+  "question_id": "cmp23",
+  "purpose": "「利用実績からサイズを判定する」役割が Compute Optimizer にあることを、入力 → 分析 → 推奨の流れで示す。",
+  "audience": "AWS 認定を学習中で、コスト系サービスの名前は挙げられるが役割の違いが曖昧な人。",
+  "message": "利用実績のメトリクスから最適なインスタンスタイプを出すのは Compute Optimizer。コストの可視化とは役割が違う。",
+  "source_summary": "Compute Optimizer は CPU・メモリなどの利用実績を機械学習で分析し、EC2・Auto Scaling・EBS・Lambda の最適なサイズを推奨する。Cost Explorer もライトサイジング推奨を持つが、体系的な性能分析は Compute Optimizer が担当。Inspector は脆弱性診断でありサイジングとは無関係。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "稼働中の EC2 群の過剰・過小プロビジョニングを判定したい",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "利用実績からサイズを判定するか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CW",
+      "label": "CloudWatch メトリクス(CPU・メモリなどの実績)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CO",
+      "label": "AWS Compute Optimizer",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ML",
+      "label": "機械学習による分析",
+      "type": "process",
+      "priority": "secondary"
+    },
+    {
+      "id": "REC",
+      "label": "EC2・Auto Scaling・EBS・Lambda の最適サイズを推奨",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "CE",
+      "label": "AWS Cost Explorer(ライトサイジング推奨も持つ)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "BUD",
+      "label": "AWS Budgets",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "INSP",
+      "label": "Amazon Inspector(脆弱性診断)",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "NOTE",
+      "label": "体系的な性能分析は Compute Optimizer が担当",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "CO",
+      "verb": "実績で判定する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "CW",
+      "to": "CO",
+      "verb": "入力になる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CO",
+      "to": "ML",
+      "verb": "分析する",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "ML",
+      "to": "REC",
+      "verb": "推奨を出す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "CE",
+      "verb": "役割が異なる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "BUD",
+      "verb": "役割が異なる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "INSP",
+      "verb": "役割が異なる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "CE",
+      "to": "NOTE",
+      "verb": "紛らわしい点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "役割が異なる選択肢",
+      "element_ids": [
+        "CE",
+        "BUD",
+        "INSP"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "直列(入力 → 分析 → 推奨)+ 分岐: 実績が推奨に変わる流れを描き、他サービスは別経路にする",
+    "テーブル/対比: 4サービスの役割を並べて比較する"
+  ],
+  "selected_pattern": "直列(入力 → 分析 → 推奨)+ 分岐。対比表は Budgets の役割を解説にない根拠で書く必要が出る。直列にすれば「CloudWatch の実績が入力で、推奨が出力」という Compute Optimizer 固有の働きが主役になり、他サービスは経路の違いとして片付く。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Budgets が非最適な理由は解説に記述がないため、名前だけを「役割が異なる選択肢」の枠に置いている。",
+    "Compute Optimizer の推奨対象(EC2・Auto Scaling・EBS・Lambda)は解説の記述をそのまま使い、精度や有効化手順は描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"稼働中の EC2 群について<br/>過剰・過小プロビジョニングを判定し<br/>最適なインスタンスタイプを提案してほしい\"]:::req\n    Q{\"利用実績から<br/>サイズを判定するか?\"}:::judge\n    CW[\"CloudWatch メトリクス<br/>CPU・メモリなどの利用実績\"]:::svc\n    CO[\"AWS Compute Optimizer\"]:::best\n    ML[\"機械学習で分析\"]:::best\n    REC[\"EC2・Auto Scaling・EBS・Lambda の<br/>最適なサイズを推奨\"]:::best\n    NOTE[\"Cost Explorer もライトサイジング推奨を持つが<br/>体系的な性能分析は Compute Optimizer\"]:::note\n\n    subgraph NG[\"役割が異なる選択肢\"]\n        CE[\"AWS Cost Explorer<br/>コストの可視化\"]:::alt\n        BUD[\"AWS Budgets\"]:::alt\n        INSP[\"Amazon Inspector<br/>脆弱性診断\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"実績で判定\"| CO\n    CW --> CO\n    CO --> ML --> REC\n    Q -.-> CE\n    Q -.-> BUD\n    Q -.-> INSP\n    CE -.- NOTE"
+}
