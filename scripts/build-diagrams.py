@@ -29,6 +29,7 @@ MERMAID_CONFIG = ROOT / "scripts" / "mermaid.config.json"
 WEB_SVG_DIR = ROOT / "web" / "diagrams"
 IOS_SVG_DIR = ROOT / "ios" / "AWSStudy.swiftpm" / "Resources" / "diagrams"
 WEB_MANIFEST = ROOT / "web" / "data" / "diagrams.js"
+IOS_MANIFEST = ROOT / "ios" / "AWSStudy.swiftpm" / "Resources" / "diagram-index.json"
 GALLERY = ROOT / "docs" / "diagrams" / "README.md"
 
 # 共通スタイル(docs/DIAGRAM-WORKFLOW.md 第4節)。各図の末尾に自動で付与する。
@@ -183,12 +184,16 @@ def main() -> None:
         sections.append(render_section(brief, questions[qid]))
         ids.append(qid)
 
-    # Web は file:// でも動かすため、図解の有無は fetch ではなくマニフェストで判定する
+    # 図解は全問には無いため、両アプリとも「図解を持つ問題ID」の一覧を必要とする
+    # (ホームの「図解つき問題」導線と、解説欄に図を出すかの判定に使う)
     WEB_MANIFEST.write_text(
         "// 自動生成ファイル — 直接編集禁止。scripts/build-diagrams.py が生成する。\n"
         "// 図解 SVG(web/diagrams/<問題ID>.svg)を持つ問題IDの一覧。\n"
         f"window.QUIZ_DIAGRAMS = {json.dumps(ids, ensure_ascii=False)};\n",
         encoding="utf-8",
+    )
+    IOS_MANIFEST.write_text(
+        json.dumps({"questionIds": ids}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
 
     header = [
@@ -206,7 +211,7 @@ def main() -> None:
     ]
     GALLERY.parent.mkdir(parents=True, exist_ok=True)
     GALLERY.write_text("\n".join(header) + "\n---\n\n".join(sections), encoding="utf-8")
-    print(f"OK: {len(ids)} 問 — SVG(web/ios)・{WEB_MANIFEST.relative_to(ROOT)}・{GALLERY.relative_to(ROOT)} を更新しました")
+    print(f"OK: {len(ids)} 問 — SVG(web/ios)・マニフェスト(web/ios)・{GALLERY.relative_to(ROOT)} を更新しました")
 
 
 if __name__ == "__main__":

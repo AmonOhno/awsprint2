@@ -14,6 +14,20 @@ enum DiagramLoader {
         let aspectRatio: CGFloat  // 幅 / 高さ
     }
 
+    private struct Index: Decodable {
+        let questionIds: [String]
+    }
+
+    /// 図解を持つ問題ID(Resources/diagram-index.json・build-diagrams.py が生成)。
+    /// 全400問のうち図解があるのは一部なので、ホームの「図解つき問題」導線でこれを使う。
+    static let questionIDsWithDiagram: Set<String> = {
+        guard let url = Bundle.main.url(forResource: "diagram-index", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let index = try? JSONDecoder().decode(Index.self, from: data)
+        else { return [] }
+        return Set(index.questionIds)
+    }()
+
     private static var cache: [String: Diagram?] = [:]
 
     static func diagram(for questionID: String) -> Diagram? {

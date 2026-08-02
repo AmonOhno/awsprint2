@@ -36,7 +36,7 @@ flowchart TD
     Q1 -->|"やり直せない"| Q2
     Q2 -->|"はい"| RI
     Q2 -->|"いいえ"| OD
-    START -.->|"物理占有の要件がある場合だけ"| DH
+    START -.->|"物理占有が必要な場合のみ"| DH
     SPOT -.- NOTE
     classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
     classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45

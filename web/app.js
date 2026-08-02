@@ -83,6 +83,8 @@
     $("stat-weak").textContent = weak.length;
     $("review-count").textContent = weak.length;
     $("btn-review").disabled = weak.length === 0;
+    $("diagram-count").textContent = DIAGRAM_IDS.size;
+    $("btn-diagram-quiz").disabled = DIAGRAM_IDS.size === 0;
 
     const streak = store.data.streak;
     $("streak-badge").hidden = streak < 2;
@@ -249,6 +251,10 @@
   $("btn-review").addEventListener("click", () => {
     const ids = new Set(store.weakIds());
     startQuiz(shuffle(QUESTIONS.filter((q) => ids.has(q.id))), "弱点復習");
+  });
+  // 図解があるのは一部の問題だけなので、そこだけを出題する導線を用意する
+  $("btn-diagram-quiz").addEventListener("click", () => {
+    startQuiz(shuffle(QUESTIONS.filter((q) => DIAGRAM_IDS.has(q.id))), "図解つき問題");
   });
   $("btn-flash").addEventListener("click", startFlash);
   $("btn-reset").addEventListener("click", () => {

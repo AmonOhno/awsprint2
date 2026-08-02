@@ -90,6 +90,17 @@ struct HomeView: View {
                 .buttonStyle(.bordered)
             }
 
+            // 図解があるのは一部の問題だけなので、そこだけを出題する導線を用意する
+            let withDiagram = questions.filter { DiagramLoader.questionIDsWithDiagram.contains($0.id) }
+            Button {
+                quizSession = QuizSession(questions: withDiagram.shuffled(), label: "図解つき問題")
+            } label: {
+                Label("図解つき問題 (\(withDiagram.count))", systemImage: "rectangle.3.group")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .disabled(withDiagram.isEmpty)
+
             Button("進捗リセット", role: .destructive) { showResetAlert = true }
                 .font(.footnote)
                 .frame(maxWidth: .infinity, alignment: .trailing)

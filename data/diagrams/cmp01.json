@@ -93,7 +93,7 @@
     {
       "from": "START",
       "to": "DH",
-      "verb": "物理占有要件がある場合だけ",
+      "verb": "物理占有が必要な場合のみ",
       "direction": "one-way",
       "kind": "other"
     },
@@ -120,5 +120,5 @@
   "open_questions": [
     "Savings Plans はリザーブドと1ノードにまとめている(解説の粒度に合わせた)。両者の違いを問う問題を追加する場合は分割が必要。"
   ],
-  "mermaid": "flowchart TD\n    START[\"夜間バッチ処理<br/>中断されても再実行できる / 低コスト最優先\"]:::req\n    Q1{\"中断されても<br/>やり直せるか?\"}:::judge\n    SPOT[\"スポットインスタンス<br/>余剰キャパシティを最大90%引き\"]:::best\n    NOTE[\"中断は2分前に通知される<br/>チェックポイント保存で再実行に備える\"]:::note\n    Q2{\"常時稼働で<br/>1年以上使い続けるか?\"}:::judge\n    RI[\"リザーブド / Savings Plans<br/>継続利用を前提に割引\"]:::alt\n    OD[\"オンデマンドインスタンス<br/>短期かつ中断不可ならこれ\"]:::alt\n    DH[\"Dedicated Hosts<br/>物理サーバ占有・ライセンス持込用\"]:::alt\n\n    START --> Q1\n    Q1 -->|\"やり直せる\"| SPOT\n    Q1 -->|\"やり直せない\"| Q2\n    Q2 -->|\"はい\"| RI\n    Q2 -->|\"いいえ\"| OD\n    START -.->|\"物理占有の要件がある場合だけ\"| DH\n    SPOT -.- NOTE"
+  "mermaid": "flowchart TD\n    START[\"夜間バッチ処理<br/>中断されても再実行できる / 低コスト最優先\"]:::req\n    Q1{\"中断されても<br/>やり直せるか?\"}:::judge\n    SPOT[\"スポットインスタンス<br/>余剰キャパシティを最大90%引き\"]:::best\n    NOTE[\"中断は2分前に通知される<br/>チェックポイント保存で再実行に備える\"]:::note\n    Q2{\"常時稼働で<br/>1年以上使い続けるか?\"}:::judge\n    RI[\"リザーブド / Savings Plans<br/>継続利用を前提に割引\"]:::alt\n    OD[\"オンデマンドインスタンス<br/>短期かつ中断不可ならこれ\"]:::alt\n    DH[\"Dedicated Hosts<br/>物理サーバ占有・ライセンス持込用\"]:::alt\n\n    START --> Q1\n    Q1 -->|\"やり直せる\"| SPOT\n    Q1 -->|\"やり直せない\"| Q2\n    Q2 -->|\"はい\"| RI\n    Q2 -->|\"いいえ\"| OD\n    START -.->|\"物理占有が必要な場合のみ\"| DH\n    SPOT -.- NOTE"
 }
