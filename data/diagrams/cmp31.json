@@ -1,0 +1,147 @@
+{
+  "question_id": "cmp31",
+  "purpose": "初回起動時のブートストラップを担う仕組みがユーザーデータであることを、起動から実行までの流れで示す。",
+  "audience": "AWS 認定を学習中で、ユーザーデータとインスタンスメタデータの役割を取り違えやすい人。",
+  "message": "初回起動時に root 権限で自動実行されるのはユーザーデータで、ミドルウェア導入や設定の初期化はここに書く。",
+  "source_summary": "ユーザーデータに記述したシェルスクリプトや cloud-init ディレクティブは、インスタンスの初回起動時に root 権限で自動実行され、パッケージ導入や設定の初期化(ブートストラップ)に使われる。頻繁に使う構成は AMI に焼き込み(ゴールデン AMI)、環境差分だけユーザーデータで注入するのが定石。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: EC2 の初回起動時にミドルウェア導入や設定スクリプトを自動実行したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "初回起動時に自動実行される仕組みはどれか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "UD",
+      "label": "ユーザーデータ(シェルスクリプト / cloud-init ディレクティブ)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "RUN",
+      "label": "初回起動時に root 権限で自動実行",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "BOOT",
+      "label": "パッケージ導入・設定の初期化(ブートストラップ)",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "MD",
+      "label": "インスタンスメタデータ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "AMI",
+      "label": "AMI の手動カスタマイズのみ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "PG",
+      "label": "プレイスメントグループ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "定石: 頻繁に使う構成はゴールデン AMI に焼き込み、環境差分だけユーザーデータで注入",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "UD",
+      "verb": "初回起動時に実行される",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "UD",
+      "to": "RUN",
+      "verb": "起動時に走る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "RUN",
+      "to": "BOOT",
+      "verb": "初期化を済ませる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "MD",
+      "verb": "自動実行の仕組みではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "AMI",
+      "verb": "自動実行の仕組みではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "PG",
+      "verb": "自動実行の仕組みではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "UD",
+      "to": "NOTE",
+      "verb": "実務での使い分けを補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "要件を満たさない他の選択肢",
+      "element_ids": [
+        "MD",
+        "AMI",
+        "PG"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "直列(起動 → 自動実行 → 初期化完了)+ 分岐: 起動時に何が走るかを時間順に描く",
+    "テーブル: 4つの仕組みを「実行タイミング」「用途」の2列で比較する"
+  ],
+  "selected_pattern": "直列 + 分岐。要件が「初回起動時」という時点を指定しているので、起動という時点を起点に一本の線で描けば、ユーザーデータがその線の上にある唯一の選択肢だと解読なしで分かる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "インスタンスメタデータ・プレイスメントグループの本来の役割は解説に記述がないため、名前だけを枠に置いている。",
+    "AMI は「不適切な選択肢」であると同時に解説の定石にも登場するため、注釈側にも線を引いて役割の違いを示している。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>EC2 の初回起動時にミドルウェアの導入や<br/>設定スクリプトを自動実行させたい\"]:::req\n    Q{\"初回起動時に自動実行される<br/>仕組みはどれか?\"}:::judge\n    UD[\"ユーザーデータ<br/>シェルスクリプト / cloud-init ディレクティブ\"]:::best\n    RUN[\"初回起動時に root 権限で自動実行\"]:::best\n    BOOT[\"パッケージ導入・設定の初期化<br/>= ブートストラップ\"]:::best\n    NOTE[\"定石<br/>頻繁に使う構成はゴールデン AMI に焼き込み<br/>環境差分だけユーザーデータで注入\"]:::note\n\n    subgraph OTHER[\"要件を満たさない他の選択肢\"]\n        MD[\"インスタンスメタデータ\"]:::alt\n        AMI[\"AMI の手動カスタマイズのみ\"]:::alt\n        PG[\"プレイスメントグループ\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"起動時に実行\"| UD\n    UD --> RUN\n    RUN --> BOOT\n    Q -.-> OTHER\n    UD -.- NOTE\n    AMI -.- NOTE"
+}

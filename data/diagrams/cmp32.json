@@ -1,0 +1,147 @@
+{
+  "question_id": "cmp32",
+  "purpose": "検査用アプライアンス群の前段に置くロードバランサーが GWLB であることを、動作する層と分散の対象で切り分ける。",
+  "audience": "AWS 認定を学習中で、ELB の4種類のうち GWLB だけ用途がぴんと来ていない人。",
+  "message": "トラフィックを透過的にセキュリティアプライアンス群へ流して検査させたいなら、レイヤー 3 のゲートウェイとして動く Gateway Load Balancer を使う。",
+  "source_summary": "GWLB はレイヤー 3 のゲートウェイとして動作し、GENEVE プロトコルでトラフィックをセキュリティアプライアンス群へ透過的に分散する。アプライアンスのスケーリングと可用性管理も担う。検査用アプライアンスの前段 = GWLB という一対一対応で覚えてよい。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: サードパーティー製の FW/IPS 仮想アプライアンス群に全トラフィックを透過的に検査させたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "何をどの層で分散するか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "GWLB",
+      "label": "Gateway Load Balancer(レイヤー 3 のゲートウェイとして動作)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "GEN",
+      "label": "GENEVE プロトコルで透過的に分散",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "APPL",
+      "label": "FW / IPS 仮想アプライアンス群(スケーリングと可用性管理も GWLB が担う)",
+      "type": "actor",
+      "priority": "primary"
+    },
+    {
+      "id": "ALB",
+      "label": "Application Load Balancer",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NLB",
+      "label": "Network Load Balancer",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CLB",
+      "label": "Classic Load Balancer",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "検査用アプライアンスの前段 = GWLB の一対一対応で覚えてよい",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "GWLB",
+      "verb": "L3 で透過的に流す",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "GWLB",
+      "to": "GEN",
+      "verb": "GENEVE で包む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "GEN",
+      "to": "APPL",
+      "verb": "アプライアンス群へ分散する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "ALB",
+      "verb": "検査用の前段ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NLB",
+      "verb": "検査用の前段ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "CLB",
+      "verb": "検査用の前段ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "GWLB",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "要件を満たさない他のロードバランサー",
+      "element_ids": [
+        "ALB",
+        "NLB",
+        "CLB"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "直列(トラフィック → GWLB → アプライアンス群)+ 分岐: 透過的に流れる経路を1本描く",
+    "レイヤー: L7 / L4 / L3 の層に4種類のロードバランサーを積んで位置づけを示す"
+  ],
+  "selected_pattern": "直列 + 分岐。解説の要点は「トラフィックがアプライアンス群へ透過的に流れる」ことなので、その流れを1本の線で見せるのが最短。レイヤー図は各ロードバランサーの層を解説にない粒度で説明することになり、主メッセージがぼやける。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "ALB / NLB / CLB それぞれが不適切な理由は解説に記述がないため、名前だけを「要件を満たさない他のロードバランサー」の枠に置いている。",
+    "検査後のトラフィックがどこへ戻るかは解説に記述がないため、図でも戻りの経路は描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>サードパーティー製のファイアウォール/IPS<br/>仮想アプライアンス群へ全トラフィックを<br/>透過的に流して検査させたい\"]:::req\n    Q{\"何をどの層で<br/>分散するか?\"}:::judge\n    GWLB[\"Gateway Load Balancer<br/>レイヤー 3 のゲートウェイとして動作\"]:::best\n    GEN[\"GENEVE プロトコルで<br/>トラフィックを透過的に分散\"]:::best\n    APPL[\"FW / IPS 仮想アプライアンス群<br/>スケーリングと可用性管理も GWLB が担う\"]:::best\n    NOTE[\"検査用アプライアンスの前段 = GWLB<br/>一対一対応で覚えてよい\"]:::note\n\n    subgraph OTHER[\"要件を満たさない他のロードバランサー\"]\n        ALB[\"Application Load Balancer\"]:::alt\n        NLB[\"Network Load Balancer\"]:::alt\n        CLB[\"Classic Load Balancer\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"L3 で透過\"| GWLB\n    GWLB --> GEN\n    GEN --> APPL\n    Q -.-> OTHER\n    GWLB -.- NOTE"
+}

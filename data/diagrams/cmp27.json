@@ -1,0 +1,133 @@
+{
+  "question_id": "cmp27",
+  "purpose": "「ユーザーの近くで EC2 を動かす」だけでは選択肢が絞れず、設備を誰が持つかまで見て初めて答えが決まることを示す。",
+  "audience": "AWS 認定を学習中で、Local Zones と Outposts をどちらも「近くに置くもの」と覚えていて取り違える人。",
+  "message": "ユーザーの近くで EC2 を動かしたいが自社設備は持ちたくない場合、AWS 側が大都市圏に設置する Local Zones が要件を満たす。",
+  "source_summary": "Local Zones は AWS がリージョン外の大都市圏に設置するインフラ拡張で、EC2 や EBS をユーザーの近くで実行し 1 桁ミリ秒のレイテンシーを実現する。自社設備は不要。Outposts は自社データセンターへの設置が前提であり、設備を持ちたくないという要件に合わない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: 遠方の大都市ユーザーにミリ秒単位の低レイテンシー / 自社 DC は持ちたくない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "ユーザーの近くに置く設備を誰が持つか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "LZ",
+      "label": "AWS Local Zones(AWS がリージョン外の大都市圏に設置)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "RES",
+      "label": "EC2・EBS をユーザーの近くで実行し 1 桁ミリ秒のレイテンシー",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "OP",
+      "label": "AWS Outposts(自社 DC への設置が前提)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "MR",
+      "label": "リージョンを増やして全リージョンに展開",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "TA",
+      "label": "S3 Transfer Acceleration",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "近さを満たしても自社設備が要る構成は要件外",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "LZ",
+      "verb": "AWS が設置する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "LZ",
+      "to": "RES",
+      "verb": "低レイテンシーを実現する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "OP",
+      "verb": "自社が設置する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "MR",
+      "verb": "近くに置く手段ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "TA",
+      "verb": "近くに置く手段ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "OP",
+      "to": "NOTE",
+      "verb": "取り違えやすい点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "要件を満たさない他の選択肢",
+      "element_ids": [
+        "MR",
+        "TA"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(設備の所有者で分ける): 近くに置く点は共通としたうえで所有者で Local Zones と Outposts を分ける",
+    "マトリクス: 「レイテンシー」×「自社設備の要否」の2軸に4選択肢を配置する"
+  ],
+  "selected_pattern": "分岐(設備の所有者で分ける)。この問題の誤答の中心は Outposts で、レイテンシーの軸では落ちず所有者の軸でだけ落ちる。分岐なら落ちる位置が一目で分かる。マトリクスは残り2選択肢を置く座標を解説にない根拠で決めることになる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "全リージョン展開・S3 Transfer Acceleration が不適切な理由は解説に記述がないため、名前だけを「要件を満たさない他の選択肢」の枠に置いている。",
+    "「1 桁ミリ秒」は解説の表現をそのまま使い、具体的な数値目標は足していない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>リージョンから遠い大都市のユーザーに<br/>ミリ秒単位の低レイテンシーで提供したい<br/>データセンターは自社で持ちたくない\"]:::req\n    Q{\"ユーザーの近くに置く設備を<br/>誰が持つか?\"}:::judge\n    LZ[\"AWS Local Zones<br/>AWS がリージョン外の大都市圏に設置<br/>自社設備は不要\"]:::best\n    RES[\"EC2・EBS をユーザーの近くで実行<br/>1 桁ミリ秒のレイテンシー\"]:::best\n    OP[\"AWS Outposts<br/>自社データセンターへの設置が前提\"]:::alt\n    NOTE[\"近さを満たしても<br/>自社設備が要る構成は要件外\"]:::note\n\n    subgraph OTHER[\"要件を満たさない他の選択肢\"]\n        MR[\"全リージョンに展開\"]:::alt\n        TA[\"S3 Transfer Acceleration\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"AWS が持つ\"| LZ\n    LZ --> RES\n    Q -.->|\"自社が持つ\"| OP\n    Q -.-> OTHER\n    OP -.- NOTE"
+}

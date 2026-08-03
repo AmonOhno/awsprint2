@@ -1,0 +1,174 @@
+{
+  "question_id": "cmp29",
+  "purpose": "Auto Scaling が「何を根拠に壊れたと判断するか」を切り替える設定であることを、検知できる層の違いとして示す。",
+  "audience": "AWS 認定を学習中で、Auto Scaling が勝手に不調なインスタンスを直してくれると思っている人。",
+  "message": "OS は生きていてアプリだけ落ちた状態を置換につなげたいなら、ヘルスチェックタイプを ELB にして ALB の判定を Auto Scaling に使わせる。",
+  "source_summary": "デフォルトの EC2 ヘルスチェックはハードウェア・OS レベルの障害しか検知しない。ヘルスチェックタイプを ELB にすると、ALB のヘルスチェック(HTTP 応答の確認)で unhealthy と判定されたインスタンスを Auto Scaling が終了・置換する。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: OS は正常だがアプリのプロセスだけが応答しないインスタンスを自動で入れ替えたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "どの層の異常を置換の根拠にするか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "EC2HC",
+      "label": "EC2 ヘルスチェック(既定): ハードウェア・OS レベルの障害だけを検知",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "MISS",
+      "label": "アプリだけ応答しない状態は検知されない",
+      "type": "state",
+      "priority": "secondary"
+    },
+    {
+      "id": "ALB",
+      "label": "ALB のヘルスチェック(HTTP 応答の確認)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "UNH",
+      "label": "unhealthy と判定",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "ASG",
+      "label": "Auto Scaling が終了・置換",
+      "type": "actor",
+      "priority": "primary"
+    },
+    {
+      "id": "CWA",
+      "label": "CloudWatch エージェントをインストール",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "TP",
+      "label": "終了保護を有効にする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "アプリ層の死活監視で置き換え = ELB ヘルスチェック連携",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "ALB",
+      "verb": "アプリ層を根拠にする",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "ALB",
+      "to": "UNH",
+      "verb": "応答がなければ判定する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "UNH",
+      "to": "ASG",
+      "verb": "終了・置換を起こす",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "EC2HC",
+      "verb": "OS 層だけを根拠にする",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "EC2HC",
+      "to": "MISS",
+      "verb": "アプリ層を取りこぼす",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "CWA",
+      "verb": "置換の根拠にならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "TP",
+      "verb": "置換の根拠にならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "ASG",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "ヘルスチェックタイプ = ELB",
+      "element_ids": [
+        "ALB",
+        "UNH",
+        "ASG"
+      ]
+    },
+    {
+      "label": "EC2 ヘルスチェック(既定)",
+      "element_ids": [
+        "EC2HC",
+        "MISS"
+      ]
+    },
+    {
+      "label": "要件を満たさない他の選択肢",
+      "element_ids": [
+        "CWA",
+        "TP"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "対比 + 直列: 既定の EC2 ヘルスチェックが取りこぼす経路と、ELB 連携で置換まで届く経路を並べる",
+    "レイヤー: ハードウェア / OS / アプリケーションの層を積み、各ヘルスチェックの守備範囲を帯で示す"
+  ],
+  "selected_pattern": "対比 + 直列。要件は「置換まで到達させたい」ことなので、判定から終了・置換までつながる線があるかどうかを2本の経路として並べると、守備範囲の帯を読ませるレイヤー図より結論が早い。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "CloudWatch エージェント・終了保護が不適切な理由は解説に記述がないため、名前だけを「要件を満たさない他の選択肢」の枠に置いている。",
+    "ALB のヘルスチェック設定値(閾値・間隔)は解説の範囲外なので描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>OS は正常だがアプリのプロセスだけが<br/>応答しないインスタンスを自動で入れ替えたい\"]:::req\n    Q{\"どの層の異常を<br/>置換の根拠にするか?\"}:::judge\n    NOTE[\"アプリ層の死活監視で置き換え<br/>= ELB ヘルスチェック連携\"]:::note\n\n    REQ --> Q\n\n    subgraph ELBHC[\"ヘルスチェックタイプ = ELB\"]\n        direction TB\n        ALB[\"ALB のヘルスチェック<br/>HTTP 応答を確認\"]:::best\n        UNH[\"unhealthy と判定\"]:::best\n        ASG[\"Auto Scaling が終了・置換\"]:::best\n        ALB -->|\"応答なし\"| UNH\n        UNH -->|\"置換\"| ASG\n    end\n\n    subgraph DEF[\"EC2 ヘルスチェック(既定)\"]\n        direction TB\n        EC2HC[\"ハードウェア・OS レベルの<br/>障害だけを検知\"]:::alt\n        MISS[\"アプリだけ応答しない状態は<br/>検知されない\"]:::alt\n        EC2HC -->|\"取りこぼす\"| MISS\n    end\n\n    subgraph OTHER[\"要件を満たさない他の選択肢\"]\n        CWA[\"CloudWatch エージェントを導入\"]:::alt\n        TP[\"終了保護を有効にする\"]:::alt\n    end\n\n    Q -->|\"アプリ層\"| ALB\n    Q -.->|\"OS 層のみ\"| EC2HC\n    Q -.-> OTHER\n    ASG -.- NOTE"
+}

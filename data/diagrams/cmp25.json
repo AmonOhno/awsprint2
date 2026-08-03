@@ -1,0 +1,146 @@
+{
+  "question_id": "cmp25",
+  "purpose": "BYOL の可否を分けるのは「ハードウェアを専有できるか」ではなく「ソケット・コアが可視化されるか」だと示す。",
+  "audience": "AWS 認定を学習中で、Dedicated Hosts と Dedicated Instances の名前は知っているが違いを説明できない人。",
+  "message": "ソケット/コア単位ライセンスの持ち込みでは、専有できるだけでは足りず、ソケット・コア・ホスト ID が可視化される Dedicated Hosts が要る。",
+  "source_summary": "Dedicated Hosts は物理サーバー全体を専有し、ソケット・コア・ホスト ID が可視化されるためソケット/コア単位ライセンスの BYOL に対応できる。Dedicated Instances はハードウェア専有だがホストの可視性・制御がなく、ライセンス要件を満たせない場合がある。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: ソケット/コア単位ライセンスの商用ソフトを EC2 に持ち込む(BYOL)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q1",
+      "label": "物理サーバーを専有するか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "Q2",
+      "label": "ソケット・コアの可視性が要るか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "DH",
+      "label": "Dedicated Hosts(物理サーバー全体を専有)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "VIS",
+      "label": "ソケット・コア・ホスト ID が可視 = BYOL のライセンス要件を満たせる",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "DI",
+      "label": "ハードウェア専有インスタンス(ホストの可視性・制御がない)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "OD",
+      "label": "オンデマンドインスタンス",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CR",
+      "label": "キャパシティ予約",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "分かれ目は専有の有無ではなくホストの可視性",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q1",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q1",
+      "to": "Q2",
+      "verb": "専有できる場合はさらに問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q1",
+      "to": "OD",
+      "verb": "専有しない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q1",
+      "to": "CR",
+      "verb": "専有が目的ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q2",
+      "to": "DH",
+      "verb": "可視性が要る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "DH",
+      "to": "VIS",
+      "verb": "ライセンス要件を満たす",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q2",
+      "to": "DI",
+      "verb": "可視性が不要なら足りる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q2",
+      "to": "NOTE",
+      "verb": "分かれ目を補足する",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "ハードウェアを専有しない選択肢",
+      "element_ids": [
+        "OD",
+        "CR"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "二段の判断分岐: 「専有するか」→「可視性が要るか」の順に絞る",
+    "テーブル/対比: 4つの購入オプションを専有・可視性・BYOL 可否の3列で比較する"
+  ],
+  "selected_pattern": "二段の判断分岐。誤答の中心は Dedicated Instances で、これは一段目の「専有するか」では落ちず二段目でしか落ちない。段を分けた図はその落ちる位置がそのまま見えるので、比較表より誤読が起きにくい。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "キャパシティ予約が不適切な理由は解説に記述がないため、「専有しない選択肢」の枠に名前だけを置いている。",
+    "解説は Dedicated Instances について「ライセンス要件を満たせない場合がある」と条件付きで述べているため、図でも断定せず「可視性・制御がない」までにとどめている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>ソケット単位・コア単位でライセンスされた<br/>商用ソフトを EC2 に持ち込みたい(BYOL)\"]:::req\n    Q1{\"物理サーバーを<br/>専有するか?\"}:::judge\n    Q2{\"ソケット・コアの<br/>可視性が要るか?\"}:::judge\n    DH[\"Dedicated Hosts<br/>物理サーバー全体を専有\"]:::best\n    VIS[\"ソケット・コア・ホスト ID が可視<br/>= BYOL のライセンス要件を満たせる\"]:::best\n    DI[\"ハードウェア専有インスタンス<br/>専有はできるが<br/>ホストの可視性・制御がない\"]:::alt\n    NOTE[\"分かれ目は専有の有無ではなく<br/>ホストの可視性\"]:::note\n\n    subgraph SHARED[\"ハードウェアを専有しない選択肢\"]\n        OD[\"オンデマンドインスタンス\"]:::alt\n        CR[\"キャパシティ予約\"]:::alt\n    end\n\n    REQ --> Q1\n    Q1 -->|\"専有する\"| Q2\n    Q1 -.->|\"専有しない\"| SHARED\n    Q2 -->|\"要る\"| DH\n    DH --> VIS\n    Q2 -.->|\"不要\"| DI\n    Q2 -.- NOTE"
+}

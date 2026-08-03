@@ -1,0 +1,153 @@
+{
+  "question_id": "cmp33",
+  "purpose": "キューイング・スケジューリング・リソース確保という3つの仕事をまとめて引き受けるのが AWS Batch であることを流れで示す。",
+  "audience": "AWS 認定を学習中で、大量ジョブの実行基盤を Lambda や Auto Scaling で組もうとしてしまう人。",
+  "message": "大量ジョブのキューイングと依存関係・優先度を考えたスケジューリング、リソース確保までフルマネージドで引き受けるのが AWS Batch。",
+  "source_summary": "AWS Batch はバッチジョブのキューイング・スケジューリング・リソースプロビジョニングをフルマネージドで行い、ジョブの依存関係定義やスポットインスタンス活用によるコスト最適化も可能。Lambda は 15 分の実行時間制限があるため長時間のシミュレーションには不向き。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: 数十万件のジョブをキューで管理し、依存関係・優先度を考慮して最適なリソースへ自動配置したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "キューイングとスケジューリングをマネージドで任せるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "BATCH",
+      "label": "AWS Batch",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "QUEUE",
+      "label": "ジョブのキューイング / 依存関係・優先度を考慮したスケジューリング",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "PROV",
+      "label": "コンピューティングリソースを自動プロビジョニング(スポット活用でコスト最適化)",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "LAM",
+      "label": "AWS Lambda(15 分の実行時間制限)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ASGONLY",
+      "label": "Amazon EC2 Auto Scaling 単体",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SFNONLY",
+      "label": "AWS Step Functions 単体",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "長時間のシミュレーションは 15 分の制限に収まらない",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "BATCH",
+      "verb": "フルマネージドで任せる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "BATCH",
+      "to": "QUEUE",
+      "verb": "キューイングと並べ替えを担う",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "QUEUE",
+      "to": "PROV",
+      "verb": "実行先を確保する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "LAM",
+      "verb": "実行時間の制限がある",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "ASGONLY",
+      "verb": "要件を満たさない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SFNONLY",
+      "verb": "要件を満たさない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "LAM",
+      "to": "NOTE",
+      "verb": "不向きな理由を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "AWS Batch が担う仕事",
+      "element_ids": [
+        "QUEUE",
+        "PROV"
+      ]
+    },
+    {
+      "label": "要件を満たさない他の選択肢",
+      "element_ids": [
+        "ASGONLY",
+        "SFNONLY"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "直列(投入 → キュー/スケジューリング → リソース確保)+ 分岐: Batch が担う範囲を枠で囲う",
+    "階層/包含: Batch を大枠として内側に機能を並べ、他サービスを外側に置く"
+  ],
+  "selected_pattern": "直列 + 分岐。要件が「キューで管理し」「配置したい」と順序のある仕事として書かれているため、その順に並べれば Batch がどこまでを引き受けるかが枠の範囲としてそのまま読める。包含図では順序が消え、依存関係・優先度を考える段が見えにくくなる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "EC2 Auto Scaling 単体・Step Functions 単体が不適切な理由は解説に記述がないため、名前だけを「要件を満たさない他の選択肢」の枠に置いている。",
+    "スポットインスタンス活用は解説にある「可能」という記述にとどめ、削減率などは書いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>数十万件のシミュレーションジョブをキューで管理し<br/>依存関係や優先度を考慮しつつ<br/>最適なコンピューティングリソースへ自動配置したい\"]:::req\n    Q{\"キューイングと<br/>スケジューリングを<br/>マネージドで任せるか?\"}:::judge\n    LAM[\"AWS Lambda<br/>15 分の実行時間制限\"]:::alt\n    NOTE[\"長時間のシミュレーションは<br/>15 分の制限に収まらない\"]:::note\n\n    subgraph BATCH[\"AWS Batch(フルマネージド)\"]\n        direction TB\n        QUEUE[\"ジョブのキューイング<br/>依存関係・優先度を考慮したスケジューリング\"]:::best\n        PROV[\"コンピューティングリソースを自動プロビジョニング<br/>スポットインスタンス活用でコスト最適化\"]:::best\n        QUEUE -->|\"実行先を確保\"| PROV\n    end\n\n    subgraph OTHER[\"要件を満たさない他の選択肢\"]\n        ASGONLY[\"EC2 Auto Scaling 単体\"]:::alt\n        SFNONLY[\"Step Functions 単体\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"任せる\"| BATCH\n    Q -.->|\"時間制限あり\"| LAM\n    Q -.-> OTHER\n    LAM -.- NOTE"
+}

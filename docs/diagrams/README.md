@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 23 問 / 全 400 問
+収録: 33 問 / 全 400 問
 
 ---
 
@@ -1226,3 +1226,514 @@ flowchart TD
 **解説**: Compute Optimizer は CPU・メモリなどの利用実績を機械学習で分析し、EC2・Auto Scaling・EBS・Lambda の最適なサイズを推奨します。Cost Explorer もライトサイジング推奨を持ちますが、体系的な性能分析は Compute Optimizer が担当です。Inspector は脆弱性診断でありサイジングとは無関係です。
 
 **確認事項**: Budgets が非最適な理由は解説に記述がないため、名前だけを「役割が異なる選択肢」の枠に置いている。 / Compute Optimizer の推奨対象(EC2・Auto Scaling・EBS・Lambda)は解説の記述をそのまま使い、精度や有効化手順は描いていない。
+
+---
+
+## cmp24 — コンピューティング / level 2
+
+**問題**: Web サービスの Auto Scaling グループで、最低限の安定性を保ちつつコストを最大限削減したい。ベースラインはオンデマンド、変動分は安価に賄う構成はどれか?
+
+**正解**: 混合インスタンスポリシーでオンデマンド + スポットを併用する
+
+**他の選択肢**: 全台スポットインスタンスにする / 全台リザーブドインスタンスにする / Dedicated Hosts で固定する
+
+**図解の主メッセージ**: 安定性とコストを両立させる分かれ目は購入オプションを一律に選ぶかどうかで、ベースをオンデマンド・超過分をスポットに分けられる混合インスタンスポリシーが要件を満たす。
+
+**採用パターン**: 分岐 + 包含。主メッセージは「一律に選ばず需要を2層に分ける」ことそのものなので、ベースと超過分が上下に積まれた形が見えれば解読なしで伝わる。比較表では安定性とコストを解説にない粒度で数値化したくなり、書きすぎのリスクがある。(候補: 分岐 + 包含: 需要を2層に割り、それぞれに当てる購入オプションを枠でまとめる / テーブル/対比: 4つの購入オプションを安定性・コストの2列で比較する)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>最低限の安定性は保ちつつ<br/>コストを最大限削減したい"]:::req
+    Q{"購入オプションを一律に選ぶか<br/>需要を分けて当てるか?"}:::judge
+    NOTE["全台スポットは中断時に<br/>サービス全体が落ちる"]:::note
+
+    REQ --> Q
+
+    subgraph MIX["混合インスタンスポリシー"]
+        direction TB
+        BASE["ベース台数<br/>オンデマンド(中断されない土台)"]:::best
+        SPOT["ベースを超える変動分<br/>スポット比率を指定して安く賄う"]:::best
+        TYPES["複数インスタンスタイプへ分散<br/>スポット中断リスクを下げる"]:::best
+        BASE -->|"超過分"| SPOT
+        SPOT -->|"分散"| TYPES
+    end
+
+    subgraph FLAT["一律に揃える選択肢"]
+        ALLSPOT["全台スポットインスタンス"]:::alt
+        ALLRI["全台リザーブドインスタンス"]:::alt
+        DH["Dedicated Hosts で固定"]:::alt
+    end
+
+    Q -->|"分けて当てる"| MIX
+    Q -.->|"一律に選ぶ"| FLAT
+    ALLSPOT -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp24.svg`](../../web/diagrams/cmp24.svg)
+
+**解説**: Auto Scaling の混合インスタンスポリシーでは「オンデマンドのベース台数」と「それ以上の部分のスポット比率」を指定でき、複数インスタンスタイプへの分散でスポット中断リスクも下げられます。全台スポットは中断時にサービス全体が落ちるリスクがあり、Web サービスのベースには不適切です。
+
+**確認事項**: 全台リザーブド・Dedicated Hosts が不適切な理由は解説に記述がないため、名前だけを「一律に揃える選択肢」の枠に置いている。 / スポット比率やベース台数の具体値は解説にないため図には書いていない(指定できる、という事実だけを描く)。
+
+---
+
+## cmp25 — コンピューティング / level 2
+
+**問題**: ソケット単位・コア単位でライセンスされた商用ソフトウェア(BYOL)を EC2 で利用したい。物理サーバーを専有し、ソケット/コアの可視性が得られる購入オプションはどれか?
+
+**正解**: Dedicated Hosts
+
+**他の選択肢**: ハードウェア専有インスタンス(Dedicated Instances) / オンデマンドインスタンス / キャパシティ予約
+
+**図解の主メッセージ**: ソケット/コア単位ライセンスの持ち込みでは、専有できるだけでは足りず、ソケット・コア・ホスト ID が可視化される Dedicated Hosts が要る。
+
+**採用パターン**: 二段の判断分岐。誤答の中心は Dedicated Instances で、これは一段目の「専有するか」では落ちず二段目でしか落ちない。段を分けた図はその落ちる位置がそのまま見えるので、比較表より誤読が起きにくい。(候補: 二段の判断分岐: 「専有するか」→「可視性が要るか」の順に絞る / テーブル/対比: 4つの購入オプションを専有・可視性・BYOL 可否の3列で比較する)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>ソケット単位・コア単位でライセンスされた<br/>商用ソフトを EC2 に持ち込みたい(BYOL)"]:::req
+    Q1{"物理サーバーを<br/>専有するか?"}:::judge
+    Q2{"ソケット・コアの<br/>可視性が要るか?"}:::judge
+    DH["Dedicated Hosts<br/>物理サーバー全体を専有"]:::best
+    VIS["ソケット・コア・ホスト ID が可視<br/>= BYOL のライセンス要件を満たせる"]:::best
+    DI["ハードウェア専有インスタンス<br/>専有はできるが<br/>ホストの可視性・制御がない"]:::alt
+    NOTE["分かれ目は専有の有無ではなく<br/>ホストの可視性"]:::note
+
+    subgraph SHARED["ハードウェアを専有しない選択肢"]
+        OD["オンデマンドインスタンス"]:::alt
+        CR["キャパシティ予約"]:::alt
+    end
+
+    REQ --> Q1
+    Q1 -->|"専有する"| Q2
+    Q1 -.->|"専有しない"| SHARED
+    Q2 -->|"要る"| DH
+    DH --> VIS
+    Q2 -.->|"不要"| DI
+    Q2 -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp25.svg`](../../web/diagrams/cmp25.svg)
+
+**解説**: Dedicated Hosts は物理サーバー全体を専有し、ソケット・コア・ホスト ID が可視化されるため、Windows Server や SQL Server などのソケット/コア単位ライセンスの持ち込み(BYOL)に対応できます。Dedicated Instances はハードウェア専有ですがホストの可視性・制御がなく、ライセンス要件を満たせない場合があります。
+
+**確認事項**: キャパシティ予約が不適切な理由は解説に記述がないため、「専有しない選択肢」の枠に名前だけを置いている。 / 解説は Dedicated Instances について「ライセンス要件を満たせない場合がある」と条件付きで述べているため、図でも断定せず「可視性・制御がない」までにとどめている。
+
+---
+
+## cmp26 — コンピューティング / level 2
+
+**問題**: データレジデンシー(データを自社データセンター内に保持する)要件があるが、AWS と同じ API・ツールでオンプレミス上のインフラを運用したい。どのサービスが適切か?
+
+**正解**: AWS Outposts
+
+**他の選択肢**: AWS Local Zones / AWS Wavelength / AWS Direct Connect
+
+**図解の主メッセージ**: データを自社データセンターから出せない要件では、AWS の設備を自社 DC 内に置ける Outposts だけが AWS と同一の API での運用と両立できる。
+
+**採用パターン**: 分岐。設問が問うのは位置関係そのものではなく「データを外に出さない配置はどれか」という一択の判断なので、判断ノードから設置先ごとに分ける形がいちばん短く読める。レイヤー図は距離の遠近まで描き込むことになり、解説にない情報を足しやすい。(候補: 中心放射/分岐: 「どこに置くか」を中心に、設置先ごとにサービスを枝分かれさせる / レイヤー: 自社 DC / 都市部 / 5G 網 / リージョン を層に積んで位置関係を示す)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>データは自社データセンター内に保持したい<br/>かつ AWS と同じ API・ツールで運用したい"]:::req
+    Q{"AWS のインフラを<br/>どこに置くか?"}:::judge
+    OP["AWS Outposts<br/>AWS のラック/サーバーを自社 DC に設置"]:::best
+    SAME["EC2・EBS・RDS などを<br/>AWS と同一の API で運用"]:::best
+    DX["AWS Direct Connect<br/>拠点と AWS をつなぐ接続の手段"]:::alt
+    NOTE["分かれ目はデータが<br/>施設外に出るかどうか"]:::note
+
+    subgraph OUTSIDE["データが自社 DC の外に出る配置"]
+        LZ["AWS Local Zones<br/>設置先は AWS 側の都市部"]:::alt
+        WL["AWS Wavelength<br/>設置先は 5G ネットワーク内"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"自社 DC 内"| OP
+    OP --> SAME
+    Q -.->|"AWS 側"| OUTSIDE
+    Q -.->|"置かない"| DX
+    OP -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp26.svg`](../../web/diagrams/cmp26.svg)
+
+**解説**: Outposts は AWS のラック/サーバーを自社データセンターに設置し、EC2・EBS・RDS などを AWS と同一の API で運用できるサービスです。データを施設外に出せない規制要件と AWS の運用モデルを両立できます。Local Zones は AWS 側の設備を都市部に置くもの、Wavelength は 5G ネットワーク内へ置くものです。
+
+**確認事項**: Direct Connect が不適切な理由は解説に記述がないため、「接続の手段であって設備を置くサービスではない」以上のことは書いていない。 / Local Zones / Wavelength のレイテンシー特性は本問の解説の範囲外なので、設置先だけを書いている。
+
+---
+
+## cmp27 — コンピューティング / level 2
+
+**問題**: リージョンから遠い大都市のユーザーに対し、ミリ秒単位の低レイテンシーでゲームサーバーを提供したい。データセンターは自社で持ちたくない。どの選択肢が適切か?
+
+**正解**: AWS Local Zones
+
+**他の選択肢**: AWS Outposts / リージョンを増やして全リージョンに展開 / S3 Transfer Acceleration
+
+**図解の主メッセージ**: ユーザーの近くで EC2 を動かしたいが自社設備は持ちたくない場合、AWS 側が大都市圏に設置する Local Zones が要件を満たす。
+
+**採用パターン**: 分岐(設備の所有者で分ける)。この問題の誤答の中心は Outposts で、レイテンシーの軸では落ちず所有者の軸でだけ落ちる。分岐なら落ちる位置が一目で分かる。マトリクスは残り2選択肢を置く座標を解説にない根拠で決めることになる。(候補: 分岐(設備の所有者で分ける): 近くに置く点は共通としたうえで所有者で Local Zones と Outposts を分ける / マトリクス: 「レイテンシー」×「自社設備の要否」の2軸に4選択肢を配置する)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>リージョンから遠い大都市のユーザーに<br/>ミリ秒単位の低レイテンシーで提供したい<br/>データセンターは自社で持ちたくない"]:::req
+    Q{"ユーザーの近くに置く設備を<br/>誰が持つか?"}:::judge
+    LZ["AWS Local Zones<br/>AWS がリージョン外の大都市圏に設置<br/>自社設備は不要"]:::best
+    RES["EC2・EBS をユーザーの近くで実行<br/>1 桁ミリ秒のレイテンシー"]:::best
+    OP["AWS Outposts<br/>自社データセンターへの設置が前提"]:::alt
+    NOTE["近さを満たしても<br/>自社設備が要る構成は要件外"]:::note
+
+    subgraph OTHER["要件を満たさない他の選択肢"]
+        MR["全リージョンに展開"]:::alt
+        TA["S3 Transfer Acceleration"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"AWS が持つ"| LZ
+    LZ --> RES
+    Q -.->|"自社が持つ"| OP
+    Q -.-> OTHER
+    OP -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp27.svg`](../../web/diagrams/cmp27.svg)
+
+**解説**: Local Zones は AWS がリージョン外の大都市圏に設置するインフラ拡張で、EC2 や EBS をユーザーの近くで実行し 1 桁ミリ秒のレイテンシーを実現します。自社設備は不要です。Outposts は自社データセンターへの設置が前提であり、要件(設備を持ちたくない)に合いません。
+
+**確認事項**: 全リージョン展開・S3 Transfer Acceleration が不適切な理由は解説に記述がないため、名前だけを「要件を満たさない他の選択肢」の枠に置いている。 / 「1 桁ミリ秒」は解説の表現をそのまま使い、具体的な数値目標は足していない。
+
+---
+
+## cmp28 — コンピューティング / level 1
+
+**問題**: AWS が設計した ARM ベースのプロセッサを搭載し、同等の x86 インスタンスより優れた価格性能比を提供するのはどれか?
+
+**正解**: AWS Graviton 搭載インスタンス
+
+**他の選択肢**: Intel Xeon 搭載インスタンス / GPU 搭載 P 系インスタンス / Mac インスタンス
+
+**図解の主メッセージ**: AWS が自社設計した ARM プロセッサを積み、x86 比で優れた価格性能比を出すのは Graviton 搭載インスタンス。
+
+**採用パターン**: 分岐。解説が根拠として挙げているのは「AWS 自社設計の ARM である」という一点だけなので、判断も一段で足りる。比較表にすると GPU 系や Mac の用途欄を解説にない知識で埋めることになる。(候補: 分岐: 「誰が設計した何のアーキテクチャか」の1問で該当する1つだけを抜き出す / テーブル: 4つのインスタンス群をアーキテクチャ・設計元・用途の3列で比較する)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>同等の x86 インスタンスより<br/>優れた価格性能比がほしい"]:::req
+    Q{"プロセッサを誰が設計し<br/>どのアーキテクチャか?"}:::judge
+    GV["AWS Graviton 搭載インスタンス<br/>AWS が自社設計した ARM プロセッサ"]:::best
+    PERF["対応するワークロードなら<br/>x86 比で最大 40% 程度<br/>優れた価格性能比"]:::best
+    MARK["見分け方<br/>世代の後ろに g が付く(例 m7g, c7g)"]:::best
+    NOTE["ARM 対応のビルドが必要な点だけ注意"]:::note
+
+    subgraph NOTARM["AWS 自社設計の ARM ではない選択肢"]
+        X86["Intel Xeon 搭載インスタンス"]:::alt
+        GPU["GPU 搭載 P 系インスタンス"]:::alt
+        MAC["Mac インスタンス"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"AWS 設計 ARM"| GV
+    GV --> PERF
+    GV --> MARK
+    Q -.-> NOTARM
+    GV -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp28.svg`](../../web/diagrams/cmp28.svg)
+
+**解説**: Graviton は AWS が自社設計した ARM アーキテクチャのプロセッサで、対応するワークロードなら x86 比で最大 40% 程度優れた価格性能比を発揮します。インスタンス名の世代の後に g が付く(例: m7g, c7g)のが目印です。ARM 対応のビルドが必要な点だけ注意します。
+
+**確認事項**: GPU 搭載 P 系・Mac インスタンスの用途は解説に記述がないため、名前だけを枠に置いている。 / 「最大 40% 程度」は解説の表現をそのまま引いており、ワークロード別の内訳は描いていない。
+
+---
+
+## cmp29 — コンピューティング / level 2
+
+**問題**: ALB 配下の Auto Scaling グループで、OS は正常だがアプリケーションプロセスだけが応答しないインスタンスを自動的に入れ替えたい。どの設定が必要か?
+
+**正解**: Auto Scaling のヘルスチェックタイプを ELB に変更する
+
+**他の選択肢**: EC2 ステータスチェックだけを利用する / CloudWatch エージェントをインストールする / 終了保護を有効にする
+
+**図解の主メッセージ**: OS は生きていてアプリだけ落ちた状態を置換につなげたいなら、ヘルスチェックタイプを ELB にして ALB の判定を Auto Scaling に使わせる。
+
+**採用パターン**: 対比 + 直列。要件は「置換まで到達させたい」ことなので、判定から終了・置換までつながる線があるかどうかを2本の経路として並べると、守備範囲の帯を読ませるレイヤー図より結論が早い。(候補: 対比 + 直列: 既定の EC2 ヘルスチェックが取りこぼす経路と、ELB 連携で置換まで届く経路を並べる / レイヤー: ハードウェア / OS / アプリケーションの層を積み、各ヘルスチェックの守備範囲を帯で示す)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>OS は正常だがアプリのプロセスだけが<br/>応答しないインスタンスを自動で入れ替えたい"]:::req
+    Q{"どの層の異常を<br/>置換の根拠にするか?"}:::judge
+    NOTE["アプリ層の死活監視で置き換え<br/>= ELB ヘルスチェック連携"]:::note
+
+    REQ --> Q
+
+    subgraph ELBHC["ヘルスチェックタイプ = ELB"]
+        direction TB
+        ALB["ALB のヘルスチェック<br/>HTTP 応答を確認"]:::best
+        UNH["unhealthy と判定"]:::best
+        ASG["Auto Scaling が終了・置換"]:::best
+        ALB -->|"応答なし"| UNH
+        UNH -->|"置換"| ASG
+    end
+
+    subgraph DEF["EC2 ヘルスチェック(既定)"]
+        direction TB
+        EC2HC["ハードウェア・OS レベルの<br/>障害だけを検知"]:::alt
+        MISS["アプリだけ応答しない状態は<br/>検知されない"]:::alt
+        EC2HC -->|"取りこぼす"| MISS
+    end
+
+    subgraph OTHER["要件を満たさない他の選択肢"]
+        CWA["CloudWatch エージェントを導入"]:::alt
+        TP["終了保護を有効にする"]:::alt
+    end
+
+    Q -->|"アプリ層"| ALB
+    Q -.->|"OS 層のみ"| EC2HC
+    Q -.-> OTHER
+    ASG -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp29.svg`](../../web/diagrams/cmp29.svg)
+
+**解説**: デフォルトの EC2 ヘルスチェックはハードウェア・OS レベルの障害しか検知しません。ヘルスチェックタイプを ELB にすると、ALB のヘルスチェック(HTTP 応答の確認)で unhealthy と判定されたインスタンスを Auto Scaling が終了・置換します。「アプリ層の死活監視で置き換え = ELB ヘルスチェック連携」と覚えます。
+
+**確認事項**: CloudWatch エージェント・終了保護が不適切な理由は解説に記述がないため、名前だけを「要件を満たさない他の選択肢」の枠に置いている。 / ALB のヘルスチェック設定値(閾値・間隔)は解説の範囲外なので描いていない。
+
+---
+
+## cmp30 — コンピューティング / level 2
+
+**問題**: DR 用に特定 AZ で必要なときに確実に EC2 を起動できるようキャパシティを確保したいが、1 年・3 年の長期コミットはしたくない。どのオプションが適切か?
+
+**正解**: オンデマンドキャパシティ予約
+
+**他の選択肢**: スタンダードリザーブドインスタンス / スポットフリート / Savings Plans
+
+**図解の主メッセージ**: 目的が割引ではなくキャパシティの確実な確保で、しかも長期コミットを避けたいなら、オンデマンドキャパシティ予約が該当する。
+
+**採用パターン**: 二段の判断分岐。この問題は目的の取り違え(割引と混同する)が主な落とし穴で、それは一段目で片付く。二段目のコミット有無は補助的な条件にすぎないため、両者を対等な軸として扱うマトリクスより順序のある分岐のほうが誤読しにくい。(候補: 二段の判断分岐: 「目的は割引か確保か」→「長期コミットを受け入れるか」で絞る / マトリクス: 「割引の有無」×「コミットの要否」の2軸に4選択肢を配置する)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>DR 用に特定 AZ で必要なときに<br/>確実に EC2 を起動できるようにしたい<br/>1年・3年の長期コミットはしたくない"]:::req
+    Q1{"目的は割引か<br/>キャパシティの確保か?"}:::judge
+    Q2{"長期コミットを<br/>受け入れるか?"}:::judge
+    ODCR["オンデマンドキャパシティ予約"]:::best
+    HOW["特定 AZ・インスタンスタイプの枠を確保<br/>期間コミットなし・いつでも解約できる"]:::best
+    SF["スポットフリート"]:::alt
+    COST["確保中は起動していなくても<br/>オンデマンド料金が発生する"]:::note
+
+    subgraph DISC["割引が目的の選択肢(枠の確保が目的ではない)"]
+        RI["スタンダードリザーブドインスタンス"]:::alt
+        SP["Savings Plans"]:::alt
+    end
+
+    REQ --> Q1
+    Q1 -->|"確保が目的"| Q2
+    Q1 -.->|"割引が目的"| DISC
+    Q1 -.-> SF
+    Q2 -->|"コミット不要"| ODCR
+    ODCR --> HOW
+    ODCR -.- COST
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp30.svg`](../../web/diagrams/cmp30.svg)
+
+**解説**: オンデマンドキャパシティ予約は、特定 AZ・インスタンスタイプのキャパシティを期間コミットなしで確保でき、いつでも解約できます。確保中は起動していなくてもオンデマンド料金が発生します。割引が目的の RI/Savings Plans とは役割が異なり、「キャパシティの確実な確保」が目的の機能です。
+
+**確認事項**: スポットフリートが不適切な理由は本問の解説に記述がないため、名前だけを分岐の外に置き、断定的な説明は付けていない。 / 解説にある「確保中は未起動でも課金される」は選択の根拠ではないが、実運用で誤解しやすいため注釈として残した。
+
+---
+
+## cmp31 — コンピューティング / level 1
+
+**問題**: EC2 インスタンスの初回起動時に、ミドルウェアのインストールや設定スクリプトを自動実行させたい。どの仕組みを使うか?
+
+**正解**: ユーザーデータ
+
+**他の選択肢**: インスタンスメタデータ / AMI の手動カスタマイズのみ / プレイスメントグループ
+
+**図解の主メッセージ**: 初回起動時に root 権限で自動実行されるのはユーザーデータで、ミドルウェア導入や設定の初期化はここに書く。
+
+**採用パターン**: 直列 + 分岐。要件が「初回起動時」という時点を指定しているので、起動という時点を起点に一本の線で描けば、ユーザーデータがその線の上にある唯一の選択肢だと解読なしで分かる。(候補: 直列(起動 → 自動実行 → 初期化完了)+ 分岐: 起動時に何が走るかを時間順に描く / テーブル: 4つの仕組みを「実行タイミング」「用途」の2列で比較する)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>EC2 の初回起動時にミドルウェアの導入や<br/>設定スクリプトを自動実行させたい"]:::req
+    Q{"初回起動時に自動実行される<br/>仕組みはどれか?"}:::judge
+    UD["ユーザーデータ<br/>シェルスクリプト / cloud-init ディレクティブ"]:::best
+    RUN["初回起動時に root 権限で自動実行"]:::best
+    BOOT["パッケージ導入・設定の初期化<br/>= ブートストラップ"]:::best
+    NOTE["定石<br/>頻繁に使う構成はゴールデン AMI に焼き込み<br/>環境差分だけユーザーデータで注入"]:::note
+
+    subgraph OTHER["要件を満たさない他の選択肢"]
+        MD["インスタンスメタデータ"]:::alt
+        AMI["AMI の手動カスタマイズのみ"]:::alt
+        PG["プレイスメントグループ"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"起動時に実行"| UD
+    UD --> RUN
+    RUN --> BOOT
+    Q -.-> OTHER
+    UD -.- NOTE
+    AMI -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp31.svg`](../../web/diagrams/cmp31.svg)
+
+**解説**: ユーザーデータに記述したシェルスクリプトや cloud-init ディレクティブは、インスタンスの初回起動時に root 権限で自動実行されます。パッケージ導入や設定の初期化(ブートストラップ)に使われます。頻繁に使う構成は AMI に焼き込み(ゴールデン AMI)、環境差分だけユーザーデータで注入するのが定石です。
+
+**確認事項**: インスタンスメタデータ・プレイスメントグループの本来の役割は解説に記述がないため、名前だけを枠に置いている。 / AMI は「不適切な選択肢」であると同時に解説の定石にも登場するため、注釈側にも線を引いて役割の違いを示している。
+
+---
+
+## cmp32 — コンピューティング / level 2
+
+**問題**: サードパーティー製のファイアウォール/IPS 仮想アプライアンス群へ、全トラフィックを透過的に流して検査させたい。どのロードバランサーを使うべきか?
+
+**正解**: Gateway Load Balancer
+
+**他の選択肢**: Application Load Balancer / Network Load Balancer / Classic Load Balancer
+
+**図解の主メッセージ**: トラフィックを透過的にセキュリティアプライアンス群へ流して検査させたいなら、レイヤー 3 のゲートウェイとして動く Gateway Load Balancer を使う。
+
+**採用パターン**: 直列 + 分岐。解説の要点は「トラフィックがアプライアンス群へ透過的に流れる」ことなので、その流れを1本の線で見せるのが最短。レイヤー図は各ロードバランサーの層を解説にない粒度で説明することになり、主メッセージがぼやける。(候補: 直列(トラフィック → GWLB → アプライアンス群)+ 分岐: 透過的に流れる経路を1本描く / レイヤー: L7 / L4 / L3 の層に4種類のロードバランサーを積んで位置づけを示す)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>サードパーティー製のファイアウォール/IPS<br/>仮想アプライアンス群へ全トラフィックを<br/>透過的に流して検査させたい"]:::req
+    Q{"何をどの層で<br/>分散するか?"}:::judge
+    GWLB["Gateway Load Balancer<br/>レイヤー 3 のゲートウェイとして動作"]:::best
+    GEN["GENEVE プロトコルで<br/>トラフィックを透過的に分散"]:::best
+    APPL["FW / IPS 仮想アプライアンス群<br/>スケーリングと可用性管理も GWLB が担う"]:::best
+    NOTE["検査用アプライアンスの前段 = GWLB<br/>一対一対応で覚えてよい"]:::note
+
+    subgraph OTHER["要件を満たさない他のロードバランサー"]
+        ALB["Application Load Balancer"]:::alt
+        NLB["Network Load Balancer"]:::alt
+        CLB["Classic Load Balancer"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"L3 で透過"| GWLB
+    GWLB --> GEN
+    GEN --> APPL
+    Q -.-> OTHER
+    GWLB -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp32.svg`](../../web/diagrams/cmp32.svg)
+
+**解説**: GWLB はレイヤー 3 のゲートウェイとして動作し、GENEVE プロトコルでトラフィックをセキュリティアプライアンス群へ透過的に分散します。アプライアンスのスケーリングと可用性管理も担います。「検査用アプライアンスの前段 = GWLB」という一対一対応で覚えて問題ありません。
+
+**確認事項**: ALB / NLB / CLB それぞれが不適切な理由は解説に記述がないため、名前だけを「要件を満たさない他のロードバランサー」の枠に置いている。 / 検査後のトラフィックがどこへ戻るかは解説に記述がないため、図でも戻りの経路は描いていない。
+
+---
+
+## cmp33 — コンピューティング / level 2
+
+**問題**: 数十万件のシミュレーションジョブをキューで管理し、依存関係や優先度を考慮しつつ最適なコンピューティングリソースへ自動配置したい。どのサービスが適切か?
+
+**正解**: AWS Batch
+
+**他の選択肢**: AWS Lambda / Amazon EC2 Auto Scaling 単体 / AWS Step Functions 単体
+
+**図解の主メッセージ**: 大量ジョブのキューイングと依存関係・優先度を考えたスケジューリング、リソース確保までフルマネージドで引き受けるのが AWS Batch。
+
+**採用パターン**: 直列 + 分岐。要件が「キューで管理し」「配置したい」と順序のある仕事として書かれているため、その順に並べれば Batch がどこまでを引き受けるかが枠の範囲としてそのまま読める。包含図では順序が消え、依存関係・優先度を考える段が見えにくくなる。(候補: 直列(投入 → キュー/スケジューリング → リソース確保)+ 分岐: Batch が担う範囲を枠で囲う / 階層/包含: Batch を大枠として内側に機能を並べ、他サービスを外側に置く)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>数十万件のシミュレーションジョブをキューで管理し<br/>依存関係や優先度を考慮しつつ<br/>最適なコンピューティングリソースへ自動配置したい"]:::req
+    Q{"キューイングと<br/>スケジューリングを<br/>マネージドで任せるか?"}:::judge
+    LAM["AWS Lambda<br/>15 分の実行時間制限"]:::alt
+    NOTE["長時間のシミュレーションは<br/>15 分の制限に収まらない"]:::note
+
+    subgraph BATCH["AWS Batch(フルマネージド)"]
+        direction TB
+        QUEUE["ジョブのキューイング<br/>依存関係・優先度を考慮したスケジューリング"]:::best
+        PROV["コンピューティングリソースを自動プロビジョニング<br/>スポットインスタンス活用でコスト最適化"]:::best
+        QUEUE -->|"実行先を確保"| PROV
+    end
+
+    subgraph OTHER["要件を満たさない他の選択肢"]
+        ASGONLY["EC2 Auto Scaling 単体"]:::alt
+        SFNONLY["Step Functions 単体"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"任せる"| BATCH
+    Q -.->|"時間制限あり"| LAM
+    Q -.-> OTHER
+    LAM -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp33.svg`](../../web/diagrams/cmp33.svg)
+
+**解説**: AWS Batch はバッチジョブのキューイング・スケジューリング・リソースプロビジョニングをフルマネージドで行い、ジョブの依存関係定義やスポットインスタンス活用によるコスト最適化も可能です。Lambda は 15 分の実行時間制限があるため長時間のシミュレーションには不向きです。
+
+**確認事項**: EC2 Auto Scaling 単体・Step Functions 単体が不適切な理由は解説に記述がないため、名前だけを「要件を満たさない他の選択肢」の枠に置いている。 / スポットインスタンス活用は解説にある「可能」という記述にとどめ、削減率などは書いていない。

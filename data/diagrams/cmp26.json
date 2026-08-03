@@ -1,0 +1,133 @@
+{
+  "question_id": "cmp26",
+  "purpose": "AWS のインフラを物理的にどこへ置くサービスなのか、という一本の軸で Outposts / Local Zones / Wavelength を切り分ける。",
+  "audience": "AWS 認定を学習中で、ハイブリッド・エッジ系サービスの名前は挙げられるが設置場所の違いが曖昧な人。",
+  "message": "データを自社データセンターから出せない要件では、AWS の設備を自社 DC 内に置ける Outposts だけが AWS と同一の API での運用と両立できる。",
+  "source_summary": "Outposts は AWS のラック/サーバーを自社データセンターに設置し、EC2・EBS・RDS などを AWS と同一の API で運用できる。Local Zones は AWS 側の設備を都市部に置くもの、Wavelength は 5G ネットワーク内へ置くもの。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: データを自社 DC 内に保持しつつ AWS と同じ API・ツールで運用したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "AWS のインフラをどこに置くか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "OP",
+      "label": "AWS Outposts(AWS のラック/サーバーを自社 DC に設置)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "SAME",
+      "label": "EC2・EBS・RDS などを AWS と同一の API で運用",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "LZ",
+      "label": "AWS Local Zones(設置先は AWS 側の都市部)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "WL",
+      "label": "AWS Wavelength(設置先は 5G ネットワーク内)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DX",
+      "label": "AWS Direct Connect",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "分かれ目はデータが施設外に出るかどうか",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "OP",
+      "verb": "自社 DC 内に置く",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "OP",
+      "to": "SAME",
+      "verb": "運用モデルを保つ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "LZ",
+      "verb": "AWS 側の都市部に置く",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "WL",
+      "verb": "5G ネットワーク内に置く",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "DX",
+      "verb": "設備を置くサービスではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "OP",
+      "to": "NOTE",
+      "verb": "分かれ目を補足する",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "データが自社 DC の外に出る配置",
+      "element_ids": [
+        "LZ",
+        "WL"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "中心放射/分岐: 「どこに置くか」を中心に、設置先ごとにサービスを枝分かれさせる",
+    "レイヤー: 自社 DC / 都市部 / 5G 網 / リージョン を層に積んで位置関係を示す"
+  ],
+  "selected_pattern": "分岐。設問が問うのは位置関係そのものではなく「データを外に出さない配置はどれか」という一択の判断なので、判断ノードから設置先ごとに分ける形がいちばん短く読める。レイヤー図は距離の遠近まで描き込むことになり、解説にない情報を足しやすい。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Direct Connect が不適切な理由は解説に記述がないため、「接続の手段であって設備を置くサービスではない」以上のことは書いていない。",
+    "Local Zones / Wavelength のレイテンシー特性は本問の解説の範囲外なので、設置先だけを書いている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>データは自社データセンター内に保持したい<br/>かつ AWS と同じ API・ツールで運用したい\"]:::req\n    Q{\"AWS のインフラを<br/>どこに置くか?\"}:::judge\n    OP[\"AWS Outposts<br/>AWS のラック/サーバーを自社 DC に設置\"]:::best\n    SAME[\"EC2・EBS・RDS などを<br/>AWS と同一の API で運用\"]:::best\n    DX[\"AWS Direct Connect<br/>拠点と AWS をつなぐ接続の手段\"]:::alt\n    NOTE[\"分かれ目はデータが<br/>施設外に出るかどうか\"]:::note\n\n    subgraph OUTSIDE[\"データが自社 DC の外に出る配置\"]\n        LZ[\"AWS Local Zones<br/>設置先は AWS 側の都市部\"]:::alt\n        WL[\"AWS Wavelength<br/>設置先は 5G ネットワーク内\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"自社 DC 内\"| OP\n    OP --> SAME\n    Q -.->|\"AWS 側\"| OUTSIDE\n    Q -.->|\"置かない\"| DX\n    OP -.- NOTE"
+}

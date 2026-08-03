@@ -1,0 +1,146 @@
+{
+  "question_id": "cmp30",
+  "purpose": "「割引がほしい」のか「枠を確実に押さえたい」のかで購入オプションの役割が分かれることを示す。",
+  "audience": "AWS 認定を学習中で、RI / Savings Plans / キャパシティ予約をすべて「安くするもの」とまとめて覚えている人。",
+  "message": "目的が割引ではなくキャパシティの確実な確保で、しかも長期コミットを避けたいなら、オンデマンドキャパシティ予約が該当する。",
+  "source_summary": "オンデマンドキャパシティ予約は特定 AZ・インスタンスタイプのキャパシティを期間コミットなしで確保でき、いつでも解約できる。確保中は起動していなくてもオンデマンド料金が発生する。割引が目的の RI / Savings Plans とは役割が異なり、キャパシティの確実な確保が目的の機能。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: DR 用に特定 AZ で確実に起動したい / 1年・3年の長期コミットはしたくない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q1",
+      "label": "目的は割引か、キャパシティの確保か",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "Q2",
+      "label": "長期コミットを受け入れるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ODCR",
+      "label": "オンデマンドキャパシティ予約",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "HOW",
+      "label": "特定 AZ・インスタンスタイプの枠を確保 / 期間コミットなし・いつでも解約",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "RI",
+      "label": "スタンダードリザーブドインスタンス",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SP",
+      "label": "Savings Plans",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SF",
+      "label": "スポットフリート",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "COST",
+      "label": "確保中は起動していなくてもオンデマンド料金が発生する",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q1",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q1",
+      "to": "Q2",
+      "verb": "確保が目的の場合はさらに問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q1",
+      "to": "RI",
+      "verb": "割引が目的の仕組み",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q1",
+      "to": "SP",
+      "verb": "割引が目的の仕組み",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q2",
+      "to": "ODCR",
+      "verb": "コミットなしで確保する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "ODCR",
+      "to": "HOW",
+      "verb": "確保の内容を示す",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "Q1",
+      "to": "SF",
+      "verb": "確実な確保にならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "ODCR",
+      "to": "COST",
+      "verb": "見落としやすい点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "割引が目的の選択肢(枠の確保が目的ではない)",
+      "element_ids": [
+        "RI",
+        "SP"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "二段の判断分岐: 「目的は割引か確保か」→「長期コミットを受け入れるか」で絞る",
+    "マトリクス: 「割引の有無」×「コミットの要否」の2軸に4選択肢を配置する"
+  ],
+  "selected_pattern": "二段の判断分岐。この問題は目的の取り違え(割引と混同する)が主な落とし穴で、それは一段目で片付く。二段目のコミット有無は補助的な条件にすぎないため、両者を対等な軸として扱うマトリクスより順序のある分岐のほうが誤読しにくい。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "スポットフリートが不適切な理由は本問の解説に記述がないため、名前だけを分岐の外に置き、断定的な説明は付けていない。",
+    "解説にある「確保中は未起動でも課金される」は選択の根拠ではないが、実運用で誤解しやすいため注釈として残した。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>DR 用に特定 AZ で必要なときに<br/>確実に EC2 を起動できるようにしたい<br/>1年・3年の長期コミットはしたくない\"]:::req\n    Q1{\"目的は割引か<br/>キャパシティの確保か?\"}:::judge\n    Q2{\"長期コミットを<br/>受け入れるか?\"}:::judge\n    ODCR[\"オンデマンドキャパシティ予約\"]:::best\n    HOW[\"特定 AZ・インスタンスタイプの枠を確保<br/>期間コミットなし・いつでも解約できる\"]:::best\n    SF[\"スポットフリート\"]:::alt\n    COST[\"確保中は起動していなくても<br/>オンデマンド料金が発生する\"]:::note\n\n    subgraph DISC[\"割引が目的の選択肢(枠の確保が目的ではない)\"]\n        RI[\"スタンダードリザーブドインスタンス\"]:::alt\n        SP[\"Savings Plans\"]:::alt\n    end\n\n    REQ --> Q1\n    Q1 -->|\"確保が目的\"| Q2\n    Q1 -.->|\"割引が目的\"| DISC\n    Q1 -.-> SF\n    Q2 -->|\"コミット不要\"| ODCR\n    ODCR --> HOW\n    ODCR -.- COST"
+}

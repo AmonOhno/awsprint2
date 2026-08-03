@@ -1,0 +1,147 @@
+{
+  "question_id": "cmp28",
+  "purpose": "「AWS 自社設計の ARM プロセッサ」という一点で Graviton を他のインスタンス群から切り分け、見分け方まで示す。",
+  "audience": "AWS 認定を学習中で、インスタンスタイプの記号の意味をまだ体系的に覚えていない人。",
+  "message": "AWS が自社設計した ARM プロセッサを積み、x86 比で優れた価格性能比を出すのは Graviton 搭載インスタンス。",
+  "source_summary": "Graviton は AWS が自社設計した ARM アーキテクチャのプロセッサで、対応するワークロードなら x86 比で最大 40% 程度優れた価格性能比を発揮する。インスタンス名の世代の後に g が付く(例: m7g, c7g)のが目印。ARM 対応のビルドが必要な点だけ注意する。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: 同等の x86 インスタンスより優れた価格性能比がほしい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "プロセッサを誰が設計し、どのアーキテクチャか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "GV",
+      "label": "AWS Graviton 搭載インスタンス",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "PERF",
+      "label": "対応ワークロードで x86 比 最大 40% 程度の価格性能比",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "MARK",
+      "label": "見分け方: 世代の後ろに g(例 m7g, c7g)",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "X86",
+      "label": "Intel Xeon 搭載インスタンス",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "GPU",
+      "label": "GPU 搭載 P 系インスタンス",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "MAC",
+      "label": "Mac インスタンス",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "ARM 対応のビルドが必要な点だけ注意",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "GV",
+      "verb": "AWS 自社設計の ARM",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "GV",
+      "to": "PERF",
+      "verb": "価格性能比を出す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "GV",
+      "to": "MARK",
+      "verb": "名前から見分けられる",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "Q",
+      "to": "X86",
+      "verb": "AWS 自社設計の ARM ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "GPU",
+      "verb": "AWS 自社設計の ARM ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "MAC",
+      "verb": "AWS 自社設計の ARM ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "GV",
+      "to": "NOTE",
+      "verb": "採用時の注意を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "AWS 自社設計の ARM ではない選択肢",
+      "element_ids": [
+        "X86",
+        "GPU",
+        "MAC"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐: 「誰が設計した何のアーキテクチャか」の1問で該当する1つだけを抜き出す",
+    "テーブル: 4つのインスタンス群をアーキテクチャ・設計元・用途の3列で比較する"
+  ],
+  "selected_pattern": "分岐。解説が根拠として挙げているのは「AWS 自社設計の ARM である」という一点だけなので、判断も一段で足りる。比較表にすると GPU 系や Mac の用途欄を解説にない知識で埋めることになる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "GPU 搭載 P 系・Mac インスタンスの用途は解説に記述がないため、名前だけを枠に置いている。",
+    "「最大 40% 程度」は解説の表現をそのまま引いており、ワークロード別の内訳は描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>同等の x86 インスタンスより<br/>優れた価格性能比がほしい\"]:::req\n    Q{\"プロセッサを誰が設計し<br/>どのアーキテクチャか?\"}:::judge\n    GV[\"AWS Graviton 搭載インスタンス<br/>AWS が自社設計した ARM プロセッサ\"]:::best\n    PERF[\"対応するワークロードなら<br/>x86 比で最大 40% 程度<br/>優れた価格性能比\"]:::best\n    MARK[\"見分け方<br/>世代の後ろに g が付く(例 m7g, c7g)\"]:::best\n    NOTE[\"ARM 対応のビルドが必要な点だけ注意\"]:::note\n\n    subgraph NOTARM[\"AWS 自社設計の ARM ではない選択肢\"]\n        X86[\"Intel Xeon 搭載インスタンス\"]:::alt\n        GPU[\"GPU 搭載 P 系インスタンス\"]:::alt\n        MAC[\"Mac インスタンス\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"AWS 設計 ARM\"| GV\n    GV --> PERF\n    GV --> MARK\n    Q -.-> NOTARM\n    GV -.- NOTE"
+}

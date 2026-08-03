@@ -1,0 +1,155 @@
+{
+  "question_id": "cmp24",
+  "purpose": "需要を「ベース」と「変動分」に分けて別々の購入オプションを当てる、という混合インスタンスポリシーの考え方を1枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、スポットが安いことは知っているが本番 Web にどこまで使ってよいか判断できない人。",
+  "message": "安定性とコストを両立させる分かれ目は購入オプションを一律に選ぶかどうかで、ベースをオンデマンド・超過分をスポットに分けられる混合インスタンスポリシーが要件を満たす。",
+  "source_summary": "Auto Scaling の混合インスタンスポリシーは「オンデマンドのベース台数」と「それ以上の部分のスポット比率」を指定でき、複数インスタンスタイプへの分散でスポット中断リスクも下げられる。全台スポットは中断時にサービス全体が落ちるため Web のベースには不適切。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: 最低限の安定性を保ちつつコストを最大限削減したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "購入オプションを一律に選ぶか、需要を分けて当てるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "BASE",
+      "label": "ベース台数はオンデマンド(中断されない土台)",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "SPOT",
+      "label": "ベースを超える変動分はスポット比率で指定",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "TYPES",
+      "label": "複数インスタンスタイプへ分散してスポット中断リスクを下げる",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "ALLSPOT",
+      "label": "全台スポットインスタンス",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ALLRI",
+      "label": "全台リザーブドインスタンス",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DH",
+      "label": "Dedicated Hosts で固定",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "全台スポットは中断時にサービス全体が落ちる",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "BASE",
+      "verb": "需要を分けて当てる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "BASE",
+      "to": "SPOT",
+      "verb": "ベースを超えた分を賄う",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "SPOT",
+      "to": "TYPES",
+      "verb": "タイプを分散して中断に備える",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "ALLSPOT",
+      "verb": "一律に揃える",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "ALLRI",
+      "verb": "一律に揃える",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "DH",
+      "verb": "一律に揃える",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "ALLSPOT",
+      "to": "NOTE",
+      "verb": "誤読しやすい点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "混合インスタンスポリシー",
+      "element_ids": [
+        "BASE",
+        "SPOT",
+        "TYPES"
+      ]
+    },
+    {
+      "label": "購入オプションを一律に揃える選択肢",
+      "element_ids": [
+        "ALLSPOT",
+        "ALLRI",
+        "DH"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐 + 包含: 需要を2層に割り、それぞれに当てる購入オプションを枠でまとめる",
+    "テーブル/対比: 4つの購入オプションを安定性・コストの2列で比較する"
+  ],
+  "selected_pattern": "分岐 + 包含。主メッセージは「一律に選ばず需要を2層に分ける」ことそのものなので、ベースと超過分が上下に積まれた形が見えれば解読なしで伝わる。比較表では安定性とコストを解説にない粒度で数値化したくなり、書きすぎのリスクがある。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "全台リザーブド・Dedicated Hosts が不適切な理由は解説に記述がないため、名前だけを「一律に揃える選択肢」の枠に置いている。",
+    "スポット比率やベース台数の具体値は解説にないため図には書いていない(指定できる、という事実だけを描く)。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>最低限の安定性は保ちつつ<br/>コストを最大限削減したい\"]:::req\n    Q{\"購入オプションを一律に選ぶか<br/>需要を分けて当てるか?\"}:::judge\n    NOTE[\"全台スポットは中断時に<br/>サービス全体が落ちる\"]:::note\n\n    REQ --> Q\n\n    subgraph MIX[\"混合インスタンスポリシー\"]\n        direction TB\n        BASE[\"ベース台数<br/>オンデマンド(中断されない土台)\"]:::best\n        SPOT[\"ベースを超える変動分<br/>スポット比率を指定して安く賄う\"]:::best\n        TYPES[\"複数インスタンスタイプへ分散<br/>スポット中断リスクを下げる\"]:::best\n        BASE -->|\"超過分\"| SPOT\n        SPOT -->|\"分散\"| TYPES\n    end\n\n    subgraph FLAT[\"一律に揃える選択肢\"]\n        ALLSPOT[\"全台スポットインスタンス\"]:::alt\n        ALLRI[\"全台リザーブドインスタンス\"]:::alt\n        DH[\"Dedicated Hosts で固定\"]:::alt\n    end\n\n    Q -->|\"分けて当てる\"| MIX\n    Q -.->|\"一律に選ぶ\"| FLAT\n    ALLSPOT -.- NOTE"
+}
