@@ -1,0 +1,146 @@
+{
+  "question_id": "cmp36",
+  "purpose": "プレイスメントグループの選択が「何が実行時間を支配しているか」と「同時消失を許容できるか」の2問で決まることを示す。",
+  "audience": "AWS 認定を学習中で、3種類のプレイスメントグループの名前は覚えたが用途の対応づけが曖昧な人。",
+  "message": "ノード間レイテンシーが実行時間を支配し、全ノードの同時消失も許容できるなら、単一 AZ に近接配置するクラスタープレイスメントグループを選ぶ。",
+  "source_summary": "クラスタープレイスメントグループは単一 AZ 内の近接した位置にインスタンスを配置し、ノード間の低レイテンシー・高帯域を実現するため MPI ベースの HPC に最適。さらに EFA を使うと OS バイパスによる高速な集団通信が可能になる。スプレッドは可用性重視(最大 7 インスタンス/AZ)、パーティションは分散データストア向けで、いずれもノード間レイテンシーは最小化されない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: 100 ノードの MPI 通信、ノード間レイテンシーとスループットが実行時間を支配、全ノードの同時消失は許容",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q1",
+      "label": "実行時間を支配するのはノード間の通信か",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "Q2",
+      "label": "全ノードの同時消失を許容できるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CPG",
+      "label": "クラスタープレイスメントグループ(単一 AZ 内に近接配置)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "EFA",
+      "label": "Elastic Fabric Adapter(EFA)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "SPREAD",
+      "label": "スプレッドプレイスメントグループ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "PART",
+      "label": "パーティションプレイスメントグループ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOPG",
+      "label": "複数 AZ の Auto Scaling グループ(プレイスメントグループなし)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "スプレッドは可用性重視で 1 AZ あたり最大 7 インスタンス",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q1",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q1",
+      "to": "Q2",
+      "verb": "通信が支配するなら次の問いへ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q2",
+      "to": "CPG",
+      "verb": "同時消失を許容できるので近接配置してよい",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "CPG",
+      "to": "EFA",
+      "verb": "OS バイパスで集団通信を高速化する",
+      "direction": "one-way",
+      "kind": "depend"
+    },
+    {
+      "from": "Q2",
+      "to": "SPREAD",
+      "verb": "可用性を優先する場合の選択肢",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q1",
+      "to": "PART",
+      "verb": "分散データストア向けの選択肢",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q1",
+      "to": "NOPG",
+      "verb": "配置を制御しない構成",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "PART",
+      "to": "NOTE",
+      "verb": "選ばない理由を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "ノード間レイテンシーを最小化しない配置",
+      "element_ids": [
+        "SPREAD",
+        "PART",
+        "NOPG"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(2段の判断フロー): 通信が支配するか → 同時消失を許容できるか",
+    "テーブル: 3種のプレイスメントグループを「配置」「レイテンシー」「可用性」で比較する"
+  ],
+  "selected_pattern": "分岐(2段の判断フロー)。本問は「近接配置が要る」と「単一 AZ に寄せてよい」の2つが揃って初めてクラスターが選べる構造なので、問いを2つ直列に置くと判断順序がそのまま追える。比較表では2つ目の条件(同時消失の許容)が要件由来であることが見えない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "選択肢2の ENA(拡張ネットワーキング)は、パーティション+3 AZ という配置側が要件に合わないことが本質のため、図では配置の違いだけを描き ENA そのものには触れていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>100 ノードで MPI 通信を行う HPC ジョブ<br/>実行時間を支配するのはノード間レイテンシーとスループット<br/>ハードウェア障害で全ノードを同時に失うことは許容できる\"]:::req\n    Q1{\"実行時間を支配するのは<br/>ノード間の通信か?\"}:::judge\n    Q2{\"全ノードの同時消失を<br/>許容できるか?\"}:::judge\n    CPG[\"クラスタープレイスメントグループ<br/>単一 AZ 内の近接した位置に配置し低レイテンシー・高帯域\"]:::best\n    EFA[\"Elastic Fabric Adapter(EFA)<br/>OS バイパスで集団通信を高速化\"]:::best\n\n    subgraph OTHER[\"ノード間レイテンシーを最小化しない配置\"]\n        direction TB\n        SPREAD[\"スプレッドプレイスメントグループ<br/>異なるハードウェアへ分散\"]:::alt\n        PART[\"パーティションプレイスメントグループ<br/>分散データストア向け\"]:::alt\n        NOPG[\"複数 AZ + プレイスメントグループなし<br/>インスタンスタイプを最大サイズに\"]:::alt\n    end\n    NOTE[\"スプレッドは可用性重視の配置で<br/>1 AZ あたり最大 7 インスタンス\"]:::note\n\n    REQ --> Q1\n    Q1 -->|\"通信が支配\"| Q2\n    Q2 -->|\"許容できる\"| CPG\n    CPG --> EFA\n    Q1 -.-> OTHER\n    Q2 -.->|\"許容しない\"| SPREAD\n    OTHER -.- NOTE"
+}

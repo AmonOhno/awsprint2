@@ -1,0 +1,167 @@
+{
+  "question_id": "cmp34",
+  "purpose": "スポット活用の可否を全体で1つに決めるのではなく、「中断させたくない台数」と「中断してよい台数」に分けて考えることを示す。",
+  "audience": "AWS 認定を学習中で、スポットインスタンスは知っているが SLA を守りながら使う構成の組み立て方が曖昧な人。",
+  "message": "ベースライン分はオンデマンドで固定し、それを超える分だけを複数タイプに分散したスポットに任せることで、コスト削減と SLA を両立できる。",
+  "source_summary": "混在インスタンスポリシーの OnDemandBaseCapacity でベースラインをオンデマンドに固定し、超過分をスポットにする。割当戦略は lowest-price ではなく capacity-optimized(または price-capacity-optimized)を選ぶと余剰キャパシティの多いプールから起動するため中断率が下がり、複数タイプ・複数 AZ への分散で同時中断のリスクも減る。キャパシティリバランスは中断通知の前に代替インスタンスを先行起動する。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: 平常時 40 台・ピーク時 200 台、コスト 60% 削減、SLA 99.9%、ベースライン 40 台は中断させたくない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "中断させたくない台数と中断してよい台数を分けられるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "BASE",
+      "label": "オンデマンドベース容量 40 台",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "SPOT",
+      "label": "ベース超過分はスポット 100%",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "TYPES",
+      "label": "インスタンスタイプを 4〜6 種類指定(複数タイプ・複数 AZ へ分散)",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CAPOPT",
+      "label": "割当戦略 capacity-optimized",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "REBAL",
+      "label": "キャパシティリバランス",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ONETYPE",
+      "label": "単一インスタンスタイプでスポット 100%",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ALLOD",
+      "label": "オンデマンド 200 台 + Compute Savings Plans",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "LOWEST",
+      "label": "スポットフリート lowest-price 戦略",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "BASE",
+      "verb": "中断させない分を固定する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "BASE",
+      "to": "SPOT",
+      "verb": "超過分を安く賄う",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "SPOT",
+      "to": "TYPES",
+      "verb": "中断を分散させる",
+      "direction": "one-way",
+      "kind": "depend"
+    },
+    {
+      "from": "SPOT",
+      "to": "CAPOPT",
+      "verb": "中断率の低いプールを選ぶ",
+      "direction": "one-way",
+      "kind": "depend"
+    },
+    {
+      "from": "SPOT",
+      "to": "REBAL",
+      "verb": "中断通知の前に先行起動する",
+      "direction": "one-way",
+      "kind": "depend"
+    },
+    {
+      "from": "Q",
+      "to": "ONETYPE",
+      "verb": "中断が同時に集中する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "ALLOD",
+      "verb": "コスト削減幅が届かない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "LOWEST",
+      "verb": "価格優先で中断率が下がらない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "混在インスタンスポリシー(1つの Auto Scaling グループ)",
+      "element_ids": [
+        "BASE",
+        "SPOT"
+      ]
+    },
+    {
+      "label": "中断を集中させないための設定",
+      "element_ids": [
+        "TYPES",
+        "CAPOPT",
+        "REBAL"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐 + 包含: 1つの判断で台数を2つに割り、それぞれの扱いを枠で囲う",
+    "マトリクス: 中断耐性 × 割当戦略の2軸に4つの構成を配置"
+  ],
+  "selected_pattern": "分岐 + 包含。要件が「ベースラインは中断させたくない / 超過分は安くしたい」と台数の切り分けとして書かれているため、1本の分岐で割ってから、それぞれに何を設定するかを枠で示すのが最も解読が少ない。2軸マトリクスでは「同じ1グループの中で割る」という要点が消える。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "price-capacity-optimized は解説で capacity-optimized と並記されているが、図では代表として capacity-optimized のみを書いている。",
+    "オンデマンド 200 台 + Savings Plans が不適切な理由は解説に明示がないため、ピーク前提の台数を常時起動する構成であることだけを書いている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>ステートレスな Web API を平常時 40 台・ピーク時 200 台で運用<br/>コストは 60% 削減したいが SLA 99.9% は割れない<br/>ベースライン 40 台は中断させたくない\"]:::req\n    Q{\"中断させたくない台数と<br/>中断してよい台数を<br/>分けられるか?\"}:::judge\n\n    subgraph MIX[\"混在インスタンスポリシー(1つの Auto Scaling グループ)\"]\n        direction TB\n        BASE[\"オンデマンドベース容量 40 台<br/>ベースラインは中断させない\"]:::best\n        SPOT[\"ベース超過分はスポット 100%<br/>ピーク時の増分を安く賄う\"]:::best\n        BASE -->|\"超過分\"| SPOT\n    end\n\n    subgraph GUARD[\"中断を集中させないための設定\"]\n        direction TB\n        TYPES[\"インスタンスタイプを 4〜6 種類指定<br/>複数タイプ・複数 AZ へ分散\"]:::best\n        CAPOPT[\"割当戦略 capacity-optimized<br/>余剰キャパシティの多いプールから起動\"]:::best\n        REBAL[\"キャパシティリバランス<br/>中断通知の前に代替を先行起動\"]:::best\n    end\n\n    ONETYPE[\"単一タイプでスポット 100%<br/>中断が同時に集中する\"]:::alt\n    ALLOD[\"オンデマンド 200 台 + Savings Plans<br/>ピーク前提の台数を常時起動\"]:::alt\n    LOWEST[\"スポットフリート lowest-price<br/>価格優先で中断率は下がらない\"]:::alt\n\n    REQ --> Q\n    Q -->|\"分けられる\"| MIX\n    SPOT --> GUARD\n    Q -.->|\"分けない\"| ONETYPE\n    Q -.->|\"分けない\"| ALLOD\n    Q -.->|\"分けない\"| LOWEST"
+}

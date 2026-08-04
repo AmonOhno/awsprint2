@@ -1,0 +1,124 @@
+{
+  "question_id": "cmp43",
+  "purpose": "Fargate の共有ストレージ選択が「全タスクから同時に書けるか」と「タスクの再起動をまたいで残るか」の2問で決まることを示す。",
+  "audience": "AWS 認定を学習中で、Fargate に付けられるストレージの選択肢と制約を整理したい人。",
+  "message": "複数タスクからの同時書き込みと再起動をまたぐ永続化を同時に満たせるのは EFS だけなので、タスク定義で EFS ボリュームをマウントする。",
+  "source_summary": "Fargate タスクは EFS ボリュームをマウントでき、複数タスクからの同時読み書きとタスク再起動をまたいだ永続化を両立できる。EFS アクセスポイントを使えばマウント時の UID/GID とルートディレクトリを強制でき、権限管理も簡潔になる。エフェメラルストレージはタスク終了で消え、EBS マルチアタッチは Fargate では利用できず、S3 同期は同時書き込みの整合性を担保できない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: 3 タスクが設定ファイル群と画像を共有、書き込みは全タスクから発生、再起動をまたいで永続化",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q1",
+      "label": "全タスクから同時に書けるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "Q2",
+      "label": "タスクの再起動をまたいで残るか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "EFS",
+      "label": "タスク定義で EFS ボリュームをマウント",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "AP",
+      "label": "EFS アクセスポイント(UID/GID とルートディレクトリを固定)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "EPH",
+      "label": "エフェメラルストレージ 200 GiB",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "S3",
+      "label": "起動時に S3 から同期し更新時に書き戻す",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "EBS",
+      "label": "EBS ボリューム + マルチアタッチ",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q1",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q1",
+      "to": "Q2",
+      "verb": "同時に書けるなら次の問いへ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q2",
+      "to": "EFS",
+      "verb": "再起動をまたいで残る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "EFS",
+      "to": "AP",
+      "verb": "POSIX 権限を固定する",
+      "direction": "one-way",
+      "kind": "depend"
+    },
+    {
+      "from": "Q1",
+      "to": "S3",
+      "verb": "同時書き込みの整合性を担保できない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q1",
+      "to": "EBS",
+      "verb": "Fargate では利用できない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q2",
+      "to": "EPH",
+      "verb": "タスク終了で消える",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(2段の判断フロー): 同時書き込み → 永続化 の順に条件をふるいにかける",
+    "マトリクス: 同時書き込みの可否 × 永続化の可否の2軸に4つのストレージを配置"
+  ],
+  "selected_pattern": "分岐(2段の判断フロー)。誤答は落ちる理由がそれぞれ別(同時書き込み・利用不可・揮発)なので、条件を順に当てて脱落先を示すほうが、どの条件で落ちたかが1本の線で追える。マトリクスは4象限のうち2つが空になり、読む手間の割に情報が増えない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "EBS は「Fargate では利用できない」という解説どおりの理由で落としており、マルチアタッチ自体の制約(同時書き込みにはクラスタ対応ファイルシステムが要る等)には触れていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>Fargate の 3 タスクが設定ファイル群とアップロード済み画像を共有する<br/>書き込みは全タスクから発生する<br/>タスクの再起動をまたいで永続化する\"]:::req\n    Q1{\"全タスクから<br/>同時に書けるか?\"}:::judge\n    Q2{\"タスクの再起動を<br/>またいで残るか?\"}:::judge\n    EFS[\"タスク定義で EFS ボリュームをマウント<br/>複数タスクからの同時読み書きと永続化を両立\"]:::best\n    AP[\"EFS アクセスポイント<br/>マウント時の UID/GID とルートディレクトリを固定\"]:::best\n\n    S3[\"起動時に S3 から同期し更新時に書き戻す<br/>同時書き込みの整合性を担保できない\"]:::alt\n    EBS[\"EBS ボリューム + マルチアタッチ<br/>Fargate では利用できない\"]:::alt\n    EPH[\"エフェメラルストレージ 200 GiB<br/>タスク終了で消える\"]:::alt\n\n    REQ --> Q1\n    Q1 -->|\"書ける\"| Q2\n    Q2 -->|\"残る\"| EFS\n    EFS -->|\"権限を固定\"| AP\n    Q1 -.->|\"担保できない\"| S3\n    Q1 -.->|\"使えない\"| EBS\n    Q2 -.->|\"消える\"| EPH"
+}

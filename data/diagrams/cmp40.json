@@ -1,0 +1,119 @@
+{
+  "question_id": "cmp40",
+  "purpose": "キャパシティプロバイダー戦略の base と weight が「止めない最低限」と「安くする残り」を1つのサービス内で分けるための道具だと示す。",
+  "audience": "AWS 認定を学習中で、Fargate Spot は知っているが base / weight の役割を区別できていない人。",
+  "message": "base=1 の FARGATE で最低 1 タスクを守り、残りを weight 9:1 で FARGATE_SPOT に寄せれば、全停止を避けつつ最大限安くできる。",
+  "source_summary": "キャパシティプロバイダー戦略ではベース(base)で最低限確保するタスク数を通常 Fargate に固定し、ウェイト(weight)で超過分の配分比率を決められる。base=1 の FARGATE により最低 1 タスクは中断しない一方、残りは 9:1 の比率で FARGATE_SPOT に寄せられ最大約 70% の割引を得られる。SPOT のみではキャパシティ不足時に全タスクが停止するリスクがある。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: 中断されても再実行可能なバッチ、コストは最大限下げたい、1 タスクも動かない状態は避けたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "止めない最低限と安くする残りを分けられるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "BASE",
+      "label": "FARGATE をベース 1・ウェイト 1(最低 1 タスクを確保)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "SPOT",
+      "label": "FARGATE_SPOT をウェイト 9(ベース超過分を 9:1 で配分)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ONLYSPOT",
+      "label": "FARGATE_SPOT のみ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "EC2SPOT",
+      "label": "EC2 起動タイプ + スポットの Auto Scaling グループ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ONLYFG",
+      "label": "FARGATE のみ・タスクサイズを 0.25 vCPU に縮小",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "BASE",
+      "verb": "最低限を通常 Fargate に固定する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "BASE",
+      "to": "SPOT",
+      "verb": "ベース超過分を割引側へ寄せる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "ONLYSPOT",
+      "verb": "キャパシティ不足時に全タスクが停止する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "EC2SPOT",
+      "verb": "Fargate をやめて自前のノード管理が増える",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "ONLYFG",
+      "verb": "スポットの割引を得られない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "キャパシティプロバイダー戦略",
+      "element_ids": [
+        "BASE",
+        "SPOT"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐 + 包含: 1問でタスクを2つに割り、base と weight のそれぞれの役割を枠内に置く",
+    "比率バー: タスク総数を1本の帯として base 部分と 9:1 の配分を面積で表す"
+  ],
+  "selected_pattern": "分岐 + 包含。base と weight は「何台を守るか」「残りをどう配るか」という別々の問いに答える設定なので、2つのノードに分けて並べれば役割の違いがそのまま読める。比率バーは配分は伝わるが、base が『中断しない枠』であるという意味が面積からは読み取れない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "EC2 起動タイプ + スポット ASG が不適切な理由は解説に明示がないため、図では Fargate をやめる構成である点だけを書いている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>ECS on Fargate のバッチ処理・中断されても再実行できる<br/>コストは最大限下げたい<br/>ただし 1 タスクも動かない状態は避けたい\"]:::req\n    Q{\"止めない最低限と<br/>安くする残りを<br/>分けられるか?\"}:::judge\n\n    subgraph CP[\"サービスのキャパシティプロバイダー戦略\"]\n        direction TB\n        BASE[\"FARGATE: ベース 1・ウェイト 1<br/>最低 1 タスクは中断させない\"]:::best\n        SPOT[\"FARGATE_SPOT: ウェイト 9<br/>9:1 の比率で寄せて最大約 70% の割引\"]:::best\n        BASE -->|\"超過分\"| SPOT\n    end\n\n    ONLYSPOT[\"FARGATE_SPOT のみ<br/>キャパシティ不足時に全タスクが停止\"]:::alt\n    EC2SPOT[\"EC2 起動タイプ + スポットの ASG<br/>Fargate をやめる構成\"]:::alt\n    ONLYFG[\"FARGATE のみ・0.25 vCPU に縮小<br/>スポットの割引は得られない\"]:::alt\n\n    REQ --> Q\n    Q -->|\"分けられる\"| CP\n    Q -.->|\"分けない\"| ONLYSPOT\n    Q -.->|\"分けない\"| EC2SPOT\n    Q -.->|\"分けない\"| ONLYFG"
+}

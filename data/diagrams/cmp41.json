@@ -1,0 +1,160 @@
+{
+  "question_id": "cmp41",
+  "purpose": "EKS のノード供給が「事前定義したノードグループの台数を増減する」方式と「保留中 Pod の要求から直接インスタンスを起動する」方式のどちらかを選ぶ問題であることを示す。",
+  "audience": "AWS 認定を学習中で、Cluster Autoscaler・Karpenter・HPA・VPA がそれぞれ何をスケールさせるのか整理したい人。",
+  "message": "要求が多様でノードグループの事前定義が膨らむなら、保留中 Pod の要求からインスタンスタイプを直接選ぶ Karpenter にする。",
+  "source_summary": "Karpenter は Auto Scaling グループを介さず、保留中 Pod のリソース要求・アフィニティ・アーキテクチャを解釈して最適なインスタンスタイプを EC2 API から直接起動するため、ノードグループの事前定義が不要で起動も高速。Cluster Autoscaler は事前定義したノードグループの台数を増減するモデルのため、多様な要求には多数のグループ定義が必要になる。HPA/VPA は Pod のスケーリングであってノード供給の課題は解決しない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: CPU/メモリ比や GPU の有無が大きく異なる Pod、事前定義するノードグループが多く運用負荷が高い、起動に数分",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "ノードを決めるとき何を見るか(事前定義のグループか、保留中 Pod の要求か)",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CA_DEF",
+      "label": "現状: Pod の種類ごとにノードグループを事前定義",
+      "type": "process",
+      "priority": "secondary"
+    },
+    {
+      "id": "CA_SCALE",
+      "label": "現状: 定義済みグループの台数を増減する",
+      "type": "process",
+      "priority": "secondary"
+    },
+    {
+      "id": "KP_READ",
+      "label": "保留中 Pod の要求を解釈(リソース要求・アフィニティ・アーキテクチャ)",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "KP_LAUNCH",
+      "label": "EC2 API から最適なインスタンスタイプを直接起動",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "HPA",
+      "label": "Horizontal Pod Autoscaler のメトリクス変更",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "VPA",
+      "label": "全ノードを最大サイズに統一 + Vertical Pod Autoscaler",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "HPA / VPA は Pod のスケーリングであってノード供給の課題は解決しない",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "KP_READ",
+      "verb": "保留中 Pod の要求を見る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "KP_READ",
+      "to": "KP_LAUNCH",
+      "verb": "要求に合うタイプを選んで起動する",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "CA_DEF",
+      "verb": "事前定義したグループを見る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "CA_DEF",
+      "to": "CA_SCALE",
+      "verb": "定義済みの範囲でしか増減できない",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "HPA",
+      "verb": "スケールする対象がノードではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "VPA",
+      "verb": "スケールする対象がノードではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "HPA",
+      "to": "NOTE",
+      "verb": "効かない理由を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "Cluster Autoscaler(現状)",
+      "element_ids": [
+        "CA_DEF",
+        "CA_SCALE"
+      ]
+    },
+    {
+      "label": "Karpenter",
+      "element_ids": [
+        "KP_READ",
+        "KP_LAUNCH"
+      ]
+    },
+    {
+      "label": "Pod 側のスケーリング",
+      "element_ids": [
+        "HPA",
+        "VPA"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "対比 + 分岐: 「何を見てノードを決めるか」で2つの方式を左右に置く",
+    "レイヤー: Pod 層とノード層を分け、各選択肢がどちらの層に効くかを示す"
+  ],
+  "selected_pattern": "対比 + 分岐。Cluster Autoscaler と Karpenter の差は「ノードを決める入力が事前定義のグループか、保留中 Pod の要求か」の一点なので、その1問を軸に2方式を並べれば運用負荷と起動時間の差まで同時に説明できる。レイヤー図は HPA/VPA の位置づけには向くが、主メッセージである2方式の差が薄まる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "EKS Auto Mode など Karpenter を含むマネージド形態には解説が触れていないため図でも扱っていない。",
+    "起動が速い理由(Auto Scaling グループを介さない)は解説の記述どおりに書き、具体的な短縮時間は書いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>ジョブごとに CPU/メモリ比や GPU の有無が大きく異なる Pod が投入される<br/>ノードグループを多数事前定義する必要があり運用負荷が高い<br/>スケールアウトにも数分かかっている\"]:::req\n    Q{\"ノードを決めるとき<br/>何を見るか?\"}:::judge\n\n    subgraph KP[\"Karpenter\"]\n        direction TB\n        KP_READ[\"保留中 Pod の要求を解釈<br/>リソース要求・アフィニティ・アーキテクチャ\"]:::best\n        KP_LAUNCH[\"EC2 API から最適なインスタンスタイプを直接起動<br/>ノードグループの事前定義が不要\"]:::best\n        KP_READ --> KP_LAUNCH\n    end\n\n    subgraph CA[\"Cluster Autoscaler(現状)\"]\n        direction TB\n        CA_DEF[\"Pod の種類ごとにノードグループを事前定義\"]:::alt\n        CA_SCALE[\"定義済みグループの台数を増減する\"]:::alt\n        CA_DEF --> CA_SCALE\n    end\n\n    HPA[\"HPA のメトリクスをカスタムに変更\"]:::alt\n    VPA[\"全ノードを最大サイズに統一 + VPA\"]:::alt\n    NOTE[\"HPA・VPA は Pod のスケーリングであり<br/>ノード供給の課題は解決しない\"]:::note\n\n    REQ --> Q\n    Q -->|\"Pod の要求\"| KP\n    Q -.->|\"事前定義\"| CA\n    Q -.-> HPA\n    Q -.-> VPA\n    HPA -.- NOTE"
+}

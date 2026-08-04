@@ -1,0 +1,160 @@
+{
+  "question_id": "cmp35",
+  "purpose": "購入コミットメントの選択が「割引率の高さ」ではなく「割引が適用される範囲の広さ」で決まることを示す。",
+  "audience": "AWS 認定を学習中で、Savings Plans とリザーブドインスタンスの種類は覚えたが、どれがどこまで効くのかが整理できていない人。",
+  "message": "実行環境が EC2・Fargate・Lambda をまたいで移り変わるなら、その全体に効く Compute Savings Plans を選ぶ。",
+  "source_summary": "Compute Savings Plans は EC2・Fargate・Lambda を横断し、リージョン・インスタンスファミリー・OS を問わず適用されるため、構成が変化するワークロードに最適。EC2 Instance Savings Plans は割引率が高い代わりに特定リージョン内の特定ファミリーに固定され、コンバーティブル RI は交換操作が必要で Fargate/Lambda には適用されない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: 3 年間 月 $8,000 相当を使い続けるが、年内に EC2・Fargate・Lambda の間で構成が大きく移り変わる",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "割引の適用範囲が実行環境の乗り換えをまたげるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CSP",
+      "label": "Compute Savings Plans(3 年)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "EC2",
+      "label": "EC2(複数のインスタンスファミリー)",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "FG",
+      "label": "Fargate",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "LAM",
+      "label": "Lambda",
+      "type": "artifact",
+      "priority": "support"
+    },
+    {
+      "id": "EISP",
+      "label": "EC2 Instance Savings Plans",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CRI",
+      "label": "コンバーティブルリザーブドインスタンス",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SRI",
+      "label": "スタンダードリザーブドインスタンス(1 年を買い直し)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "割引率の高さと適用範囲の広さは引き換えの関係にある",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "CSP",
+      "verb": "範囲をまたげる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "CSP",
+      "to": "EC2",
+      "verb": "リージョン・ファミリー・OS を問わず適用",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "CSP",
+      "to": "FG",
+      "verb": "同じコミットメントが適用される",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "CSP",
+      "to": "LAM",
+      "verb": "同じコミットメントが適用される",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "Q",
+      "to": "EISP",
+      "verb": "特定ファミリーに固定される",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "CRI",
+      "verb": "交換操作が必要で Fargate/Lambda は対象外",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SRI",
+      "verb": "構成変更に追随できない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "EISP",
+      "to": "NOTE",
+      "verb": "選ばない理由を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "年内に移り変わる実行環境",
+      "element_ids": [
+        "EC2",
+        "FG",
+        "LAM"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "包含 + 分岐: 移り変わる実行環境を1つの枠にまとめ、その枠全体を覆えるかで判断する",
+    "テーブル/対比: 4つの購入方法を「適用範囲」「割引率」「交換の手間」で並べて比較する"
+  ],
+  "selected_pattern": "包含 + 分岐。「Compute Savings Plans だけが3つの実行環境をまとめて覆える」という一点が主メッセージなので、覆える範囲を枠として描けば比較表を読まなくても差が見える。テーブルは項目が増えるぶん、どこで決まったのかが埋もれる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "割引率の大小は解説に「EC2 Instance Savings Plans は割引率が高い」とあるだけで具体値がないため、注釈で関係だけを述べ数値は書いていない。",
+    "月 $8,000 というコミットメント額は選択の分かれ目ではないため図には出していない(4択すべてが同じ利用量を前提としている)。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>3 年間 月 $8,000 相当のコンピュートを使い続ける見込み<br/>ただし年内に EC2・Fargate・Lambda の間で<br/>ワークロードが大きく移り変わる\"]:::req\n    Q{\"割引の適用範囲が<br/>実行環境の乗り換えを<br/>またげるか?\"}:::judge\n    CSP[\"Compute Savings Plans(3 年契約)<br/>リージョン・インスタンスファミリー・OS を問わず適用\"]:::best\n\n    subgraph TARGET[\"年内に移り変わる実行環境\"]\n        direction LR\n        EC2[\"EC2<br/>複数ファミリー\"]:::svc\n        FG[\"Fargate\"]:::svc\n        LAM[\"Lambda\"]:::svc\n    end\n\n    EISP[\"EC2 Instance Savings Plans<br/>特定リージョン内の特定ファミリーに固定\"]:::alt\n    CRI[\"コンバーティブル RI<br/>交換操作が必要 / Fargate・Lambda は対象外\"]:::alt\n    SRI[\"スタンダード RI を 1 年ごとに買い直し<br/>構成変更に追随できない\"]:::alt\n    NOTE[\"割引率の高さと適用範囲の広さは引き換え<br/>ここは柔軟性が最優先\"]:::note\n\n    REQ --> Q\n    Q -->|\"またげる\"| CSP\n    CSP --> TARGET\n    Q -.->|\"またげない\"| EISP\n    Q -.->|\"またげない\"| CRI\n    Q -.->|\"またげない\"| SRI\n    EISP -.- NOTE"
+}

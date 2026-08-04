@@ -1,0 +1,195 @@
+{
+  "question_id": "cmp37",
+  "purpose": "初期化に時間がかかるアプリのスパイク対応が「初期化を短くする」ではなく「初期化をスパイクより前に済ませる」で解けることを示す。",
+  "audience": "AWS 認定を学習中で、Auto Scaling のポリシーは知っているがウォームプールの使いどころを知らない人。",
+  "message": "初期化に 8 分かかるなら、その 8 分をスパイクの前に済ませて待機させておく(ウォームプール)。",
+  "source_summary": "ウォームプールは初期化済みのインスタンスを Stopped(または Hibernated / Running)で待機させ、スケールアウト時に起動するだけで即座にサービス投入できるため、初期化に時間がかかるアプリのスパイク対応に有効。Stopped 状態なら EBS 料金のみでインスタンス料金はかからずコスト効率も良好。猶予期間の延長やしきい値変更は初期化そのものを短縮しない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: 初期化に約 8 分、数分で予測不能にスパイク、常時多めの起動はコストが合わない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "N_SPIKE",
+      "label": "現状: スパイク発生",
+      "type": "state",
+      "priority": "secondary"
+    },
+    {
+      "id": "N_BOOT",
+      "label": "現状: インスタンス起動",
+      "type": "process",
+      "priority": "secondary"
+    },
+    {
+      "id": "N_INIT",
+      "label": "現状: 初期化 約 8 分",
+      "type": "process",
+      "priority": "secondary"
+    },
+    {
+      "id": "N_SERVE",
+      "label": "現状: ようやくサービス投入",
+      "type": "state",
+      "priority": "secondary"
+    },
+    {
+      "id": "Q",
+      "label": "初期化の 8 分をスパイクより前に済ませられるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "W_INIT",
+      "label": "平常時に初期化まで実施しておく",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "W_POOL",
+      "label": "Stopped で待機(EBS 料金のみ)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "W_SPIKE",
+      "label": "スパイク発生",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "W_SERVE",
+      "label": "起動するだけで即サービス投入",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "OTHER",
+      "label": "猶予期間の延長 / しきい値変更 / 最小台数を高く / ユーザーデータ最適化",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "いずれも初期化そのものをスパイクより前に動かせない",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "N_SPIKE",
+      "verb": "現状をなぞる",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "N_SPIKE",
+      "to": "N_BOOT",
+      "verb": "起動を始める",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "N_BOOT",
+      "to": "N_INIT",
+      "verb": "初期化に入る",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "N_INIT",
+      "to": "N_SERVE",
+      "verb": "8 分後に投入される",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "N_SERVE",
+      "to": "Q",
+      "verb": "遅さの原因を判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "W_INIT",
+      "verb": "初期化を前倒しできる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "W_INIT",
+      "to": "W_POOL",
+      "verb": "初期化済みのまま待機させる",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "W_POOL",
+      "to": "W_SPIKE",
+      "verb": "スパイクを待ち受ける",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "W_SPIKE",
+      "to": "W_SERVE",
+      "verb": "起動するだけで投入する",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "OTHER",
+      "verb": "初期化の位置は変わらない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "OTHER",
+      "to": "NOTE",
+      "verb": "効かない理由を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "現状: スケールアウトのたびに初期化する",
+      "element_ids": [
+        "N_SPIKE",
+        "N_BOOT",
+        "N_INIT",
+        "N_SERVE"
+      ]
+    },
+    {
+      "label": "ウォームプール: 初期化を先に済ませて待機させる",
+      "element_ids": [
+        "W_INIT",
+        "W_POOL",
+        "W_SPIKE",
+        "W_SERVE"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "対比 + タイムライン: 現状の時系列とウォームプールの時系列を並べ、初期化の位置がどこへ動くかを見せる",
+    "分岐: 「初期化を短縮するか / 前倒しするか」で選択肢を振り分ける"
+  ],
+  "selected_pattern": "対比 + タイムライン。効くかどうかの差は「初期化の 8 分がスパイクの後ろにあるか前にあるか」という時間軸上の位置だけなので、2本の時系列を並べれば説明なしで差が見える。分岐図だと選択肢は整理できるが、なぜ効くのかが伝わらない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "ウォームプールの状態は Stopped 以外に Hibernated / Running も選べるが、解説がコスト効率の観点で Stopped を挙げているため図では Stopped に絞っている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>起動から JVM ウォームアップとキャッシュ事前読み込みまで約 8 分<br/>トラフィックは数分で予測不能にスパイクする<br/>常時多めに起動するとコストが合わない\"]:::req\n\n    subgraph NOW[\"現状: スケールアウトのたびに初期化する\"]\n        direction LR\n        N_SPIKE[\"スパイク発生\"]:::alt\n        N_BOOT[\"インスタンス起動\"]:::alt\n        N_INIT[\"初期化 約 8 分<br/>この間レイテンシーが悪化\"]:::alt\n        N_SERVE[\"ようやくサービス投入\"]:::alt\n        N_SPIKE --> N_BOOT --> N_INIT --> N_SERVE\n    end\n\n    Q{\"初期化の 8 分を<br/>スパイクより前に<br/>済ませられるか?\"}:::judge\n\n    subgraph WARM[\"ウォームプール: 初期化を先に済ませて待機させる\"]\n        direction LR\n        W_INIT[\"平常時に初期化まで実施\"]:::best\n        W_POOL[\"Stopped で待機<br/>EBS 料金のみ\"]:::best\n        W_SPIKE[\"スパイク発生\"]:::best\n        W_SERVE[\"起動するだけで即サービス投入\"]:::best\n        W_INIT --> W_POOL --> W_SPIKE --> W_SERVE\n    end\n\n    OTHER[\"猶予期間の延長 / しきい値の引き下げ<br/>スケジュールで最小台数を高く<br/>ユーザーデータの最適化\"]:::alt\n    NOTE[\"いずれも初期化そのものを<br/>スパイクより前へ動かせない\"]:::note\n\n    REQ --> NOW\n    NOW --> Q\n    Q -->|\"前倒しする\"| WARM\n    Q -.->|\"できない\"| OTHER\n    OTHER -.- NOTE"
+}

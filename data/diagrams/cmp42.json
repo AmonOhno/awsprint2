@@ -1,0 +1,173 @@
+{
+  "question_id": "cmp42",
+  "purpose": "最小権限の徹底が「権限の境界をノードに置くか Pod に置くか」で決まり、ネットワーク層の制御では代替できないことを示す。",
+  "audience": "AWS 認定を学習中で、EKS の Pod に IAM 権限を与える方法を整理したい人。",
+  "message": "同居する Pod に権限が漏れるのを止めるには、権限の境界をノードから Pod へ移す IRSA を使う。",
+  "source_summary": "IRSA はクラスターの OIDC プロバイダーを IAM に登録し、サービスアカウントのトークンで sts:AssumeRoleWithWebIdentity を行うことで Pod 単位に IAM ロールを割り当てる(EKS Pod Identity も同様の目的の新しい仕組み)。長期のアクセスキー配布は漏洩リスクが高く、ノード分割は運用が煩雑でスケールしない。セキュリティグループやエンドポイントポリシーはネットワーク層の制御であり ID ベースの最小権限にはならない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: サービスごとに異なる S3 / DynamoDB へアクセス、現状はノード IAM ロールに全権限、同居 Pod からも使えてしまう",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "権限の境界をノードに置くか Pod に置くか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "SA",
+      "label": "Kubernetes サービスアカウント",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "OIDC",
+      "label": "クラスターの OIDC プロバイダーを IAM に登録",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "STS",
+      "label": "sts:AssumeRoleWithWebIdentity",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ROLE",
+      "label": "Pod 単位の IAM ロール(最小権限)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "KEY",
+      "label": "IAM ユーザーのアクセスキーを Secret 経由で配布",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NODESPLIT",
+      "label": "Pod の種類ごとにノードグループを分割",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NET",
+      "label": "セキュリティグループ / エンドポイントポリシー",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "ネットワーク層の制御は ID ベースの最小権限にはならない",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "NOTE2",
+      "label": "EKS Pod Identity も同じ目的の新しい仕組み",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "SA",
+      "verb": "境界を Pod に置く",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "SA",
+      "to": "OIDC",
+      "verb": "サービスアカウントのトークンを提示する",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "OIDC",
+      "to": "STS",
+      "verb": "ウェブ ID フェデレーションで引き受ける",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "STS",
+      "to": "ROLE",
+      "verb": "Pod 単位のロールを得る",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "NODESPLIT",
+      "verb": "境界がノードのまま・運用が煩雑",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "KEY",
+      "verb": "長期の認証情報は漏洩リスクが高い",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NET",
+      "verb": "ネットワーク層の制御にとどまる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "NET",
+      "to": "NOTE",
+      "verb": "効かない理由を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "ROLE",
+      "to": "NOTE2",
+      "verb": "同じ目的の仕組みを補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "IAM Roles for Service Accounts(IRSA)",
+      "element_ids": [
+        "SA",
+        "OIDC",
+        "STS",
+        "ROLE"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐 + 直列: 権限の境界をどこに置くかで振り分け、IRSA の紐付けの流れを直列で示す",
+    "包含(対比): ノード枠の中に Pod を描き、権限がノード枠に付く現状と Pod に付く IRSA を並べる"
+  ],
+  "selected_pattern": "分岐 + 直列。誤答は「境界がノードのまま」「そもそも ID の話ではない」の2種に整理でき、1問で振り分けられる。IRSA 側は紐付けの経路(サービスアカウント → OIDC → AssumeRoleWithWebIdentity → ロール)を追えることが理解の要なので直列で示す。包含図は現状の問題は伝わるが、IRSA がどう成立するかが描けない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "EKS Pod Identity は解説が併記しているため注釈として置いたが、IRSA との使い分けを問う問題を追加する場合は別図が必要。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>マイクロサービスごとに異なる S3 バケット・DynamoDB テーブルへアクセスする<br/>現在はノードの IAM ロールに全権限をまとめている<br/>同居する他の Pod からも権限が使えてしまう\"]:::req\n    Q{\"権限の境界を<br/>ノードに置くか<br/>Pod に置くか?\"}:::judge\n\n    subgraph IRSA[\"IAM Roles for Service Accounts(IRSA)\"]\n        direction TB\n        SA[\"Kubernetes サービスアカウント\"]:::best\n        OIDC[\"クラスターの OIDC プロバイダーを IAM に登録\"]:::best\n        STS[\"sts:AssumeRoleWithWebIdentity\"]:::best\n        ROLE[\"Pod 単位の IAM ロール(最小権限)\"]:::best\n        SA -->|\"トークン\"| OIDC\n        OIDC --> STS\n        STS --> ROLE\n    end\n\n    NODESPLIT[\"ノードグループを種類ごとに分割<br/>境界はノードのまま・運用が煩雑\"]:::alt\n    KEY[\"IAM ユーザーのアクセスキーを Secret で配布<br/>長期の認証情報は漏洩リスクが高い\"]:::alt\n    NET[\"セキュリティグループ / エンドポイントポリシー<br/>ネットワーク層の制御\"]:::alt\n    NOTE[\"ネットワーク層の制御は<br/>ID ベースの最小権限にはならない\"]:::note\n    NOTE2[\"EKS Pod Identity も<br/>同じ目的の新しい仕組み\"]:::note\n\n    REQ --> Q\n    Q -->|\"Pod に置く\"| IRSA\n    Q -.->|\"ノードのまま\"| NODESPLIT\n    Q -.->|\"ID 管理でない\"| KEY\n    Q -.->|\"ID 管理でない\"| NET\n    NET -.- NOTE\n    ROLE -.- NOTE2"
+}

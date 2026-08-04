@@ -1,0 +1,146 @@
+{
+  "question_id": "cmp38",
+  "purpose": "スケールイン時のデータ退避が「終了そのものを保留できる仕組み」でしか担保できないことを示す。",
+  "audience": "AWS 認定を学習中で、クールダウン・登録解除の遅延・ライフサイクルフックがそれぞれ何を制御しているのか混同しがちな人。",
+  "message": "終了処理の猶予が要るなら、インスタンスを Terminating:Wait で保留できる終了ライフサイクルフックを使う。",
+  "source_summary": "ライフサイクルフック(autoscaling:EC2_INSTANCE_TERMINATING)はインスタンスを Terminating:Wait 状態で保留し、その間にデータ退避などの終了処理を実行できる。処理完了後 CompleteLifecycleAction を呼べば即座に終了し、呼ばれなくてもタイムアウト(最大 100 分)まで待つ。登録解除の遅延は ALB からの接続ドレインを制御するだけでアプリ内部のバッファ処理は保証せず、クールダウンは次のスケーリング動作の間隔にすぎない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "要件: 終了するインスタンスのフラッシュに最大 5 分、完了前の終了はデータ損失、追加サーバーは立てない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "インスタンスの終了そのものを保留できるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "WAIT",
+      "label": "Terminating:Wait で保留(タイムアウト最大 100 分)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "FLUSH",
+      "label": "残った処理中データを外部へフラッシュ",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "DONE",
+      "label": "CompleteLifecycleAction を呼んで終了",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "COOL",
+      "label": "クールダウン 300 秒",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DEREG",
+      "label": "ターゲットグループの登録解除の遅延 300 秒",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "PROT",
+      "label": "スケールイン保護 + 運用者による手動終了",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "登録解除の遅延が制御するのは ALB からの接続ドレインで、アプリ内部のバッファ処理は保証しない",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "判断に持ち込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "WAIT",
+      "verb": "終了を保留できる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "WAIT",
+      "to": "FLUSH",
+      "verb": "保留中に退避する",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "FLUSH",
+      "to": "DONE",
+      "verb": "完了を通知して終了する",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "COOL",
+      "verb": "次のスケーリング動作の間隔にすぎない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "DEREG",
+      "verb": "ALB からの接続ドレインを制御するだけ",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "PROT",
+      "verb": "自動での終了を止める運用になる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "DEREG",
+      "to": "NOTE",
+      "verb": "効かない理由を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "終了ライフサイクルフック(EC2_INSTANCE_TERMINATING)",
+      "element_ids": [
+        "WAIT",
+        "FLUSH",
+        "DONE"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐 + 直列: 「終了を保留できるか」で振り分け、フック内の流れを直列で示す",
+    "レイヤー: ALB 層・Auto Scaling 層・アプリ層に分け、各設定がどの層に効くかを示す"
+  ],
+  "selected_pattern": "分岐 + 直列。誤答の3つはいずれも「終了を止められない」という一点で落ちるため、その1問で振り分けたうえで、正解側だけ保留→退避→完了の流れを見せれば足りる。レイヤー図は正確だが層の定義を読ませる手間が増える。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "スケールイン保護が不適切な理由は解説に記述がないため、図では「運用者が手動で終了させる」という選択肢そのものの性質だけを書いている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>終了するインスタンス上のデータのフラッシュに最大 5 分<br/>完了前に終了するとデータが失われる<br/>追加のサーバーは立てられない\"]:::req\n    Q{\"インスタンスの<br/>終了そのものを<br/>保留できるか?\"}:::judge\n\n    subgraph HOOK[\"終了ライフサイクルフック(EC2_INSTANCE_TERMINATING)\"]\n        direction TB\n        WAIT[\"Terminating:Wait で保留<br/>タイムアウトは最大 100 分\"]:::best\n        FLUSH[\"残った処理中データを外部へフラッシュ\"]:::best\n        DONE[\"CompleteLifecycleAction を呼ぶ<br/>呼べば即座に終了する\"]:::best\n        WAIT --> FLUSH --> DONE\n    end\n\n    COOL[\"クールダウン 300 秒<br/>次のスケーリング動作の間隔\"]:::alt\n    DEREG[\"登録解除の遅延 300 秒<br/>ALB からの接続ドレイン\"]:::alt\n    PROT[\"スケールイン保護<br/>運用者が手動で終了させる\"]:::alt\n    NOTE[\"制御しているのは ALB との接続であって<br/>アプリ内部のバッファ処理ではない\"]:::note\n\n    REQ --> Q\n    Q -->|\"保留できる\"| HOOK\n    Q -.->|\"保留しない\"| COOL\n    Q -.->|\"保留しない\"| DEREG\n    Q -.->|\"保留しない\"| PROT\n    DEREG -.- NOTE"
+}
