@@ -1,0 +1,42 @@
+{
+  "question_id": "cmp45",
+  "purpose": "コンピュートコスト削減の打ち手が「価格性能比そのものを変えているか」で決まることを示し、総 vCPU が同じままの案と区別させる。",
+  "audience": "AWS 認定を学習中で、EC2 のコスト最適化案を並べたときにどれが実際に効くのかを判断したい人。",
+  "message": "オープンソースのランタイムだけに依存し arm64 で再ビルドできるアプリなら、価格性能比の高い Graviton へ移すのがコストに効く唯一の打ち手。",
+  "source_summary": "Graviton(arm64)インスタンスは同等の x86 インスタンスに比べ最大 40% 優れた価格性能比を提供し、Linux でソースからビルドできるアプリなら移行障壁は低め。移行時は依存ライブラリの arm64 対応とベンチマークの確認が必要。サイズを下げて台数を倍にしても総 vCPU は同じでコストはほぼ変わらず、Dedicated Hosts は通常より高コスト、io2 への変更はストレージ費用を増やす。",
+  "elements": [
+    { "id": "REQ", "label": "要件: Linux 内製 Web アプリ、OSS ランタイムのみ、ソースからビルド可能、コスト 3 割減、短時間のダウンタイムは許容", "type": "state", "priority": "primary" },
+    { "id": "Q1", "label": "同じ処理を単価の安いハードで動かせるか", "type": "process", "priority": "primary" },
+    { "id": "Q2", "label": "arm64 で再ビルドできるか", "type": "process", "priority": "primary" },
+    { "id": "GRAVITON", "label": "Graviton ベースのインスタンス(例: m7g)へ移行", "type": "artifact", "priority": "primary" },
+    { "id": "NOTE", "label": "依存ライブラリの arm64 対応とベンチマークの確認が要る", "type": "other", "priority": "support" },
+    { "id": "RESIZE", "label": "サイズを 1 段下げて台数を 2 倍", "type": "artifact", "priority": "secondary" },
+    { "id": "DH", "label": "全インスタンスを Dedicated Hosts へ", "type": "artifact", "priority": "secondary" },
+    { "id": "IO2", "label": "EBS を gp3 から io2 へ変更", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q1", "verb": "判断に持ち込む", "direction": "one-way", "kind": "flow" },
+    { "from": "Q1", "to": "Q2", "verb": "価格性能比を変えられるなら次の問いへ", "direction": "one-way", "kind": "flow" },
+    { "from": "Q2", "to": "GRAVITON", "verb": "ソースからビルドできる", "direction": "one-way", "kind": "flow" },
+    { "from": "GRAVITON", "to": "NOTE", "verb": "移行時の前提を補う", "direction": "none", "kind": "other" },
+    { "from": "Q1", "to": "RESIZE", "verb": "総 vCPU が同じでコストは変わらない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q1", "to": "DH", "verb": "通常より高コストになる", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q1", "to": "IO2", "verb": "ストレージ費用が増える", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 価格性能比を変えるか → arm64 で再ビルドできるか の順に絞る",
+    "対比(Good/Bad の2列): 効く案と効かない案を左右に並べ、効かない理由を並記する"
+  ],
+  "selected_pattern": "分岐(判断フロー)。誤答3つはいずれも「価格性能比を変えていない(むしろ費用が増える)」という同じ第1の問いで落ちるため、その問いを1つ立てて脱落させたうえで、正解だけに固有条件(arm64 で再ビルドできるか)を当てる形が最短で読める。対比2列は落ちる理由が3通りに散らばり、共通の判断軸が見えにくい。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「最大 40% 優れた価格性能比」は解説の記載どおりの表現にとどめ、要件の 3 割削減が必ず達成できるとは図に書いていない(ベンチマークで確認する前提)。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>Linux 内製 Web アプリ / OSS ランタイムのみ / ソースからビルド可能<br/>コンピュートコストを 3 割削減したい<br/>短時間のダウンタイムは許容\"]:::req\n    Q1{\"同じ処理を<br/>単価の安いハードで<br/>動かせるか?\"}:::judge\n    Q2{\"arm64 で<br/>再ビルドできるか?\"}:::judge\n    GRAVITON[\"Graviton ベースのインスタンス(例: m7g)へ移行<br/>同等の x86 に比べ最大 40% 優れた価格性能比\"]:::best\n    NOTE[\"依存ライブラリの arm64 対応を確認し<br/>移行後に性能をベンチマークする\"]:::note\n\n    RESIZE[\"サイズを 1 段下げて台数を 2 倍<br/>総 vCPU が同じでコストはほぼ変わらない\"]:::alt\n    DH[\"全インスタンスを Dedicated Hosts へ<br/>通常より高コストになる\"]:::alt\n    IO2[\"EBS を gp3 から io2 へ変更<br/>ストレージ費用が増える\"]:::alt\n\n    REQ --> Q1\n    Q1 -->|\"動かせる\"| Q2\n    Q2 -->|\"できる\"| GRAVITON\n    GRAVITON -.- NOTE\n    Q1 -.->|\"変わらず\"| RESIZE\n    Q1 -.->|\"高コスト\"| DH\n    Q1 -.->|\"費用増\"| IO2"
+}

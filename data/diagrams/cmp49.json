@@ -1,0 +1,44 @@
+{
+  "question_id": "cmp49",
+  "purpose": "スケーリング方式の選択が「負荷を事前に読めるか」と「起動遅延を先回りで吸収できるか」で決まることを示す。",
+  "audience": "AWS 認定を学習中で、ターゲット追跡・ステップ・スケジュール・予測スケーリングの使い分けを整理したい人。",
+  "message": "周期性のある急増に 10 分の起動遅延が重なるなら、過去メトリクスから先回りして容量を用意する予測スケーリングを、ターゲット追跡と併用する。",
+  "source_summary": "予測スケーリングは過去のメトリクス(最低 24 時間、推奨 14 日以上)を機械学習で分析して将来の負荷を予測し、必要な容量を事前にプロビジョニングする。ターゲット追跡と併用すれば予測外の変動にはリアクティブに追随できる。目標値を下げる方法や最小台数の固定は常時余剰を抱えコスト効率が悪く、ステップスケーリングは負荷が上がってから動くため 10 分の起動遅延は解消できない。",
+  "elements": [
+    { "id": "REQ", "label": "要件: 毎日 9:00 に負荷 5 倍、11:00 に戻る周期性、起動と初期化に 10 分、リアクティブだけでは 9:00 直後にエラー率が上がる", "type": "state", "priority": "primary" },
+    { "id": "Q1", "label": "負荷の立ち上がりを事前に読めるか", "type": "process", "priority": "primary" },
+    { "id": "Q2", "label": "余剰を常時抱えずに先回りできるか", "type": "process", "priority": "primary" },
+    { "id": "PRED", "label": "予測スケーリングで事前に容量を確保", "type": "artifact", "priority": "primary" },
+    { "id": "TT", "label": "ターゲット追跡を併用し予測外の変動に追随", "type": "artifact", "priority": "primary" },
+    { "id": "NOTE", "label": "過去メトリクスが最低 24 時間、推奨 14 日以上必要", "type": "other", "priority": "support" },
+    { "id": "LOWER", "label": "ターゲット追跡の目標値を CPU 30% に下げる", "type": "artifact", "priority": "secondary" },
+    { "id": "STEP", "label": "ステップスケーリングのしきい値を細かく刻む", "type": "artifact", "priority": "secondary" },
+    { "id": "SCHED", "label": "最小台数を 24 時間高い値で固定", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q1", "verb": "判断に持ち込む", "direction": "one-way", "kind": "flow" },
+    { "from": "Q1", "to": "Q2", "verb": "読めるなら次の問いへ", "direction": "one-way", "kind": "flow" },
+    { "from": "Q2", "to": "PRED", "verb": "先回りして容量を用意する", "direction": "one-way", "kind": "flow" },
+    { "from": "PRED", "to": "TT", "verb": "予測外の変動を拾う", "direction": "one-way", "kind": "depend" },
+    { "from": "PRED", "to": "NOTE", "verb": "前提データを補う", "direction": "none", "kind": "other" },
+    { "from": "Q1", "to": "STEP", "verb": "負荷が上がってから動くので 10 分遅れる", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q2", "to": "LOWER", "verb": "常時余剰でコスト効率が悪い", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q2", "to": "SCHED", "verb": "常時余剰でコスト効率が悪い", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(2段の判断フロー): 事前に読めるか → 常時余剰なしで先回りできるか の順に絞る",
+    "タイムライン: 9:00 の負荷上昇に対して各方式の容量が追いつくタイミングを時間軸で並べる"
+  ],
+  "selected_pattern": "分岐(2段の判断フロー)。誤答が落ちる理由は「事後にしか動けない」と「常時余剰を抱える」の2種類しかないため、その2つを問いにすれば全案を2本の線で仕分けできる。タイムラインは遅延の実感は出るが、コスト面で落ちる2案を同じ軸に載せられない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "スケジュールされたスケーリング自体は周期性に合わせて時間帯を限れば有効だが、選択肢が「24 時間高い値で固定」と書いているため、図でも常時余剰という点だけを落ちる理由にしている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>毎日 9:00 に負荷が 5 倍、11:00 に戻る明確な周期性<br/>インスタンスの起動と初期化に 10 分かかる<br/>リアクティブな追随だけでは 9:00 直後にエラー率が上がる\"]:::req\n    Q1{\"負荷の立ち上がりを<br/>事前に読めるか?\"}:::judge\n    Q2{\"余剰を常時抱えずに<br/>先回りできるか?\"}:::judge\n    PRED[\"予測スケーリングを有効化<br/>過去メトリクスから将来の負荷を予測し事前に容量を確保\"]:::best\n    TT[\"ターゲット追跡を併用<br/>予測外の変動にはリアクティブに追随する\"]:::best\n    NOTE[\"前提<br/>過去メトリクスが最低 24 時間、推奨 14 日以上必要\"]:::note\n\n    STEP[\"ステップスケーリングのしきい値を細かく刻む<br/>負荷が上がってから動くので 10 分の起動遅延が残る\"]:::alt\n    LOWER[\"目標値を CPU 30% に下げる<br/>常時余剰を抱えコスト効率が悪い\"]:::alt\n    SCHED[\"最小台数を 24 時間高い値で固定<br/>常時余剰を抱えコスト効率が悪い\"]:::alt\n\n    REQ --> Q1\n    Q1 -->|\"読める\"| Q2\n    Q2 -->|\"できる\"| PRED\n    PRED --> TT\n    PRED -.- NOTE\n    Q1 -.->|\"事後に動く\"| STEP\n    Q2 -.->|\"常時余剰\"| LOWER\n    Q2 -.->|\"常時余剰\"| SCHED"
+}

@@ -1,0 +1,45 @@
+{
+  "question_id": "cmp52",
+  "purpose": "Auto Scaling が異常を見逃した原因が「見ている層」にあることを示し、対策がタイムアウト調整ではなく検知する層を変えることだと分からせる。",
+  "audience": "AWS 認定を学習中で、Auto Scaling のヘルスチェックタイプと ELB ヘルスチェックの違いを整理したい人。",
+  "message": "ヘルスチェックタイプが EC2 のままではハードウェア・OS 層しか見ていないので、ELB ヘルスチェックを有効にし主要依存を含む実処理パスを見せてアプリ層の停止を検知させる。",
+  "source_summary": "Auto Scaling のヘルスチェックタイプが EC2 の場合、インスタンスのステータスチェック(ハードウェア・OS レベル)しか見ないため、OS は生きているがアプリが応答しない状態を検知できない。ELB ヘルスチェックを有効にし、ヘルスチェックパスを静的ファイルではなく DB 接続など主要依存を含む /health のような実処理パスにすることでアプリ障害を検知して自動置換できる。",
+  "elements": [
+    { "id": "REQ", "label": "事象: スレッドプール枯渇で HTTP に無応答、しかし Auto Scaling は異常と判定せず置き換えが起きない", "type": "state", "priority": "primary" },
+    { "id": "CAUSE", "label": "原因: ヘルスチェックタイプが EC2 のみでステータスチェック(ハードウェア・OS 層)しか見ない", "type": "artifact", "priority": "primary" },
+    { "id": "Q1", "label": "アプリ層の応答を見ているか", "type": "process", "priority": "primary" },
+    { "id": "ELBHC", "label": "ELB ヘルスチェックを有効化", "type": "artifact", "priority": "primary" },
+    { "id": "PATH", "label": "ターゲットグループのヘルスチェックに主要依存を含む実処理パス(/health)を指定", "type": "artifact", "priority": "primary" },
+    { "id": "DETECT", "label": "アプリ障害を検知して自動置換される", "type": "artifact", "priority": "primary" },
+    { "id": "TIMEOUT", "label": "ALB のアイドルタイムアウトを 4000 秒へ延長", "type": "artifact", "priority": "secondary" },
+    { "id": "GRACE", "label": "ヘルスチェックの猶予期間を 0 に設定", "type": "artifact", "priority": "secondary" },
+    { "id": "DEREG", "label": "登録解除の遅延を 0 秒に設定", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "CAUSE", "verb": "原因を特定する", "direction": "one-way", "kind": "flow" },
+    { "from": "CAUSE", "to": "Q1", "verb": "見ている層を問う", "direction": "one-way", "kind": "flow" },
+    { "from": "Q1", "to": "ELBHC", "verb": "見ていないので検知する層を足す", "direction": "one-way", "kind": "flow" },
+    { "from": "ELBHC", "to": "PATH", "verb": "実処理を伴うパスを見せる", "direction": "one-way", "kind": "depend" },
+    { "from": "PATH", "to": "DETECT", "verb": "アプリ障害を検知する", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q1", "to": "TIMEOUT", "verb": "見る層が変わらない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q1", "to": "GRACE", "verb": "見る層が変わらない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q1", "to": "DEREG", "verb": "見る層が変わらない", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "原因 → 判断 → 対策の直列: 事象から原因を特定し、見ている層を問い直して対策へ進む",
+    "レイヤー: OS 層とアプリ層を上下に積み、どちらを監視しているかを塗り分ける"
+  ],
+  "selected_pattern": "原因 → 判断 → 対策の直列。設問が原因と対策の両方を問うており、事象から対策までを1本の線でたどれる形が誤読なく読める。レイヤー図は「見えている層」が直感的だが、誤答3つを層の絵の中に置く場所がなく、対策の具体(実処理パスの指定)も表現しにくい。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "アイドルタイムアウト・猶予期間・登録解除の遅延の3案は解説が個別に否定していないため、「検知する層を変えない」という共通の理由でまとめて落としている。各設定を実際に変えたときの副作用には触れていない。",
+    "原因ノードは選択肢ではなく現状設定なので alt(グレー)で描いている。要件を満たさない状態という点で意味は揃うが、他問の alt が誤答選択肢である点とは役割がずれる。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"事象<br/>ALB 配下のインスタンスでスレッドプールが枯渇<br/>HTTP リクエストにまったく応答しない<br/>しかし Auto Scaling は異常と判定せず置き換えが行われない\"]:::req\n    CAUSE[\"原因: ヘルスチェックタイプが EC2 のみ<br/>ステータスチェック(ハードウェア・OS 層)しか見ていない\"]:::alt\n    Q1{\"アプリ層の応答を<br/>見ているか?\"}:::judge\n    ELBHC[\"ELB ヘルスチェックを有効化<br/>ロードバランサーから見た応答性を判定に加える\"]:::best\n    PATH[\"ヘルスチェックパスに実処理を伴うパス(/health)を指定<br/>静的ファイルではなく DB 接続など主要依存を含める\"]:::best\n    DETECT[\"アプリ障害を検知して自動置換される\"]:::best\n\n    TIMEOUT[\"ALB のアイドルタイムアウトを 4000 秒へ延長\"]:::alt\n    GRACE[\"ヘルスチェックの猶予期間を 0 に設定\"]:::alt\n    DEREG[\"登録解除の遅延を 0 秒に設定\"]:::alt\n\n    REQ --> CAUSE\n    CAUSE --> Q1\n    Q1 -->|\"見ていない\"| ELBHC\n    ELBHC --> PATH\n    PATH --> DETECT\n    Q1 -.->|\"層は不変\"| TIMEOUT\n    Q1 -.->|\"層は不変\"| GRACE\n    Q1 -.->|\"層は不変\"| DEREG"
+}

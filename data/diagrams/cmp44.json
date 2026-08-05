@@ -1,0 +1,44 @@
+{
+  "question_id": "cmp44",
+  "purpose": "数千の独立ジョブを回す基盤の選択が「1ジョブの実行時間」と「キューイングとスケールを誰が持つか」の2問で決まることを示す。",
+  "audience": "AWS 認定を学習中で、バッチ処理を Lambda・ECS・EC2・Batch のどれに載せるかの判断基準を整理したい人。",
+  "message": "最長 60 分のジョブを数千本、中断許容・運用負荷最小で回すなら、キューイングと自動スケールを AWS Batch に任せ、配列ジョブとジョブ依存で表現する。",
+  "source_summary": "AWS Batch は大量バッチのキューイング・スケジューリング・コンピュート環境の自動スケールを担い、配列ジョブで数千の独立ジョブを1回の投入で表現でき、ジョブ依存で後続処理も定義できる。スポットと capacity-optimized 割当戦略でコストと中断率を両立する。Lambda は最大15分の実行時間制限があり60分ジョブに使えず、ECS サービスは常駐サービス向けのモデル。",
+  "elements": [
+    { "id": "REQ", "label": "要件: 独立ジョブ 5,000 本、1本 10〜60 分、後続ジョブあり、コスト最重要・中断許容、運用負荷最小", "type": "state", "priority": "primary" },
+    { "id": "Q1", "label": "1 ジョブが 15 分を超えるか", "type": "process", "priority": "primary" },
+    { "id": "Q2", "label": "キューイングと自動スケールを自前で持つか", "type": "process", "priority": "primary" },
+    { "id": "BATCH", "label": "AWS Batch のマネージド型コンピュート環境", "type": "artifact", "priority": "primary" },
+    { "id": "ARRAY", "label": "配列ジョブで 5,000 本を 1 回投入、ジョブ依存で後続を表現", "type": "artifact", "priority": "primary" },
+    { "id": "SPOT", "label": "Spot + SPOT_CAPACITY_OPTIMIZED でコストと中断率を両立", "type": "artifact", "priority": "primary" },
+    { "id": "LAMBDA", "label": "Step Functions Map から Lambda 5,000 並列", "type": "artifact", "priority": "secondary" },
+    { "id": "ECS", "label": "ECS サービスの希望タスク数 5,000", "type": "artifact", "priority": "secondary" },
+    { "id": "EC2", "label": "大型 EC2 1 台で GNU parallel", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q1", "verb": "判断に持ち込む", "direction": "one-way", "kind": "flow" },
+    { "from": "Q1", "to": "Q2", "verb": "超えるので Lambda は外れる", "direction": "one-way", "kind": "flow" },
+    { "from": "Q1", "to": "LAMBDA", "verb": "最大 15 分の実行時間制限に当たる", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q2", "to": "BATCH", "verb": "マネージドに任せる", "direction": "one-way", "kind": "flow" },
+    { "from": "BATCH", "to": "ARRAY", "verb": "投入方法を決める", "direction": "one-way", "kind": "depend" },
+    { "from": "BATCH", "to": "SPOT", "verb": "コスト条件を満たす", "direction": "one-way", "kind": "depend" },
+    { "from": "Q2", "to": "ECS", "verb": "常駐サービス向けのモデル", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q2", "to": "EC2", "verb": "スケールも運用も自前になる", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(2段の判断フロー): 実行時間 → スケジューリングの持ち主 の順に条件をふるいにかける",
+    "マトリクス: 1ジョブの実行時間 × 運用の自前度 の2軸に4案を配置"
+  ],
+  "selected_pattern": "分岐(2段の判断フロー)。誤答が落ちる理由が別々(実行時間制限・サービスモデル違い・自前運用)なので、条件を順に当てて脱落先を示すほうがどこで落ちたかを1本の線で追える。マトリクスは軸が「時間」と「運用」で性質が揃わず、読む手間の割に情報が増えない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「大型 EC2 1 台で GNU parallel」は解説が個別に否定していないため、運用負荷最小という要件から外れる点だけを理由にしている。中断許容との相性(再実行の作り込み)には踏み込んでいない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>独立ジョブ 5,000 本 / 1 本 10〜60 分 / 後続ジョブあり<br/>コスト最重要・中断は許容<br/>運用負荷は最小にしたい\"]:::req\n    Q1{\"1 ジョブが<br/>15 分を超えるか?\"}:::judge\n    Q2{\"キューイングと自動スケールを<br/>自前で持つか?\"}:::judge\n    BATCH[\"AWS Batch のマネージド型コンピュート環境<br/>キューイング・スケジューリング・自動スケールを任せる\"]:::best\n    ARRAY[\"配列ジョブで 5,000 本を 1 回投入<br/>後続はジョブ依存で表現\"]:::best\n    SPOT[\"Spot + SPOT_CAPACITY_OPTIMIZED<br/>コストと中断率を両立\"]:::best\n\n    LAMBDA[\"Step Functions Map から Lambda 5,000 並列<br/>最大 15 分の実行時間制限に当たる\"]:::alt\n    ECS[\"ECS サービスの希望タスク数 5,000<br/>常駐サービス向けのモデル\"]:::alt\n    EC2[\"大型 EC2 1 台で GNU parallel<br/>スケールも運用も自前になる\"]:::alt\n\n    REQ --> Q1\n    Q1 -->|\"超える\"| Q2\n    Q2 -->|\"任せる\"| BATCH\n    BATCH --> ARRAY\n    BATCH --> SPOT\n    Q1 -.->|\"15 分上限\"| LAMBDA\n    Q2 -.->|\"常駐向け\"| ECS\n    Q2 -.->|\"自前運用\"| EC2"
+}

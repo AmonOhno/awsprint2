@@ -1,0 +1,45 @@
+{
+  "question_id": "cmp53",
+  "purpose": "Elastic Beanstalk のデプロイポリシー選択が「キャパシティを維持できるか」と「新旧が同時にサービスしないか」の2問で決まることを示す。",
+  "audience": "AWS 認定を学習中で、Beanstalk の4つのデプロイポリシーの違いを要件から選べるようにしたい人。",
+  "message": "キャパシティ維持・新旧の非混在・即時ロールバックを同時に満たすのは、新しい Auto Scaling グループを丸ごと作るイミュータブルデプロイだけ。",
+  "source_summary": "イミュータブルデプロイは新しい Auto Scaling グループに新バージョンのインスタンス群を丸ごと作り、ヘルスチェック通過後に既存グループへ移して旧インスタンスを削除するため、キャパシティを維持したまま新旧混在を避けられ、失敗時は新グループを破棄するだけで即座に戻せる。追加バッチ付きローリングはキャパシティを維持するが、移行中は新旧バージョンが同時にサービスする。All at once はダウンタイムを伴う。",
+  "elements": [
+    { "id": "REQ", "label": "要件: デプロイ中も全キャパシティ維持、新旧バージョンを混在させない、失敗時は速やかに戻す、一時的な追加インスタンス費用は許容", "type": "state", "priority": "primary" },
+    { "id": "Q1", "label": "デプロイ中も全キャパシティを維持するか", "type": "process", "priority": "primary" },
+    { "id": "Q2", "label": "新旧バージョンが同時にサービスしないか", "type": "process", "priority": "primary" },
+    { "id": "IMM", "label": "イミュータブルデプロイ(新 ASG に新バージョンを丸ごと作る)", "type": "artifact", "priority": "primary" },
+    { "id": "SWITCH", "label": "ヘルスチェック通過後に既存グループへ移し旧インスタンスを削除", "type": "artifact", "priority": "primary" },
+    { "id": "ROLLBACK", "label": "失敗時は新グループを破棄するだけで即座に戻る", "type": "artifact", "priority": "primary" },
+    { "id": "RWAB", "label": "追加バッチによるローリング", "type": "artifact", "priority": "secondary" },
+    { "id": "ROLLING", "label": "ローリング", "type": "artifact", "priority": "secondary" },
+    { "id": "ALLATONCE", "label": "All at once(一括)", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q1", "verb": "判断に持ち込む", "direction": "one-way", "kind": "flow" },
+    { "from": "Q1", "to": "Q2", "verb": "維持できるなら次の問いへ", "direction": "one-way", "kind": "flow" },
+    { "from": "Q2", "to": "IMM", "verb": "混在しない", "direction": "one-way", "kind": "flow" },
+    { "from": "IMM", "to": "SWITCH", "verb": "切り替える", "direction": "one-way", "kind": "sequence" },
+    { "from": "IMM", "to": "ROLLBACK", "verb": "失敗時に戻す", "direction": "one-way", "kind": "depend" },
+    { "from": "Q2", "to": "RWAB", "verb": "移行中は新旧が同時にサービスする", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q1", "to": "ROLLING", "verb": "キャパシティを維持できない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q1", "to": "ALLATONCE", "verb": "ダウンタイムを伴う", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(2段の判断フロー): キャパシティ維持 → 新旧の非混在 の順に4つのポリシーをふるいにかける",
+    "テーブル(比較表): 4ポリシー × キャパシティ・混在・ロールバック・追加費用 の表で並べる"
+  ],
+  "selected_pattern": "分岐(2段の判断フロー)。4つのポリシーが要件2つで順に脱落し最後に1つ残る構造そのものなので、上から下へ読むだけで正解にたどり着ける。比較表は網羅的だが、どの要件が決め手だったかが読み手の目に委ねられる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "ローリング(追加バッチなし)は解説が直接には否定しておらず、追加バッチ付きが「キャパシティを維持する」と書かれていることの裏返しとしてキャパシティ維持不可に置いている。",
+    "「一時的な追加インスタンス費用は許容」という条件はイミュータブルを選べる前提として要件ノードに入れているが、図の判断軸には使っていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>デプロイ中も全キャパシティを維持する<br/>新旧バージョンを混在させない / 失敗時は速やかに元へ戻す<br/>一時的な追加インスタンス費用は許容する\"]:::req\n    Q1{\"デプロイ中も<br/>全キャパシティを維持するか?\"}:::judge\n    Q2{\"新旧バージョンが<br/>同時にサービスしないか?\"}:::judge\n    IMM[\"イミュータブルデプロイ<br/>新しい Auto Scaling グループに新バージョンを丸ごと作る\"]:::best\n    SWITCH[\"ヘルスチェック通過後に既存グループへ移し<br/>旧インスタンスを削除する\"]:::best\n    ROLLBACK[\"失敗時は新グループを破棄するだけで即座に戻る\"]:::best\n\n    RWAB[\"追加バッチによるローリング<br/>キャパシティは維持するが移行中は新旧が同時にサービスする\"]:::alt\n    ROLLING[\"ローリング<br/>入れ替え中のキャパシティを維持できない\"]:::alt\n    ALLATONCE[\"All at once(一括)<br/>ダウンタイムを伴う\"]:::alt\n\n    REQ --> Q1\n    Q1 -->|\"維持する\"| Q2\n    Q2 -->|\"しない\"| IMM\n    IMM --> SWITCH\n    IMM --> ROLLBACK\n    Q1 -.->|\"維持不可\"| ROLLING\n    Q1 -.->|\"停止あり\"| ALLATONCE\n    Q2 -.->|\"同時提供\"| RWAB"
+}

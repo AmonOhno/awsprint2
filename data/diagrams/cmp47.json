@@ -1,0 +1,44 @@
+{
+  "question_id": "cmp47",
+  "purpose": "停止方法の選択が「メモリの中身を残したまま課金を止められるか」の1点で決まることを示す。",
+  "audience": "AWS 認定を学習中で、EC2 の停止・休止・終了の違いをメモリ状態の観点で整理したい人。",
+  "message": "20 分かけて読み込んだメモリ上のデータを捨てずに課金だけ止めたいなら、EC2 ハイバネーションでメモリ状態ごと保存・復元する。",
+  "source_summary": "EC2 ハイバネーションはメモリ(RAM)の内容を暗号化済みルート EBS ボリュームへ書き出し、再開時にメモリ状態ごと復元するため、長い初期化・データロードをやり直さずに済む。休止中はインスタンス料金がかからず EBS 料金のみ(対応インスタンスタイプ・RAM サイズ・暗号化ルートボリュームなどの前提条件あり)。通常の停止/終了ではメモリ内容は失われる。",
+  "elements": [
+    { "id": "REQ", "label": "要件: 60 GB をメモリへ読み込むのに 20 分、利用は 1 日 3 時間、未使用時は課金を止めたい、再読み込みは許容できない", "type": "state", "priority": "primary" },
+    { "id": "Q1", "label": "未使用時にインスタンス料金を止めるか", "type": "process", "priority": "primary" },
+    { "id": "Q2", "label": "メモリの中身を残したまま止められるか", "type": "process", "priority": "primary" },
+    { "id": "HIB", "label": "EC2 ハイバネーション(休止状態)を有効化", "type": "artifact", "priority": "primary" },
+    { "id": "RESUME", "label": "再開時にメモリ状態ごと復元し 20 分の再読み込みが不要", "type": "artifact", "priority": "primary" },
+    { "id": "NOTE", "label": "前提条件: 対応インスタンスタイプ・RAM サイズ・暗号化ルートボリューム", "type": "other", "priority": "support" },
+    { "id": "STOP", "label": "停止し起動時にユーザーデータで再読み込み", "type": "artifact", "priority": "secondary" },
+    { "id": "TERM", "label": "終了し AMI から再作成", "type": "artifact", "priority": "secondary" },
+    { "id": "CACHE", "label": "ElastiCache for Redis に保持し EC2 は毎回新規起動", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q1", "verb": "判断に持ち込む", "direction": "one-way", "kind": "flow" },
+    { "from": "Q1", "to": "Q2", "verb": "止めるなら次の問いへ", "direction": "one-way", "kind": "flow" },
+    { "from": "Q2", "to": "HIB", "verb": "メモリを EBS へ書き出す", "direction": "one-way", "kind": "flow" },
+    { "from": "HIB", "to": "RESUME", "verb": "再開時に復元する", "direction": "one-way", "kind": "sequence" },
+    { "from": "HIB", "to": "NOTE", "verb": "利用条件を補う", "direction": "none", "kind": "other" },
+    { "from": "Q2", "to": "STOP", "verb": "メモリ内容は失われ 20 分かかり直す", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q2", "to": "TERM", "verb": "メモリ内容は失われる", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q2", "to": "CACHE", "verb": "EC2 のメモリ状態は残らない", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(2段の判断フロー): 課金を止めるか → メモリを残せるか の順に条件をふるいにかける",
+    "直列(時間軸): 読み込み 20 分 → 休止 → 再開 の流れを1本で描き、停止・終了と対比する"
+  ],
+  "selected_pattern": "分岐(2段の判断フロー)。誤答3つはすべて「メモリの中身が残らない」という同じ第2の問いで落ちるので、その問いを立てて脱落させる形が最も少ない線で伝わる。時間軸の直列は復元の効果は描けるが、誤答がなぜ落ちるかを同じ図に載せると軸が2つになる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "ElastiCache 案は解説が個別に否定していないため、選択肢が明記する「EC2 は毎回新規起動する」= メモリ状態が残らないという点だけを落ちる理由にしている。Redis への転送時間やコストには触れていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>60 GB のデータセットをメモリへ読み込むのに 20 分<br/>利用は 1 日 3 時間、それ以外は課金を止めたい<br/>毎回 20 分の再読み込みは許容できない\"]:::req\n    Q1{\"未使用時に<br/>インスタンス料金を<br/>止めるか?\"}:::judge\n    Q2{\"メモリの中身を<br/>残したまま止められるか?\"}:::judge\n    HIB[\"EC2 ハイバネーション(休止状態)を有効化<br/>メモリの内容を暗号化済みルート EBS へ書き出す\"]:::best\n    RESUME[\"再開時にメモリ状態ごと復元<br/>20 分の再読み込みが要らない / 休止中は EBS 料金のみ\"]:::best\n    NOTE[\"前提条件<br/>対応インスタンスタイプ・RAM サイズ・暗号化ルートボリューム\"]:::note\n\n    STOP[\"停止しユーザーデータで再読み込み<br/>メモリ内容は失われ毎回 20 分かかる\"]:::alt\n    TERM[\"終了し AMI から再作成<br/>メモリ内容は失われる\"]:::alt\n    CACHE[\"ElastiCache for Redis に保持<br/>EC2 は毎回新規起動でメモリ状態は残らない\"]:::alt\n\n    REQ --> Q1\n    Q1 -->|\"止める\"| Q2\n    Q2 -->|\"残せる\"| HIB\n    HIB --> RESUME\n    HIB -.- NOTE\n    Q2 -.->|\"失われる\"| STOP\n    Q2 -.->|\"失われる\"| TERM\n    Q2 -.->|\"残らない\"| CACHE"
+}

@@ -1,0 +1,44 @@
+{
+  "question_id": "cmp46",
+  "purpose": "BYOL でのテナンシー選択が「物理ソケット・コアが見えるか」と「同じ物理ホストに固定できるか」の2問で決まることを示す。",
+  "audience": "AWS 認定を学習中で、Dedicated Hosts と Dedicated Instances の違いをライセンス要件の観点で整理したい人。",
+  "message": "ソケット単位ライセンスの監査に応えるには、物理ソケット数とホスト ID が見える Dedicated Hosts を使い、ホストアフィニティで同じ物理サーバーに固定する。",
+  "source_summary": "Dedicated Hosts は物理サーバーを専有し、ソケット数・物理コア数・ホスト ID が可視化されるためソケット/コア単位の BYOL に対応でき、ホストアフィニティで停止・起動後も同じ物理ホストに固定できる。Dedicated Instances はハードウェア専有ではあるが物理ソケットの可視性やホスト固定がなく、ソケット課金の要件を満たさない。License Manager は追跡・強制の補助として併用する。",
+  "elements": [
+    { "id": "REQ", "label": "要件: ソケット単位ライセンスの BYOL、監査に備え物理ソケット数・物理コア数の可視性、同一物理サーバーでの継続稼働", "type": "state", "priority": "primary" },
+    { "id": "Q1", "label": "物理ソケット数・コア数が見えるか", "type": "process", "priority": "primary" },
+    { "id": "Q2", "label": "停止・起動後も同じ物理ホストに戻るか", "type": "process", "priority": "primary" },
+    { "id": "DH", "label": "EC2 Dedicated Hosts(物理サーバーを専有、ホスト ID が可視)", "type": "artifact", "priority": "primary" },
+    { "id": "AFFINITY", "label": "ホストアフィニティで特定ホストに固定", "type": "artifact", "priority": "primary" },
+    { "id": "LM", "label": "AWS License Manager でライセンス数を追跡", "type": "artifact", "priority": "support" },
+    { "id": "DI", "label": "EC2 Dedicated Instances(専用テナンシー)", "type": "artifact", "priority": "secondary" },
+    { "id": "DEFAULT", "label": "デフォルトテナンシー + License Manager のコア数制限", "type": "artifact", "priority": "secondary" },
+    { "id": "RDS", "label": "RDS のライセンス込みモデル(既存ライセンスは解約)", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q1", "verb": "判断に持ち込む", "direction": "one-way", "kind": "flow" },
+    { "from": "Q1", "to": "Q2", "verb": "見えるなら次の問いへ", "direction": "one-way", "kind": "flow" },
+    { "from": "Q2", "to": "DH", "verb": "固定できる", "direction": "one-way", "kind": "flow" },
+    { "from": "DH", "to": "AFFINITY", "verb": "同じホストに固定する", "direction": "one-way", "kind": "depend" },
+    { "from": "DH", "to": "LM", "verb": "追跡・強制を補助する", "direction": "one-way", "kind": "depend" },
+    { "from": "Q1", "to": "DI", "verb": "物理ソケットの可視性がない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q1", "to": "DEFAULT", "verb": "物理サーバーを専有しない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "RDS", "verb": "BYOL の前提そのものを捨てる", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(2段の判断フロー): 可視性 → ホスト固定 の順に条件をふるいにかける",
+    "対比(2列): Dedicated Hosts と Dedicated Instances を左右に並べ、可視性・固定・課金単位を並記する"
+  ],
+  "selected_pattern": "分岐(2段の判断フロー)。要件が「可視性」と「同一物理サーバー」の2つに分かれており、その順に問えば誤答がどの条件で落ちるかを1本の線で追える。2列対比は Dedicated Hosts と Dedicated Instances の比較には効くが、デフォルトテナンシーと RDS の2案を置く場所がなくなる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "RDS のライセンス込みモデルは「BYOL を解約する」という選択肢の前提そのものが要件と衝突する点だけを理由にしており、RDS 側のライセンス扱いの詳細には踏み込んでいない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>ソケット単位ライセンスを BYOL で持ち込む<br/>監査に備え物理ソケット数・物理コア数が見えること<br/>同一物理サーバー上で継続稼働すること\"]:::req\n    Q1{\"物理ソケット数・<br/>コア数が見えるか?\"}:::judge\n    Q2{\"停止・起動後も<br/>同じ物理ホストに戻るか?\"}:::judge\n    DH[\"EC2 Dedicated Hosts<br/>物理サーバーを専有しソケット数・コア数・ホスト ID が可視\"]:::best\n    AFFINITY[\"ホストアフィニティを有効化<br/>特定の物理ホスト上で起動し続ける\"]:::best\n    LM[\"AWS License Manager<br/>ライセンス数の追跡・強制を補助する\"]:::best\n\n    DI[\"EC2 Dedicated Instances<br/>ハードウェア専有だが物理ソケットの可視性もホスト固定もない\"]:::alt\n    DEFAULT[\"デフォルトテナンシー + コア数制限<br/>物理サーバーを専有しない\"]:::alt\n    RDS[\"RDS のライセンス込みモデル<br/>持ち込んだライセンスを活かせない\"]:::alt\n\n    REQ --> Q1\n    Q1 -->|\"見える\"| Q2\n    Q2 -->|\"戻る\"| DH\n    DH --> AFFINITY\n    DH --> LM\n    Q1 -.->|\"見えない\"| DI\n    Q1 -.->|\"専有せず\"| DEFAULT\n    REQ -.->|\"BYOL 放棄\"| RDS"
+}

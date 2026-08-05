@@ -1,0 +1,42 @@
+{
+  "question_id": "cmp50",
+  "purpose": "ターゲット追跡に使える指標の条件が「インスタンス数を増やすと下がる比率メトリクスか」の1点にあることを示す。",
+  "audience": "AWS 認定を学習中で、SQS ワーカーのスケーリング指標をどう選ぶかを整理したい人。",
+  "message": "ターゲット追跡はインスタンス数に応じて増減する比率メトリクスを必要とするので、キュー長そのものではなくバックログ÷インスタンス数をカスタムメトリクスとして発行する。",
+  "source_summary": "ターゲット追跡は「インスタンス数に応じて増減する比率メトリクス」を必要とするため、キュー長そのものではなく『バックログ ÷ インスタンス数(= インスタンスあたりの処理待ち件数)』をカスタムメトリクスとして発行するのが AWS 推奨パターン。目標値は「許容遅延 ÷ 1 メッセージあたり処理時間」から算出する。キュー長の絶対値はインスタンス数を増やしても下がる保証がなく、ターゲット追跡の前提を満たさない。",
+  "elements": [
+    { "id": "REQ", "label": "要件: SQS ワーカーの CPU は常に 20% 前後で変動せず、キューの滞留が増えると 15 分以内の SLA を割る", "type": "state", "priority": "primary" },
+    { "id": "Q1", "label": "その指標は負荷を反映するか", "type": "process", "priority": "primary" },
+    { "id": "Q2", "label": "インスタンス数を増やすと下がる比率メトリクスか", "type": "process", "priority": "primary" },
+    { "id": "BACKLOG", "label": "バックログ ÷ インスタンス数をカスタムメトリクスとして発行", "type": "artifact", "priority": "primary" },
+    { "id": "TARGET", "label": "目標値 = 許容遅延 ÷ 1 メッセージあたり処理時間", "type": "artifact", "priority": "primary" },
+    { "id": "QLEN", "label": "ApproximateNumberOfMessagesVisible そのもの", "type": "artifact", "priority": "secondary" },
+    { "id": "CPU", "label": "CPU 使用率の目標値を 10% に引き下げ", "type": "artifact", "priority": "secondary" },
+    { "id": "AGE", "label": "ApproximateAgeOfOldestMessage + シンプルスケーリング", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q1", "verb": "判断に持ち込む", "direction": "one-way", "kind": "flow" },
+    { "from": "Q1", "to": "Q2", "verb": "反映するなら次の問いへ", "direction": "one-way", "kind": "flow" },
+    { "from": "Q2", "to": "BACKLOG", "verb": "台数を増やすと下がる", "direction": "one-way", "kind": "flow" },
+    { "from": "BACKLOG", "to": "TARGET", "verb": "目標値を算出する", "direction": "one-way", "kind": "depend" },
+    { "from": "Q1", "to": "CPU", "verb": "CPU は変動せず滞留を映さない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q2", "to": "QLEN", "verb": "台数を増やしても下がる保証がない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q2", "to": "AGE", "verb": "比率メトリクスではない", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(2段の判断フロー): 負荷を映すか → 比率メトリクスか の順に指標をふるいにかける",
+    "対比(2列): 絶対値メトリクスと比率メトリクスを左右に並べ、台数を増やしたときの挙動を並記する"
+  ],
+  "selected_pattern": "分岐(2段の判断フロー)。誤答は「そもそも負荷を映さない(CPU)」と「映すが比率でない(キュー長・最古経過時間)」の2段階で落ちるため、その順に問えば1本の線でどこで外れたかが追える。2列対比は比率か否かは示せるが、CPU が落ちる理由(問題文の前提)を置く場所がない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "最古メッセージの経過時間 + シンプルスケーリングは解説が個別に否定していないため、解説が示す原則(比率メトリクスであること)に照らして落としている。シンプルスケーリング自体のクールダウン挙動には触れていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>SQS ワーカー群の CPU は常に 20% 前後で変動しない<br/>キューの滞留が増えると処理遅延 15 分以内の SLA を割る<br/>スケーリングの指標を選び直したい\"]:::req\n    Q1{\"その指標は<br/>負荷を反映するか?\"}:::judge\n    Q2{\"インスタンス数を増やすと<br/>下がる比率メトリクスか?\"}:::judge\n    BACKLOG[\"バックログ ÷ インスタンス数をカスタムメトリクスで発行<br/>ターゲット追跡でその値を維持する\"]:::best\n    TARGET[\"目標値 = 許容遅延 ÷ 1 メッセージあたり処理時間\"]:::best\n\n    CPU[\"CPU 使用率の目標値を 10% へ引き下げ<br/>CPU は変動せず滞留を映さない\"]:::alt\n    QLEN[\"キュー長そのものを指標にする<br/>台数を増やしても下がる保証がない\"]:::alt\n    AGE[\"最古メッセージの経過時間 + シンプルスケーリング<br/>台数に応じて増減する比率メトリクスではない\"]:::alt\n\n    REQ --> Q1\n    Q1 -->|\"反映する\"| Q2\n    Q2 -->|\"比率である\"| BACKLOG\n    BACKLOG --> TARGET\n    Q1 -.->|\"映さない\"| CPU\n    Q2 -.->|\"絶対値\"| QLEN\n    Q2 -.->|\"絶対値\"| AGE"
+}

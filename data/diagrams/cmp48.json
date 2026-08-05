@@ -1,0 +1,42 @@
+{
+  "question_id": "cmp48",
+  "purpose": "ストレージ選択が「データが消えてよいか」と「必要な IOPS を追加料金なしで出せるか」の2問で決まることを示す。",
+  "audience": "AWS 認定を学習中で、インスタンスストアと EBS / EFS の使い分けを性能とコストの観点で整理したい人。",
+  "message": "処理後に捨てる中間ファイルなら、揮発性と引き換えに最高 IOPS を追加料金なしで得られる NVMe インスタンスストアに置く。",
+  "source_summary": "インスタンスストア(NVMe SSD)は物理的にホストに直結しており、EBS を大きく上回る IOPS と最低レイテンシーを追加料金なし(インスタンス価格に内包)で提供する。データはインスタンス停止・終了で失われるが、破棄前提の中間ファイルには最適。io2 Block Express は高性能だが高コスト、gp3 は最大 16,000 IOPS/ボリューム、EFS はネットワーク越しのためレイテンシー面で不利。",
+  "elements": [
+    { "id": "REQ", "label": "要件: 中間ファイルに 200 万 IOPS 級、処理後に破棄、インスタンス障害時はやり直してよい、コスト効率重視", "type": "state", "priority": "primary" },
+    { "id": "Q1", "label": "データは消えてよいか", "type": "process", "priority": "primary" },
+    { "id": "Q2", "label": "必要な IOPS を追加料金なしで出せるか", "type": "process", "priority": "primary" },
+    { "id": "STORE", "label": "NVMe インスタンスストア搭載タイプ(例: i4i、c6gd)に中間ファイルを置く", "type": "artifact", "priority": "primary" },
+    { "id": "NOTE", "label": "停止・終了でデータは失われる(破棄前提だから許容できる)", "type": "other", "priority": "support" },
+    { "id": "IO2", "label": "io2 Block Express を複数本 RAID 0", "type": "artifact", "priority": "secondary" },
+    { "id": "GP3", "label": "gp3 の IOPS を上限まで引き上げ", "type": "artifact", "priority": "secondary" },
+    { "id": "EFS", "label": "EFS の Max I/O モードで並列書き込み", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q1", "verb": "判断に持ち込む", "direction": "one-way", "kind": "flow" },
+    { "from": "Q1", "to": "Q2", "verb": "消えてよいなら次の問いへ", "direction": "one-way", "kind": "flow" },
+    { "from": "Q2", "to": "STORE", "verb": "ホスト直結で最高 IOPS", "direction": "one-way", "kind": "flow" },
+    { "from": "STORE", "to": "NOTE", "verb": "引き換えの制約を補う", "direction": "none", "kind": "other" },
+    { "from": "Q2", "to": "IO2", "verb": "高性能だが高コスト", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q2", "to": "GP3", "verb": "最大 16,000 IOPS/ボリュームで届かない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q2", "to": "EFS", "verb": "ネットワーク越しでレイテンシーが不利", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(2段の判断フロー): 揮発してよいか → 追加料金なしで IOPS を出せるか の順に絞る",
+    "マトリクス: 永続性の要否 × IOPS 性能 の2軸に4案を配置"
+  ],
+  "selected_pattern": "分岐(2段の判断フロー)。要件の「破棄してよい」がインスタンスストアを選べる前提条件になっており、その前提を先に確定してから性能とコストで残りを落とす順序が、試験本番での思考順とそのまま一致する。マトリクスは4案のうち3案が同じ象限(永続あり)に固まり分離できない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "io2 Block Express の RAID 0 が 200 万 IOPS に届くかどうかは解説が触れていないため、図では「高コスト」という解説どおりの理由だけで落としている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>動画トランスコードの中間ファイルに 200 万 IOPS 級<br/>中間ファイルは処理完了後に破棄する<br/>インスタンス障害時は最初からやり直してよい\"]:::req\n    Q1{\"データは<br/>消えてよいか?\"}:::judge\n    Q2{\"必要な IOPS を<br/>追加料金なしで出せるか?\"}:::judge\n    STORE[\"NVMe インスタンスストア搭載タイプ(例: i4i、c6gd)<br/>ホスト直結で EBS を大きく上回る IOPS と最低レイテンシー\"]:::best\n    NOTE[\"停止・終了でデータは失われる<br/>破棄前提の中間ファイルなので許容できる\"]:::note\n\n    IO2[\"io2 Block Express を複数本 RAID 0<br/>高性能だが高コスト\"]:::alt\n    GP3[\"gp3 の IOPS を上限まで引き上げ<br/>最大 16,000 IOPS/ボリュームで届かない\"]:::alt\n    EFS[\"EFS の Max I/O モードで並列書き込み<br/>ネットワーク越しでレイテンシーが不利\"]:::alt\n\n    REQ --> Q1\n    Q1 -->|\"消えてよい\"| Q2\n    Q2 -->|\"出せる\"| STORE\n    STORE -.- NOTE\n    Q2 -.->|\"高コスト\"| IO2\n    Q2 -.->|\"上限不足\"| GP3\n    Q2 -.->|\"遅延不利\"| EFS"
+}

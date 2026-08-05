@@ -1,0 +1,44 @@
+{
+  "question_id": "cmp51",
+  "purpose": "AMI 入れ替え方法の選択が「置き換えを段階で止めて確認できるか」と「戻せるか」で決まることを示す。",
+  "audience": "AWS 認定を学習中で、Auto Scaling グループのローリング更新の手段を整理したい人。",
+  "message": "25/50/100% で止めて監視結果を確かめながら入れ替え、問題があれば戻したいなら、起動テンプレートの新バージョンをインスタンスリフレッシュのチェックポイント付きで適用する。",
+  "source_summary": "インスタンスリフレッシュは Auto Scaling グループのインスタンスを段階的に置き換える機能で、チェックポイント割合と待機時間、MinHealthyPercentage を指定して段階検証ができ、問題があればロールバックも可能。新グループ+加重ルーティングでも実現できるが、ALB 配下では管理対象が増え DNS キャッシュの影響も受ける。手動終了は制御性がなく検証ポイントも設けられない。",
+  "elements": [
+    { "id": "REQ", "label": "要件: 100 台に新 AMI を適用、一度に置き換える台数を制限、25/50/100% で監視結果を確認、問題があればロールバック", "type": "state", "priority": "primary" },
+    { "id": "Q1", "label": "置き換えを段階で止めて確認できるか", "type": "process", "priority": "primary" },
+    { "id": "Q2", "label": "同じグループのまま戻せるか", "type": "process", "priority": "primary" },
+    { "id": "REFRESH", "label": "起動テンプレートの新バージョン + インスタンスリフレッシュ", "type": "artifact", "priority": "primary" },
+    { "id": "CHECKPOINT", "label": "チェックポイント 25/50/100% と MinHealthyPercentage を指定", "type": "artifact", "priority": "primary" },
+    { "id": "ROLLBACK", "label": "問題があればロールバックする", "type": "artifact", "priority": "primary" },
+    { "id": "NEWASG", "label": "新 ASG + Route 53 加重ルーティング", "type": "artifact", "priority": "secondary" },
+    { "id": "MANUAL", "label": "既存インスタンスを手動で終了", "type": "artifact", "priority": "secondary" },
+    { "id": "SCHED", "label": "スケジュールされたスケーリングで夜間に全台入れ替え", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q1", "verb": "判断に持ち込む", "direction": "one-way", "kind": "flow" },
+    { "from": "Q1", "to": "Q2", "verb": "止められるなら次の問いへ", "direction": "one-way", "kind": "flow" },
+    { "from": "Q2", "to": "REFRESH", "verb": "同じグループで戻せる", "direction": "one-way", "kind": "flow" },
+    { "from": "REFRESH", "to": "CHECKPOINT", "verb": "段階検証を設定する", "direction": "one-way", "kind": "depend" },
+    { "from": "REFRESH", "to": "ROLLBACK", "verb": "失敗時に戻す", "direction": "one-way", "kind": "depend" },
+    { "from": "Q1", "to": "MANUAL", "verb": "制御性がなく検証ポイントを設けられない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q1", "to": "SCHED", "verb": "全台を一度に入れ替える", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q2", "to": "NEWASG", "verb": "管理対象が増え DNS キャッシュの影響も受ける", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(2段の判断フロー): 段階で止められるか → 同じグループのまま戻せるか の順に絞る",
+    "直列(段階の時間軸): 25% → 50% → 100% の各チェックポイントを1本の線で描く"
+  ],
+  "selected_pattern": "分岐(2段の判断フロー)。誤答のうち2つは「段階で止められない」で、1つは「実現はできるが管理対象と DNS が増える」という別の理由で落ちるため、2つの問いに整理すると4案の位置づけが線1本で読める。段階の直列は正解の動きは描けるが、誤答を同じ図に置けない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "新 ASG + 加重ルーティングは解説が「実現できるが管理対象が増える」と位置づけているため、図でも完全な誤りとしては描かず、第2の問いで外れる案として置いている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>Auto Scaling 配下の 100 台に新しい AMI を適用する<br/>一度に置き換える台数を制限し 25/50/100% で監視結果を確認<br/>問題があればロールバックしたい\"]:::req\n    Q1{\"置き換えを段階で<br/>止めて確認できるか?\"}:::judge\n    Q2{\"同じグループのまま<br/>戻せるか?\"}:::judge\n    REFRESH[\"起動テンプレートの新バージョン + インスタンスリフレッシュ<br/>グループのインスタンスを段階的に置き換える\"]:::best\n    CHECKPOINT[\"チェックポイント 25/50/100% と待機時間<br/>MinHealthyPercentage で最小正常率を保つ\"]:::best\n    ROLLBACK[\"問題があればロールバックする\"]:::best\n\n    MANUAL[\"既存インスタンスを手動で終了<br/>制御性がなく検証ポイントを設けられない\"]:::alt\n    SCHED[\"スケジュールされたスケーリングで夜間に全台入れ替え<br/>段階ごとの確認ができない\"]:::alt\n    NEWASG[\"新 ASG + Route 53 加重ルーティング<br/>管理対象が増え DNS キャッシュの影響も受ける\"]:::alt\n\n    REQ --> Q1\n    Q1 -->|\"止められる\"| Q2\n    Q2 -->|\"戻せる\"| REFRESH\n    REFRESH --> CHECKPOINT\n    REFRESH --> ROLLBACK\n    Q1 -.->|\"制御不可\"| MANUAL\n    Q1 -.->|\"一括入替\"| SCHED\n    Q2 -.->|\"管理増\"| NEWASG"
+}
