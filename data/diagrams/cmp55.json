@@ -1,0 +1,47 @@
+{
+  "question_id": "cmp55",
+  "purpose": "AMI の内製がビルド・テスト・配布という3段の連なりであり、その全段をマネージドかつ宣言的に持てるかが選択の分かれ目であることを示す。",
+  "audience": "AWS 認定を学習中で、AMI 作成の手段(Image Builder / SSM Automation / Packer / ユーザーデータ)は知っているが、運用要件からの選び分けが曖昧な人。",
+  "message": "ビルド・テスト・配布の3段をレシピと設定として宣言的に持ち、実行基盤を自前で維持しなくてよいのは EC2 Image Builder のイメージパイプラインだけ。",
+  "source_summary": "EC2 Image Builder はイメージのビルド・テスト・配布のパイプラインをマネージドに提供し、レシピ(ベースイメージ+コンポーネント)、テストコンポーネント、配布設定(複数リージョン/アカウントへの AMI 共有・暗号化)をコードとして管理でき、ビルド履歴も残る。Packer や SSM Automation でも実現できるが、実行基盤とテスト・配布の仕組みを自前で維持する必要がある。ユーザーデータでの都度適用は起動時間と再現性の面で不利。",
+  "elements": [
+    { "id": "REQ", "label": "要件: 強化設定入り AMI を毎月ビルド、テスト合格分だけを複数リージョンの本番アカウントへ配布、宣言的管理、監査証跡", "type": "state", "priority": "primary" },
+    { "id": "Q", "label": "ビルド・テスト・配布の全段をマネージドに宣言的管理できるか", "type": "process", "priority": "primary" },
+    { "id": "IB", "label": "EC2 Image Builder のイメージパイプライン", "type": "artifact", "priority": "primary" },
+    { "id": "RECIPE", "label": "レシピ(ベースイメージ+コンポーネント)でビルドを定義する", "type": "artifact", "priority": "primary" },
+    { "id": "TEST", "label": "テストコンポーネントで合格したイメージだけを次へ進める", "type": "artifact", "priority": "primary" },
+    { "id": "DIST", "label": "配布設定で複数リージョン/アカウントへ AMI を共有・暗号化する", "type": "artifact", "priority": "primary" },
+    { "id": "AUDIT", "label": "ビルド履歴が残る(監査証跡)", "type": "concept", "priority": "support" },
+    { "id": "SELF", "label": "SSM Automation + 手動 AMI 作成・コピー / CodePipeline から Packer 実行", "type": "artifact", "priority": "secondary" },
+    { "id": "UD", "label": "起動テンプレートのユーザーデータで毎回適用する", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q", "verb": "判断に持ち込む", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "IB", "verb": "できる", "direction": "one-way", "kind": "flow" },
+    { "from": "IB", "to": "RECIPE", "verb": "1段目", "direction": "one-way", "kind": "sequence" },
+    { "from": "RECIPE", "to": "TEST", "verb": "2段目", "direction": "one-way", "kind": "sequence" },
+    { "from": "TEST", "to": "DIST", "verb": "3段目", "direction": "one-way", "kind": "sequence" },
+    { "from": "IB", "to": "AUDIT", "verb": "履歴を残す", "direction": "none", "kind": "other" },
+    { "from": "Q", "to": "SELF", "verb": "実行基盤とテスト・配布を自前で維持する必要がある", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q", "to": "UD", "verb": "起動時間と再現性で不利", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "イメージパイプラインの3段", "element_ids": ["RECIPE", "TEST", "DIST"] }
+  ],
+  "candidate_patterns": [
+    "直列(パイプラインの3段): ビルド→テスト→配布 を並べ、その全段をどの選択肢が賄えるかで比べる",
+    "対比: マネージド(Image Builder)と自前運用(Packer / SSM)を左右に並べて維持コストの差を見せる"
+  ],
+  "selected_pattern": "直列(パイプラインの3段)。要件そのものが「毎月ビルド→テスト合格分だけ→複数リージョンへ配布」という連なりなので、3段を並べたうえで正解だけがその全段を覆っている形にすると、なぜ他案が足りないかも同じ図で読める。対比は維持コストの話に寄り、テスト・配布まで含む点が落ちる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "SSM Automation 案と Packer 案は解説で同じ理由(実行基盤とテスト・配布を自前で維持)により退けられているため1ノードにまとめた。両者の違いを問う問題を足す場合は分割が必要。",
+    "「毎月」というスケジュール実行の扱いは解説に明示がないため、図ではパイプラインの起動契機として描かず要件側にとどめた。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>強化設定・エージェント・パッチ入りの AMI を毎月ビルドする<br/>テスト合格分だけを複数リージョンの本番アカウントへ配布する<br/>宣言的に管理し監査証跡も残す\"]:::req\n    Q{\"ビルド・テスト・配布の全段を<br/>マネージドに宣言的管理できるか?\"}:::judge\n    IB[\"EC2 Image Builder<br/>イメージパイプライン\"]:::best\n\n    subgraph PIPE[\"イメージパイプラインの3段\"]\n        RECIPE[\"レシピ<br/>ベースイメージ+コンポーネントでビルドを定義する\"]:::best\n        TEST[\"テストコンポーネント<br/>合格したイメージだけを次へ進める\"]:::best\n        DIST[\"配布設定<br/>複数リージョン/アカウントへ AMI を共有・暗号化する\"]:::best\n    end\n\n    AUDIT[\"ビルド履歴が残る(監査証跡)\"]:::note\n    SELF[\"SSM Automation + 手動で AMI 作成・コピー<br/>CodePipeline から Packer を実行<br/>実行基盤とテスト・配布の仕組みを自前で維持する必要がある\"]:::alt\n    UD[\"ユーザーデータで毎回すべて適用する<br/>起動時間と再現性の面で不利\"]:::alt\n\n    REQ --> Q\n    Q -->|\"できる\"| IB\n    IB --> RECIPE\n    RECIPE --> TEST\n    TEST --> DIST\n    IB -.- AUDIT\n    Q -.->|\"自前運用\"| SELF\n    Q -.->|\"都度適用\"| UD"
+}

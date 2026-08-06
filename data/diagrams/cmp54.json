@@ -1,0 +1,44 @@
+{
+  "question_id": "cmp54",
+  "purpose": "ECS の配置設定が「集約したい」と「同時全滅を避けたい」という相反する2要件の両立問題であり、戦略を複数指定することで解けることを示す。",
+  "audience": "AWS 認定を学習中で、ECS のタスク配置戦略(binpack / spread / random)と配置制約の名前は知っているが、要件から組み合わせを決められない人。",
+  "message": "ECS は配置戦略を順序付きで複数指定できるので、binpack で詰め込みつつ spread(instanceId)で同一サービスのタスクを分散させれば、集約と可用性を同時に満たせる。",
+  "source_summary": "binpack はリソースの残りが最も少ないインスタンスへ優先配置し、必要なインスタンス台数を最小化してコストを下げる。ECS は複数の配置戦略を順序付きで指定できるため、binpack と instanceId による spread を組み合わせると「詰め込みつつ同一サービスのタスクは分散」を両立できる。distinctInstance は 1 タスク/インスタンスとなり集約の目的に反する。",
+  "elements": [
+    { "id": "REQ", "label": "要件: リザーブド済み m6i の台数を可能な限り少なく保つ、かつ1インスタンス障害で1サービスの全タスクが同時に落ちない", "type": "state", "priority": "primary" },
+    { "id": "N1", "label": "台数を最小化したい(コスト)", "type": "concept", "priority": "primary" },
+    { "id": "N2", "label": "同一サービスの同時全滅を避けたい(可用性)", "type": "concept", "priority": "primary" },
+    { "id": "BINPACK", "label": "配置戦略 binpack(memory): 残りリソースが最も少ないインスタンスへ優先配置する", "type": "artifact", "priority": "primary" },
+    { "id": "SPREAD", "label": "配置戦略 spread(instanceId): 同一サービスのタスクを異なるインスタンスへ分散する", "type": "artifact", "priority": "primary" },
+    { "id": "COMBO", "label": "ECS は配置戦略を順序付きで複数指定できるので両立する", "type": "concept", "priority": "primary" },
+    { "id": "DISTINCT", "label": "配置制約 distinctInstance(1インスタンス1タスク)", "type": "artifact", "priority": "secondary" },
+    { "id": "SINGLE", "label": "戦略を1つだけにする案(random のみ / spread(AZ)のみ)", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "N1", "verb": "分解する", "direction": "one-way", "kind": "include" },
+    { "from": "REQ", "to": "N2", "verb": "分解する", "direction": "one-way", "kind": "include" },
+    { "from": "N1", "to": "BINPACK", "verb": "詰め込みで満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "N2", "to": "SPREAD", "verb": "分散で満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "BINPACK", "to": "COMBO", "verb": "1番目の戦略として合流", "direction": "one-way", "kind": "flow" },
+    { "from": "SPREAD", "to": "COMBO", "verb": "2番目の戦略として合流", "direction": "one-way", "kind": "flow" },
+    { "from": "N1", "to": "DISTINCT", "verb": "集約の目的に反する", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "SINGLE", "verb": "片方の要件しか満たせない", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "合流: 相反する2要件をそれぞれの戦略で受け、順序付き指定という1点で1つの構成に統合する",
+    "分岐(判断フロー): 要件を1つずつ問い、4つの選択肢をふるい落とす"
+  ],
+  "selected_pattern": "合流。この問題の要点は「どちらを取るか」ではなく「相反する2つを同時に取れる」ことなので、2本の線が1つの構成へ合流する形がそのまま主メッセージになる。判断フローだと最後まで読まないと両立という結論が見えない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "解説が明示的に否定しているのは distinctInstance だけで、random のみ・spread(AZ)のみは触れられていない。図では「戦略が1つでは2要件の片方しか満たせない」という要件側の論理でまとめており、各選択肢固有の欠点は書いていない。",
+    "binpack の基準に memory を選ぶ理由(cpu ではなく)は解説に書かれていないため、図では選択肢の表記どおり binpack(memory) と置くにとどめた。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>リザーブド済み m6i の台数を可能な限り少なく保つ<br/>1インスタンス障害で1サービスの全タスクが同時に落ちない\"]:::req\n    N1{\"台数を最小化するには?<br/>(コスト)\"}:::judge\n    N2{\"同時全滅を避けるには?<br/>(可用性)\"}:::judge\n    BINPACK[\"配置戦略 binpack(memory)<br/>残りリソースが最も少ないインスタンスへ優先配置する\"]:::best\n    SPREAD[\"配置戦略 spread(instanceId)<br/>同一サービスのタスクを異なるインスタンスへ分散する\"]:::best\n    COMBO[\"ECS は配置戦略を順序付きで複数指定できる<br/>詰め込みつつ同一サービスのタスクは分散する\"]:::best\n\n    DISTINCT[\"配置制約 distinctInstance<br/>1インスタンス1タスクとなり集約の目的に反する\"]:::alt\n    SINGLE[\"戦略を1つだけ指定する案<br/>random のみ / spread(AZ)のみ<br/>2要件の片方しか満たせない\"]:::alt\n\n    REQ --> N1\n    REQ --> N2\n    N1 -->|\"詰め込む\"| BINPACK\n    N2 -->|\"分散する\"| SPREAD\n    BINPACK -->|\"1番目\"| COMBO\n    SPREAD -->|\"2番目\"| COMBO\n    N1 -.->|\"集約に反する\"| DISTINCT\n    REQ -.->|\"片方のみ\"| SINGLE"
+}

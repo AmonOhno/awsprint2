@@ -1,0 +1,45 @@
+{
+  "question_id": "cmp58",
+  "purpose": "DR で必要なのは「安く起動できる」ことではなく「起動できることの保証」であり、割引の仕組みと容量確保の仕組みは別物だと示す。",
+  "audience": "AWS 認定を学習中で、キャパシティ予約・RI・Savings Plans・スポットの関係を整理したい人。",
+  "message": "物理キャパシティを押さえて「起動できること」を保証するのはオンドマンドキャパシティ予約だけで、リージョン RI やスポット/ASG は割引や需要頼みにとどまる。",
+  "source_summary": "オンデマンドキャパシティ予約は特定 AZ・インスタンスタイプの物理キャパシティを確保するもので、これだけが「起動できること」を保証する(予約中は起動有無にかかわらず課金)。ゾーン RI もキャパシティ予約を伴うが、リージョン RI は課金割引のみでキャパシティ保証はない。ASG やスポットは需要逼迫時に容量を得られない可能性があり、DR の保証にはならない。",
+  "elements": [
+    { "id": "REQ", "label": "要件: 東京障害時に大阪で200台を30分以内に確実に起動できる保証。平常時に稼働させ続けるコストは避ける", "type": "state", "priority": "primary" },
+    { "id": "Q", "label": "物理キャパシティを確保して起動を保証するか", "type": "process", "priority": "primary" },
+    { "id": "ODCR", "label": "オンデマンドキャパシティ予約(各 AZ に作成し、特定 AZ・インスタンスタイプの物理キャパシティを確保する)", "type": "artifact", "priority": "primary" },
+    { "id": "SP", "label": "キャパシティ予約に対する Savings Plans を適用する", "type": "artifact", "priority": "primary" },
+    { "id": "COST", "label": "予約中は起動有無にかかわらず課金される", "type": "concept", "priority": "support" },
+    { "id": "ZRI", "label": "ゾーン RI もキャパシティ予約を伴う", "type": "concept", "priority": "support" },
+    { "id": "RRI", "label": "リージョン単位のリザーブドインスタンス(課金割引のみ)", "type": "artifact", "priority": "secondary" },
+    { "id": "ASG", "label": "最小0台の Auto Scaling グループに複数インスタンスタイプを指定する", "type": "artifact", "priority": "secondary" },
+    { "id": "SPOT", "label": "capacity-optimized 戦略のスポットフリート", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q", "verb": "判断に持ち込む", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "ODCR", "verb": "確保する", "direction": "one-way", "kind": "flow" },
+    { "from": "ODCR", "to": "SP", "verb": "コストを抑える", "direction": "one-way", "kind": "depend" },
+    { "from": "ODCR", "to": "COST", "verb": "課金条件を補う", "direction": "none", "kind": "other" },
+    { "from": "ODCR", "to": "ZRI", "verb": "同じ性質を持つ例", "direction": "none", "kind": "other" },
+    { "from": "Q", "to": "RRI", "verb": "割引のみでキャパシティ保証がない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q", "to": "ASG", "verb": "需要逼迫時に容量を得られない可能性がある", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q", "to": "SPOT", "verb": "需要逼迫時に容量を得られない可能性がある", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「キャパシティを確保するか」の1問で保証と割引/需要頼みを分ける",
+    "対比(2列の並置): 左に容量を保証する仕組み、右に割引・需要頼みの仕組みを置いて性質の違いを見せる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。DR 要件から出発して1つの問いで4案が分かれる構造なので、上から読むだけで「保証か割引か」の取り違えに気づける。2列の対比は分類としては正しいが、要件からの導出が図に残らない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「30分以内」という時間要件は解説が直接には扱っておらず、容量が確保されていることの言い換えとして図では判断軸に使っていない。",
+    "ゾーン RI は選択肢に無いが解説が対比のために挙げているため注釈として残した。図の判断軸(容量を確保するか)では正解側に属する点に注意。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>東京リージョン障害時に大阪で200台を30分以内に確実に起動できる保証<br/>平常時に大阪でインスタンスを稼働させ続けるコストは避ける\"]:::req\n    Q{\"物理キャパシティを確保して<br/>起動できることを保証するか?\"}:::judge\n    ODCR[\"オンデマンドキャパシティ予約(ODCR)を各 AZ に作成する<br/>特定 AZ・インスタンスタイプの物理キャパシティを確保する\"]:::best\n    SP[\"必要ならキャパシティ予約に対する Savings Plans を適用する\"]:::best\n    COST[\"予約中は起動の有無にかかわらず課金される\"]:::note\n    ZRI[\"ゾーン RI もキャパシティ予約を伴う\"]:::note\n\n    RRI[\"リージョン単位のリザーブドインスタンス<br/>課金割引のみでキャパシティ保証はない\"]:::alt\n    ASG[\"最小0台の Auto Scaling グループ + 複数インスタンスタイプ<br/>需要逼迫時に容量を得られない可能性がある\"]:::alt\n    SPOT[\"capacity-optimized 戦略のスポットフリート<br/>需要逼迫時に容量を得られない可能性がある\"]:::alt\n\n    REQ --> Q\n    Q -->|\"確保する\"| ODCR\n    ODCR --> SP\n    ODCR -.- COST\n    ODCR -.- ZRI\n    Q -.->|\"割引のみ\"| RRI\n    Q -.->|\"需要頼み\"| ASG\n    Q -.->|\"需要頼み\"| SPOT"
+}

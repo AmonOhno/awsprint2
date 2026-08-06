@@ -1,0 +1,44 @@
+{
+  "question_id": "cmp61",
+  "purpose": "ALB でできることの境界が「ターゲットに指定できるものの一覧」と「リスナールールで書ける条件」の2つに分かれており、S3 だけが前者の集合の外にあることを示す。",
+  "audience": "AWS 認定を学習中で、ALB のルーティング機能とターゲットタイプの区別があいまいな人。",
+  "message": "ALB のターゲットに指定できるのはインスタンス・IP・Lambda・別の ALB だけなので、S3 への直接ルーティングだけが ALB の機能では実現できない。",
+  "source_summary": "ALB のターゲットとして指定できるのはインスタンス・IP アドレス・Lambda 関数・別の ALB であり、S3 バケットを直接ターゲットにはできない。静的コンテンツは CloudFront のオリジンとして S3 を指定し、ビヘイビアで振り分けるのが定石。一方、パス条件・ホストヘッダー条件・ソース IP 条件によるルールと固定レスポンス/リダイレクトは ALB のリスナールールで実現できる。",
+  "elements": [
+    { "id": "REQ", "label": "要件: 1つの ALB で /api/* は ECS、/static/* は S3、その他は EC2 の ASG へ。/admin/* は社内 IP のみ許可", "type": "state", "priority": "primary" },
+    { "id": "Q", "label": "ALB の機能だけで実現できるか", "type": "process", "priority": "primary" },
+    { "id": "EC2INST", "label": "インスタンス", "type": "artifact", "priority": "support" },
+    { "id": "IPADDR", "label": "IP アドレス", "type": "artifact", "priority": "support" },
+    { "id": "LAMBDA", "label": "Lambda 関数", "type": "artifact", "priority": "support" },
+    { "id": "ALB2", "label": "別の ALB", "type": "artifact", "priority": "support" },
+    { "id": "S3", "label": "S3 バケットへ直接ルーティングする(= ターゲットに指定できない・これが設問の答え)", "type": "artifact", "priority": "primary" },
+    { "id": "CF", "label": "定石: CloudFront のオリジンに S3 を指定し、ビヘイビアで振り分ける", "type": "artifact", "priority": "secondary" },
+    { "id": "RULES", "label": "リスナールールで実現できる条件(パス条件・ホストヘッダー条件・ソース IP 条件と固定レスポンス/リダイレクト)", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q", "verb": "判断に持ち込む", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "RULES", "verb": "実現できる", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "S3", "verb": "実現できない", "direction": "one-way", "kind": "flow" },
+    { "from": "S3", "to": "EC2INST", "verb": "ターゲットの集合に含まれない", "direction": "one-way", "kind": "contrast" },
+    { "from": "S3", "to": "CF", "verb": "代わりに使う", "direction": "one-way", "kind": "flow" }
+  ],
+  "groups": [
+    { "label": "ALB のターゲットに指定できるもの", "element_ids": ["EC2INST", "IPADDR", "LAMBDA", "ALB2"] }
+  ],
+  "candidate_patterns": [
+    "包含: ALB のターゲットにできるものを枠で囲み、S3 をその外に置いて「集合の外」を一目で見せる",
+    "対比(できる/できない の2列): 4つの選択肢を実現可否で左右に分ける"
+  ],
+  "selected_pattern": "包含。「実現できないのはどれか」を問う設問で、根拠はターゲットタイプという閉じた一覧に S3 が入っていないという1点なので、枠の内と外という配置がそのまま根拠になる。2列の対比でも可否は示せるが、なぜできないのかは別途文字で説明する必要が出る。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "この設問は「実現できない要件はどれか」を問う否定形なので、緑(best)は正解として選ぶべき選択肢=S3 直接ルーティングに付けている。緑を「望ましい構成」と読むと逆に見えるため、ノード内に『これが設問の答え』と明記して補った。",
+    "ALB のリスナールールで実現できる3条件(パス・ホストヘッダー・ソース IP)は誤答選択肢なのでグレー1ノードにまとめた。個別の機能差を問う問題を追加する場合は分割が必要。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>1つの ALB で /api/* は ECS、/static/* は S3(CloudFront 経由)、その他は EC2 の ASG へ<br/>さらに /admin/* は社内 IP からのみ許可する\"]:::req\n    Q{\"ALB の機能だけで<br/>実現できるか?\"}:::judge\n\n    subgraph TG[\"ALB のターゲットに指定できるもの\"]\n        EC2INST[\"インスタンス\"]:::svc\n        IPADDR[\"IP アドレス\"]:::svc\n        LAMBDA[\"Lambda 関数\"]:::svc\n        ALB2[\"別の ALB\"]:::svc\n    end\n\n    S3[\"S3 バケットへ直接ルーティングする<br/>ターゲットに指定できない = これが設問の答え\"]:::best\n    CF[\"定石: CloudFront のオリジンに S3 を指定し<br/>ビヘイビアで振り分ける\"]:::svc\n    RULES[\"リスナールールで実現できる条件<br/>パス条件 / ホストヘッダー条件 / ソース IP 条件と固定レスポンス・リダイレクト\"]:::alt\n\n    REQ --> Q\n    Q -->|\"できる\"| RULES\n    Q -->|\"できない\"| S3\n    S3 -.->|\"集合の外\"| TG\n    S3 --> CF"
+}

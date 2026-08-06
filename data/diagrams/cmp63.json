@@ -1,0 +1,43 @@
+{
+  "question_id": "cmp63",
+  "purpose": "既存 ALB のリスナールールを1本足すだけで /v2/* を Lambda に切り替えられることを、そのままの構成図として示す。",
+  "audience": "AWS 認定を学習中で、ALB が Lambda を直接ターゲットにできることを知らず、API Gateway や関数 URL を挟みたくなる人。",
+  "message": "ALB は Lambda 関数をターゲットタイプとして直接サポートするので、パス条件のリスナールールを足すだけでホスト名も層も変えずに段階移行できる。",
+  "source_summary": "ALB は Lambda 関数をターゲットタイプとして直接サポートし、リスナールールのパス条件で特定パスだけを Lambda へルーティングできる。これにより既存のホスト名・証明書・WAF 構成を維持したまま段階移行が可能。API Gateway の前置や Lambda 関数 URL へのリダイレクトは層が増え、URL やクライアント挙動にも影響する。",
+  "elements": [
+    { "id": "REQ", "label": "要件: 同一のホスト名・パスを維持したまま /v2/* だけ Lambda へ。追加のプロキシ層は設けない", "type": "state", "priority": "primary" },
+    { "id": "ALB", "label": "既存の ALB(そのまま使う)", "type": "artifact", "priority": "primary" },
+    { "id": "RULE", "label": "リスナールール: パス条件 /v2/*", "type": "process", "priority": "primary" },
+    { "id": "TGL", "label": "Lambda 関数をターゲットとするターゲットグループ", "type": "artifact", "priority": "primary" },
+    { "id": "FN", "label": "Lambda 関数(新バージョン)", "type": "artifact", "priority": "primary" },
+    { "id": "TGE", "label": "既定のターゲットグループ(EC2)", "type": "artifact", "priority": "support" },
+    { "id": "KEEP", "label": "ホスト名・証明書・WAF 構成を維持したまま段階移行できる", "type": "concept", "priority": "primary" },
+    { "id": "LAYERS", "label": "層を1つ足す他案(API Gateway の前置 / CloudFront Functions から Lambda 関数 URL へリダイレクト / EC2 リバースプロキシから Invoke)", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "ALB", "verb": "既存構成を保つ", "direction": "one-way", "kind": "flow" },
+    { "from": "ALB", "to": "RULE", "verb": "ルールを1本足す", "direction": "one-way", "kind": "sequence" },
+    { "from": "RULE", "to": "TGL", "verb": "/v2/* を向ける", "direction": "one-way", "kind": "flow" },
+    { "from": "TGL", "to": "FN", "verb": "直接呼び出す", "direction": "one-way", "kind": "flow" },
+    { "from": "ALB", "to": "TGE", "verb": "その他はこれまでどおり", "direction": "one-way", "kind": "flow" },
+    { "from": "TGL", "to": "KEEP", "verb": "段階移行を可能にする", "direction": "one-way", "kind": "cause" },
+    { "from": "REQ", "to": "LAYERS", "verb": "層が増え URL やクライアント挙動に影響する", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(構成図): 既存 ALB を起点にリスナールールで /v2/* と既定を振り分ける実構成をそのまま描く",
+    "判断フロー: 「層を増やさずにパスだけ切り替えられるか」を問い、4案をふるいにかける"
+  ],
+  "selected_pattern": "分岐(構成図)。「追加のプロキシ層を設けない」という要件は、層が1つも増えていない構成図を見せるのが最も直接的な証明になる。判断フローだと『層が増えない』という結論を文字で主張することになり、図の力が使えない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "誤答3案は落ちる理由が同じ(層が増える)なので1ノードにまとめ、図の横幅を抑えた。ただし EC2 リバースプロキシ案だけは解説が個別に論じておらず、要件『追加のプロキシ層を設けない』に正面から反するという理由でまとめている。",
+    "既定のターゲットグループ(EC2)は移行元として図に残したが、問題文は既存構成の詳細を与えていないため『既定』以上の記述はしていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>同一のホスト名・パスを維持したまま /v2/* だけ Lambda へ流す<br/>追加のプロキシ層は設けない\"]:::req\n    ALB[\"既存の ALB(そのまま使う)\"]:::best\n    RULE{\"リスナールール<br/>パス条件 /v2/*\"}:::judge\n    TGL[\"Lambda 関数をターゲットとする<br/>ターゲットグループ\"]:::best\n    FN[\"Lambda 関数(新バージョン)\"]:::best\n    TGE[\"既定のターゲットグループ(EC2)\"]:::svc\n    KEEP[\"ホスト名・証明書・WAF 構成を維持したまま段階移行できる\"]:::best\n\n    LAYERS[\"層を1つ足す他案<br/>API Gateway の前置 / CloudFront Functions から Lambda 関数 URL へリダイレクト<br/>EC2 リバースプロキシから Invoke<br/>いずれも層が増え URL やクライアント挙動に影響する\"]:::alt\n\n    REQ --> ALB\n    ALB --> RULE\n    RULE -->|\"/v2/*\"| TGL\n    RULE -->|\"その他\"| TGE\n    TGL --> FN\n    TGL --> KEEP\n    REQ -.->|\"層が増える\"| LAYERS"
+}

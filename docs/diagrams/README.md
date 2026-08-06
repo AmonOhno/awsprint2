@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 53 問 / 全 400 問
+収録: 63 問 / 全 400 問
 
 ---
 
@@ -2756,3 +2756,505 @@ flowchart TD
 **解説**: イミュータブルデプロイは新しい Auto Scaling グループに新バージョンのインスタンス群を丸ごと作り、ヘルスチェック通過後に既存グループへ移して旧インスタンスを削除するため、キャパシティを維持したまま新旧混在を避けられ、失敗時は新グループを破棄するだけで即座に戻せます。追加バッチ付きローリングはキャパシティを維持しますが、移行中は新旧バージョンが同時にサービスします。All at once はダウンタイムを伴います。
 
 **確認事項**: ローリング(追加バッチなし)は解説が直接には否定しておらず、追加バッチ付きが「キャパシティを維持する」と書かれていることの裏返しとしてキャパシティ維持不可に置いている。 / 「一時的な追加インスタンス費用は許容」という条件はイミュータブルを選べる前提として要件ノードに入れているが、図の判断軸には使っていない。
+
+---
+
+## cmp54 — コンピューティング / level 3
+
+**問題**: ECS on EC2 のクラスターで、リザーブド済みの m6i インスタンス台数を可能な限り少なく保ちながら多数の小さなタスクを詰め込みたい。一方でクラスターのインスタンス障害で 1 サービスの全タスクが同時に落ちることは避けたい。適切なタスク配置設定はどれか?
+
+**正解**: タスク配置戦略を binpack(memory)にし、配置制約として同一サービスのタスクを異なるインスタンスへ分散させる spread(instanceId)を組み合わせる
+
+**他の選択肢**: タスク配置戦略を random のみにする / タスク配置戦略を spread(attribute:ecs.availability-zone)のみにし、インスタンスタイプを最大サイズにする / タスク配置制約に distinctInstance を指定し、1 インスタンスに 1 タスクのみ配置する
+
+**図解の主メッセージ**: ECS は配置戦略を順序付きで複数指定できるので、binpack で詰め込みつつ spread(instanceId)で同一サービスのタスクを分散させれば、集約と可用性を同時に満たせる。
+
+**採用パターン**: 合流。この問題の要点は「どちらを取るか」ではなく「相反する2つを同時に取れる」ことなので、2本の線が1つの構成へ合流する形がそのまま主メッセージになる。判断フローだと最後まで読まないと両立という結論が見えない。(候補: 合流: 相反する2要件をそれぞれの戦略で受け、順序付き指定という1点で1つの構成に統合する / 分岐(判断フロー): 要件を1つずつ問い、4つの選択肢をふるい落とす)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>リザーブド済み m6i の台数を可能な限り少なく保つ<br/>1インスタンス障害で1サービスの全タスクが同時に落ちない"]:::req
+    N1{"台数を最小化するには?<br/>(コスト)"}:::judge
+    N2{"同時全滅を避けるには?<br/>(可用性)"}:::judge
+    BINPACK["配置戦略 binpack(memory)<br/>残りリソースが最も少ないインスタンスへ優先配置する"]:::best
+    SPREAD["配置戦略 spread(instanceId)<br/>同一サービスのタスクを異なるインスタンスへ分散する"]:::best
+    COMBO["ECS は配置戦略を順序付きで複数指定できる<br/>詰め込みつつ同一サービスのタスクは分散する"]:::best
+
+    DISTINCT["配置制約 distinctInstance<br/>1インスタンス1タスクとなり集約の目的に反する"]:::alt
+    SINGLE["戦略を1つだけ指定する案<br/>random のみ / spread(AZ)のみ<br/>2要件の片方しか満たせない"]:::alt
+
+    REQ --> N1
+    REQ --> N2
+    N1 -->|"詰め込む"| BINPACK
+    N2 -->|"分散する"| SPREAD
+    BINPACK -->|"1番目"| COMBO
+    SPREAD -->|"2番目"| COMBO
+    N1 -.->|"集約に反する"| DISTINCT
+    REQ -.->|"片方のみ"| SINGLE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp54.svg`](../../web/diagrams/cmp54.svg)
+
+**解説**: binpack はリソースの残りが最も少ないインスタンスへ優先配置し、必要なインスタンス台数を最小化してコストを下げます。ECS は複数の配置戦略を順序付きで指定できるため、binpack と instanceId による spread を組み合わせると「詰め込みつつ同一サービスのタスクは分散」という両立ができます。distinctInstance は 1 タスク/インスタンスとなり集約の目的に反します。
+
+**確認事項**: 解説が明示的に否定しているのは distinctInstance だけで、random のみ・spread(AZ)のみは触れられていない。図では「戦略が1つでは2要件の片方しか満たせない」という要件側の論理でまとめており、各選択肢固有の欠点は書いていない。 / binpack の基準に memory を選ぶ理由(cpu ではなく)は解説に書かれていないため、図では選択肢の表記どおり binpack(memory) と置くにとどめた。
+
+---
+
+## cmp55 — コンピューティング / level 3
+
+**問題**: 社内標準の OS 強化設定・エージェント・パッチを含む AMI を毎月ビルドし、テストに合格したものだけを複数リージョンの本番アカウントへ配布したい。ビルド〜テスト〜配布を宣言的に管理し、監査証跡も残したい。最適なサービスはどれか?
+
+**正解**: EC2 Image Builder のイメージパイプラインを使い、レシピ・テストコンポーネント・配布設定でリージョン/アカウント共有まで自動化する
+
+**他の選択肢**: Systems Manager Automation で EC2 を起動しスクリプトで構成後、手動で AMI を作成してコピーする / CodePipeline から Packer を実行する EC2 を毎回起動してビルドする / 起動テンプレートのユーザーデータですべての強化設定を毎回適用する
+
+**図解の主メッセージ**: ビルド・テスト・配布の3段をレシピと設定として宣言的に持ち、実行基盤を自前で維持しなくてよいのは EC2 Image Builder のイメージパイプラインだけ。
+
+**採用パターン**: 直列(パイプラインの3段)。要件そのものが「毎月ビルド→テスト合格分だけ→複数リージョンへ配布」という連なりなので、3段を並べたうえで正解だけがその全段を覆っている形にすると、なぜ他案が足りないかも同じ図で読める。対比は維持コストの話に寄り、テスト・配布まで含む点が落ちる。(候補: 直列(パイプラインの3段): ビルド→テスト→配布 を並べ、その全段をどの選択肢が賄えるかで比べる / 対比: マネージド(Image Builder)と自前運用(Packer / SSM)を左右に並べて維持コストの差を見せる)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>強化設定・エージェント・パッチ入りの AMI を毎月ビルドする<br/>テスト合格分だけを複数リージョンの本番アカウントへ配布する<br/>宣言的に管理し監査証跡も残す"]:::req
+    Q{"ビルド・テスト・配布の全段を<br/>マネージドに宣言的管理できるか?"}:::judge
+    IB["EC2 Image Builder<br/>イメージパイプライン"]:::best
+
+    subgraph PIPE["イメージパイプラインの3段"]
+        RECIPE["レシピ<br/>ベースイメージ+コンポーネントでビルドを定義する"]:::best
+        TEST["テストコンポーネント<br/>合格したイメージだけを次へ進める"]:::best
+        DIST["配布設定<br/>複数リージョン/アカウントへ AMI を共有・暗号化する"]:::best
+    end
+
+    AUDIT["ビルド履歴が残る(監査証跡)"]:::note
+    SELF["SSM Automation + 手動で AMI 作成・コピー<br/>CodePipeline から Packer を実行<br/>実行基盤とテスト・配布の仕組みを自前で維持する必要がある"]:::alt
+    UD["ユーザーデータで毎回すべて適用する<br/>起動時間と再現性の面で不利"]:::alt
+
+    REQ --> Q
+    Q -->|"できる"| IB
+    IB --> RECIPE
+    RECIPE --> TEST
+    TEST --> DIST
+    IB -.- AUDIT
+    Q -.->|"自前運用"| SELF
+    Q -.->|"都度適用"| UD
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp55.svg`](../../web/diagrams/cmp55.svg)
+
+**解説**: EC2 Image Builder はイメージのビルド・テスト・配布のパイプラインをマネージドに提供し、レシピ(ベースイメージ+コンポーネント)、テストコンポーネント、配布設定(複数リージョン/アカウントへの AMI 共有・暗号化)をコードとして管理でき、ビルド履歴も残ります。Packer や SSM Automation でも実現できますが、実行基盤とテスト・配布の仕組みを自前で維持する必要があります。ユーザーデータでの都度適用は起動時間と再現性の面で不利です。
+
+**確認事項**: SSM Automation 案と Packer 案は解説で同じ理由(実行基盤とテスト・配布を自前で維持)により退けられているため1ノードにまとめた。両者の違いを問う問題を足す場合は分割が必要。 / 「毎月」というスケジュール実行の扱いは解説に明示がないため、図ではパイプラインの起動契機として描かず要件側にとどめた。
+
+---
+
+## cmp56 — コンピューティング / level 3
+
+**問題**: ECS on Fargate の本番サービスを更新する際、新バージョンへ 10% のトラフィックを 15 分流して CloudWatch アラームを監視し、問題なければ残りを切り替え、異常時は即座に旧バージョンへ戻したい。最も適切な構成はどれか?
+
+**正解**: CodeDeploy の ECS Blue/Green デプロイを使い、Canary(10% → 15 分後に 100%)のトラフィック移行設定とアラームによる自動ロールバックを構成する
+
+**他の選択肢**: ECS のローリング更新(minimumHealthyPercent 100 / maximumPercent 200)で新タスクを段階投入する / ALB のターゲットグループを 2 つ用意し、加重ルーティングを手動で変更する / Route 53 の加重ルーティングで新旧の ALB へ 10:90 の比率でトラフィックを分配する
+
+**図解の主メッセージ**: 割合指定のトラフィック移行と、CloudWatch アラーム発報時の自動ロールバックを両方持つのは CodeDeploy の ECS Blue/Green だけ。
+
+**採用パターン**: 分岐(2段の判断フロー)。設問が問うているのは「どの構成か」であり、決め手は割合制御と自動ロールバックの有無という2つの機能差なので、その2問で他案が脱落する形が最短で伝わる。タイムラインは Canary の動きは描けるが、なぜ他の3案ではだめかが図に入らない。(候補: 分岐(2段の判断フロー): 割合指定 → 自動ロールバック の順に4案をふるいにかけ、残った1つの中身を続けて示す / タイムライン: 0分(10%)→15分(100%)→ベイク→旧環境削除 の時間軸に、異常時の戻り道を添える)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>新バージョンへ10%を15分流し CloudWatch アラームを監視する<br/>問題なければ残りを切り替える / 異常時は即座に旧バージョンへ戻す"]:::req
+    Q1{"割合を指定して<br/>トラフィックを移せるか?"}:::judge
+    Q2{"アラーム発報時に<br/>自動でロールバックできるか?"}:::judge
+    BG["CodeDeploy の ECS Blue/Green デプロイ<br/>新旧タスクセットを別ターゲットグループに配置する"]:::best
+    CANARY["Canary 設定<br/>10% を流し 15分後に 100% へ移行する"]:::best
+    ALARM["CloudWatch アラーム発報で自動ロールバックする"]:::best
+    BAKE["ベイクタイム後に旧環境を削除する"]:::best
+
+    ROLLING["ECS のローリング更新<br/>割合指定のトラフィック制御やベイク中のロールバック機構がない"]:::alt
+    MANUAL["ALB のターゲットグループを手動で加重変更する<br/>自動ロールバックにならず運用手数が残る"]:::alt
+    R53["Route 53 の加重ルーティング<br/>DNS キャッシュと運用手数の問題が残る"]:::alt
+
+    REQ --> Q1
+    Q1 -->|"移せる"| Q2
+    Q2 -->|"できる"| BG
+    BG --> CANARY
+    BG --> ALARM
+    CANARY --> BAKE
+    Q1 -.->|"割合制御なし"| ROLLING
+    Q2 -.->|"手動運用"| MANUAL
+    Q2 -.->|"DNSキャッシュ"| R53
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp56.svg`](../../web/diagrams/cmp56.svg)
+
+**解説**: CodeDeploy の ECS Blue/Green は新旧タスクセットを別ターゲットグループに配置し、Canary/Linear/All-at-once のトラフィック移行と、CloudWatch アラーム発報時の自動ロールバック、ベイクタイム後の旧環境削除までを自動化します。ECS ローリング更新には割合指定のトラフィック制御やベイク中のロールバック機構がなく、手動加重や Route 53 では DNS キャッシュと運用手数の問題が残ります。
+
+**確認事項**: ALB の手動加重は「割合指定はできるが自動ロールバックがない」ため2問目で落とし、Route 53 も同じ位置に置いた。解説は両者をまとめて「DNS キャッシュと運用手数」と述べており、ALB 手動加重に DNS の論点は当たらないため図では運用手数のみを理由にしている。 / Linear と All-at-once は解説に名前だけ出てくる移行方式で、この問題の判断には使わないため図から省いた。
+
+---
+
+## cmp57 — コンピューティング / level 3
+
+**問題**: 300 台の EC2 が稼働するアカウントで、実測のメトリクスに基づき過剰なインスタンスタイプ/サイズを特定し、Graviton や新世代への移行候補も含めた推奨と削減見込み額を得たい。追加のエージェント導入は最小限にしたい。最適なサービスはどれか?
+
+**正解**: AWS Compute Optimizer を有効化し、必要に応じて CloudWatch エージェントでメモリメトリクスも収集して推奨精度を上げる
+
+**他の選択肢**: AWS Cost Explorer のリザーブドインスタンス推奨レポートを確認する / AWS Trusted Advisor の「低使用率の Amazon EC2 インスタンス」チェックのみを使う / AWS Budgets で予算アラートを設定し、超過時に手動で棚卸しする
+
+**図解の主メッセージ**: 実測メトリクスを分析して具体的な移行先インスタンスタイプと削減見込み額まで出すのは Compute Optimizer で、他の3つは主目的がそれぞれ別にある。
+
+**採用パターン**: 分岐(判断フロー)。判断軸は「実測から移行先タイプと削減額まで出せるか」の1点で、その1問に対する各サービスの主目的の違いが落選理由になる。並置の対比でも違いは見えるが、どれが要件に当たるのかは読み手の照合に委ねられてしまう。(候補: 分岐(判断フロー): 1つの問いで4サービスをふるい、正解側だけ入力と出力を続けて描く / 対比(目的別の並置): 4サービスを横に並べ、それぞれの主目的をラベルにして違いを見せる)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>実測メトリクスから過剰なタイプ/サイズを特定する<br/>Graviton や新世代への移行候補と削減見込み額まで得る<br/>追加のエージェント導入は最小限にする"]:::req
+    Q{"実測メトリクスから<br/>移行先タイプと削減見込み額を<br/>出せるか?"}:::judge
+    CO["AWS Compute Optimizer"]:::best
+    ML["CloudWatch のメトリクス履歴を<br/>機械学習で分析する"]:::best
+    OUT["移行先タイプ・パフォーマンスリスク・削減見込み額を提示する<br/>Graviton など別アーキテクチャの推奨も可能"]:::best
+    AGENT["メモリは既定で取得されない<br/>CloudWatch エージェント併用で推奨精度が上がる"]:::note
+
+    TA["Trusted Advisor の低使用率チェック<br/>簡易チェックが主目的"]:::alt
+    CE["Cost Explorer の RI 推奨レポート<br/>購入コミットの推奨が主目的"]:::alt
+    BUDGET["AWS Budgets の予算アラート<br/>予算監視が主目的"]:::alt
+
+    REQ --> Q
+    Q -->|"出せる"| CO
+    CO --> ML
+    ML --> OUT
+    ML -.- AGENT
+    Q -.->|"簡易チェック"| TA
+    Q -.->|"購入コミット"| CE
+    Q -.->|"予算監視"| BUDGET
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp57.svg`](../../web/diagrams/cmp57.svg)
+
+**解説**: Compute Optimizer は CloudWatch のメトリクス履歴を機械学習で分析し、EC2・Auto Scaling グループ・EBS・Lambda・ECS on Fargate に対して具体的な移行先タイプとパフォーマンスリスク・削減見込み額を提示します(Graviton など別アーキテクチャの推奨も可能)。メモリは既定で取得されないため CloudWatch エージェントを併用すると精度が上がります。Trusted Advisor は簡易チェック、Cost Explorer は購入コミットの推奨、Budgets は予算監視が主目的です。
+
+**確認事項**: Compute Optimizer の対応対象(ASG・EBS・Lambda・ECS on Fargate)は解説にあるが、この問題は EC2 が主題なので図には入れていない。対象範囲を問う問題を足す場合は別図にしたい。 / 「エージェント導入は最小限」という要件と、精度向上のための CloudWatch エージェント併用は緊張関係にある。解説どおり併用は任意として注釈に置いたが、図では判断軸に使っていない。
+
+---
+
+## cmp58 — コンピューティング / level 3
+
+**問題**: 災害対策として、東京リージョン障害時に大阪リージョンで 200 台のインスタンスを 30 分以内に確実に起動できる保証が欲しい。平常時に大阪でインスタンスを稼働させ続けるコストは避けたい。最も確実な方法はどれか?
+
+**正解**: 大阪リージョンの各 AZ にオンデマンドキャパシティ予約(ODCR)を作成し、必要ならキャパシティ予約に対する Savings Plans を適用する
+
+**他の選択肢**: 大阪リージョンにリージョン単位のリザーブドインスタンス(RI)を購入する / 大阪リージョンに Auto Scaling グループを最小 0 台で作成し、複数のインスタンスタイプを指定しておく / 大阪リージョンでスポットフリートを capacity-optimized 戦略で構成しておく
+
+**図解の主メッセージ**: 物理キャパシティを押さえて「起動できること」を保証するのはオンドマンドキャパシティ予約だけで、リージョン RI やスポット/ASG は割引や需要頼みにとどまる。
+
+**採用パターン**: 分岐(判断フロー)。DR 要件から出発して1つの問いで4案が分かれる構造なので、上から読むだけで「保証か割引か」の取り違えに気づける。2列の対比は分類としては正しいが、要件からの導出が図に残らない。(候補: 分岐(判断フロー): 「キャパシティを確保するか」の1問で保証と割引/需要頼みを分ける / 対比(2列の並置): 左に容量を保証する仕組み、右に割引・需要頼みの仕組みを置いて性質の違いを見せる)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>東京リージョン障害時に大阪で200台を30分以内に確実に起動できる保証<br/>平常時に大阪でインスタンスを稼働させ続けるコストは避ける"]:::req
+    Q{"物理キャパシティを確保して<br/>起動できることを保証するか?"}:::judge
+    ODCR["オンデマンドキャパシティ予約(ODCR)を各 AZ に作成する<br/>特定 AZ・インスタンスタイプの物理キャパシティを確保する"]:::best
+    SP["必要ならキャパシティ予約に対する Savings Plans を適用する"]:::best
+    COST["予約中は起動の有無にかかわらず課金される"]:::note
+    ZRI["ゾーン RI もキャパシティ予約を伴う"]:::note
+
+    RRI["リージョン単位のリザーブドインスタンス<br/>課金割引のみでキャパシティ保証はない"]:::alt
+    ASG["最小0台の Auto Scaling グループ + 複数インスタンスタイプ<br/>需要逼迫時に容量を得られない可能性がある"]:::alt
+    SPOT["capacity-optimized 戦略のスポットフリート<br/>需要逼迫時に容量を得られない可能性がある"]:::alt
+
+    REQ --> Q
+    Q -->|"確保する"| ODCR
+    ODCR --> SP
+    ODCR -.- COST
+    ODCR -.- ZRI
+    Q -.->|"割引のみ"| RRI
+    Q -.->|"需要頼み"| ASG
+    Q -.->|"需要頼み"| SPOT
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp58.svg`](../../web/diagrams/cmp58.svg)
+
+**解説**: オンデマンドキャパシティ予約は特定 AZ・インスタンスタイプの物理キャパシティを確保するもので、これだけが「起動できること」を保証します(予約中は起動有無にかかわらず課金)。ゾーン RI もキャパシティ予約を伴いますが、リージョン RI は課金割引のみでキャパシティ保証はありません。ASG やスポットは需要逼迫時に容量を得られない可能性があり、DR の保証にはなりません。
+
+**確認事項**: 「30分以内」という時間要件は解説が直接には扱っておらず、容量が確保されていることの言い換えとして図では判断軸に使っていない。 / ゾーン RI は選択肢に無いが解説が対比のために挙げているため注釈として残した。図の判断軸(容量を確保するか)では正解側に属する点に注意。
+
+---
+
+## cmp59 — コンピューティング / level 3
+
+**問題**: スポットインスタンスで実行するステートレスな処理で、中断時のエラー率を下げたい。中断通知(2 分前)を受けてから作業を止める実装は済んでいるが、それでも処理の取りこぼしが残る。追加で行うべき最も効果的な対策はどれか?
+
+**正解**: Auto Scaling グループのキャパシティリバランスを有効にし、EC2 インスタンスリバランス推奨(中断リスク上昇の予兆)を受けた時点で代替インスタンスを先行起動する
+
+**他の選択肢**: スポット価格の上限をオンデマンド価格の 2 倍に設定して中断されにくくする / スポットリクエストを persistent 型にし、中断後に自動再作成させる / インスタンスの中断動作を stop ではなく hibernate に変更する
+
+**図解の主メッセージ**: 取りこぼしを減らせるのは、2分前の中断通知より早く出るリバランス推奨を受けて代替インスタンスを先行起動し、実質的な猶予を増やす対策だけ。
+
+**採用パターン**: タイムライン。この問題の決め手は対策の種類ではなく発生の順序(通知より早いシグナルがある)なので、時間軸に並べると「なぜ既存実装だけでは足りないか」と「なぜ persistent / hibernate では遅いか」が同じ1枚で読める。判断フローでは早い・遅いという肝心の差が表現できない。(候補: タイムライン: リバランス推奨 → 中断通知(2分前) → 中断 の時間軸に、各対策が効く位置を置く / 分岐(判断フロー): 「予防か復旧か」を問い、4つの選択肢を振り分ける)
+
+```mermaid
+flowchart TD
+    REQ["前提<br/>スポットで動くステートレス処理<br/>2分前の中断通知を受けて作業を止める実装は済んでいる<br/>それでも処理の取りこぼしが残る"]:::req
+
+    subgraph TL["中断までの時間軸"]
+        REBAL["EC2 インスタンスリバランス推奨<br/>中断リスク上昇の予兆・中断通知より早く発行される"]:::req
+        NOTICE["中断通知(2分前)<br/>既存実装が反応している地点"]:::req
+        STOP["中断"]:::req
+    end
+
+    CR["Auto Scaling のキャパシティリバランスを有効にする"]:::best
+    PRELAUNCH["代替インスタンスを先行起動してから<br/>旧インスタンスを外す"]:::best
+    GAIN["実質的な猶予が増え、取りこぼしが減る"]:::best
+
+    PRICE["上限価格をオンデマンドの2倍にする<br/>スポット価格は市場価格で決まり<br/>キャパシティ不足による中断は防げない"]:::alt
+    PERSIST["persistent 型で中断後に自動再作成する<br/>復旧手段であって予防にはならない"]:::alt
+    HIB["中断動作を hibernate にする<br/>復旧手段であって予防にはならない"]:::alt
+
+    REQ -->|"より早い信号"| REBAL
+    REBAL --> CR
+    CR --> PRELAUNCH
+    PRELAUNCH --> GAIN
+    REBAL -->|"その後2分前"| NOTICE
+    NOTICE --> STOP
+    REQ -.->|"中断は防げず"| PRICE
+    STOP -.->|"中断後の復旧"| PERSIST
+    STOP -.->|"中断後の復旧"| HIB
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp59.svg`](../../web/diagrams/cmp59.svg)
+
+**解説**: EC2 インスタンスリバランス推奨は 2 分前の中断通知より早いタイミングで発行されるシグナルで、キャパシティリバランスを有効にすると Auto Scaling が事前に代替インスタンスを起動してから旧インスタンスを外せるため、実質的な猶予が増えます。スポットの上限価格を上げても現在のスポット価格は市場価格で決まり、キャパシティ不足による中断は防げません。persistent や hibernate は復旧手段であって取りこぼしの予防にはなりません。
+
+**確認事項**: リバランス推奨が中断通知よりどれだけ早いかは解説にも明示がないため、図では時間軸上の前後関係だけを描き、具体的な秒数は書いていない。 / 上限価格の案は時間軸上のどこにも乗らない性質の対策(中断そのものを防ごうとする案)なので、前提ノードから分けて置いた。 / 先行起動が中断通知より前に完了することは、時間軸上でリバランス推奨が通知より手前にあることで示している。先行起動から通知へ矢印を引くと『先行起動が通知を引き起こす』と誤読されるため、その線は引いていない。
+
+---
+
+## cmp60 — コンピューティング / level 3
+
+**問題**: オンプレミスの VMware 上で稼働する 40 台の Windows サーバーを、アプリの再構築なしで EC2 へ移行したい。移行前に各サーバーの依存関係とスペックを把握し、移行のリハーサル(テストカットオーバー)も行いたい。最も適切な組み合わせはどれか?
+
+**正解**: AWS Application Discovery Service で依存関係とリソース使用状況を収集し、AWS Application Migration Service(MGN)で継続レプリケーションとテストインスタンス起動を行う
+
+**他の選択肢**: AWS DataSync でファイルを転送し、EC2 に手動で OS とアプリをインストールする / VM Import/Export で OVA を一括インポートし、そのまま本番カットオーバーする / AWS Database Migration Service(DMS)で各サーバーを継続レプリケーションする
+
+**図解の主メッセージ**: 移行前の依存関係の把握は Application Discovery Service、再構築なしの移行とテストカットオーバーは Application Migration Service と、フェーズごとに役割の合う2つを組み合わせる。
+
+**採用パターン**: 直列(2フェーズ)。設問が「組み合わせ」を問うており、2つのサービスがなぜ両方必要かはフェーズの前後関係で説明できる。対象別の並置は誤答の切り分けには効くが、正解が2つのサービスの組み合わせである理由が図に出ない。(候補: 直列(2フェーズ): 計画フェーズと移行フェーズを枠で分け、担当サービスをそれぞれに置く / 対比(対象別の並置): 4案をサーバー移行・ファイル・データベースなど対象で分類して並べる)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>VMware 上の Windows サーバー40台をアプリ再構築なしで EC2 へ移行する<br/>移行前に各サーバーの依存関係とスペックを把握する<br/>移行のリハーサル(テストカットオーバー)も行う"]:::req
+
+    subgraph P1["移行前(計画)"]
+        ADS["AWS Application Discovery Service"]:::best
+        INV["インベントリ・性能・ネットワーク依存関係を収集し<br/>移行計画に用いる"]:::best
+    end
+
+    subgraph P2["移行(実行とリハーサル)"]
+        MGN["AWS Application Migration Service(MGN)"]:::best
+        REPL["ブロックレベルの継続レプリケーション<br/>最小ダウンタイムのリフト&シフト"]:::best
+        TEST["本番に影響を与えないテストインスタンス起動"]:::best
+    end
+
+    DATASYNC["AWS DataSync<br/>対象はファイル転送"]:::alt
+    DMS["AWS Database Migration Service<br/>対象はデータベース移行"]:::alt
+    VMIE["VM Import/Export で OVA を一括インポート<br/>継続レプリケーションやテスト起動の仕組みがない"]:::alt
+
+    REQ --> ADS
+    ADS --> INV
+    INV --> MGN
+    MGN --> REPL
+    MGN --> TEST
+    REQ -.->|"ファイル用"| DATASYNC
+    REQ -.->|"DB用"| DMS
+    REQ -.->|"都度移送"| VMIE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp60.svg`](../../web/diagrams/cmp60.svg)
+
+**解説**: Application Discovery Service はオンプレミスのインベントリ・性能・ネットワーク依存関係を収集して移行計画に用い、Application Migration Service(MGN)はブロックレベルの継続レプリケーションにより最小ダウンタイムのリフト&シフトと、本番に影響を与えないテストインスタンス起動を提供します。DataSync はファイル転送、DMS はデータベース移行が対象で、VM Import/Export は都度のインポートとなり継続レプリケーションやテスト起動の仕組みがありません。
+
+**確認事項**: DataSync 案は「ファイルを転送して手動で OS とアプリを入れる」という選択肢だが、解説はサービスの対象(ファイル転送)を理由に退けている。図もその粒度に合わせ、手動構築の是非は描いていない。 / 「アプリの再構築なし(リフト&シフト)」という条件は MGN 側のラベルに含めたが、フェーズを分ける判断軸としては使っていない。
+
+---
+
+## cmp61 — コンピューティング / level 3
+
+**問題**: 1 つの ALB で、/api/* は ECS サービスへ、/static/* は S3(CloudFront 経由)へ、その他は EC2 の Auto Scaling グループへ振り分けたい。さらに社内 IP からのアクセスのみ /admin/* を許可したい。ALB の機能のみで実現できない要件はどれか?
+
+**正解**: /static/* を ALB のターゲットとして S3 バケットへ直接ルーティングすること
+
+**他の選択肢**: パスパターンに基づく複数ターゲットグループへのルーティング / ソース IP 条件によるリスナールールでの許可・拒否(固定レスポンス返却) / ホストヘッダー条件による振り分け
+
+**図解の主メッセージ**: ALB のターゲットに指定できるのはインスタンス・IP・Lambda・別の ALB だけなので、S3 への直接ルーティングだけが ALB の機能では実現できない。
+
+**採用パターン**: 包含。「実現できないのはどれか」を問う設問で、根拠はターゲットタイプという閉じた一覧に S3 が入っていないという1点なので、枠の内と外という配置がそのまま根拠になる。2列の対比でも可否は示せるが、なぜできないのかは別途文字で説明する必要が出る。(候補: 包含: ALB のターゲットにできるものを枠で囲み、S3 をその外に置いて「集合の外」を一目で見せる / 対比(できる/できない の2列): 4つの選択肢を実現可否で左右に分ける)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>1つの ALB で /api/* は ECS、/static/* は S3(CloudFront 経由)、その他は EC2 の ASG へ<br/>さらに /admin/* は社内 IP からのみ許可する"]:::req
+    Q{"ALB の機能だけで<br/>実現できるか?"}:::judge
+
+    subgraph TG["ALB のターゲットに指定できるもの"]
+        EC2INST["インスタンス"]:::svc
+        IPADDR["IP アドレス"]:::svc
+        LAMBDA["Lambda 関数"]:::svc
+        ALB2["別の ALB"]:::svc
+    end
+
+    S3["S3 バケットへ直接ルーティングする<br/>ターゲットに指定できない = これが設問の答え"]:::best
+    CF["定石: CloudFront のオリジンに S3 を指定し<br/>ビヘイビアで振り分ける"]:::svc
+    RULES["リスナールールで実現できる条件<br/>パス条件 / ホストヘッダー条件 / ソース IP 条件と固定レスポンス・リダイレクト"]:::alt
+
+    REQ --> Q
+    Q -->|"できる"| RULES
+    Q -->|"できない"| S3
+    S3 -.->|"集合の外"| TG
+    S3 --> CF
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp61.svg`](../../web/diagrams/cmp61.svg)
+
+**解説**: ALB のターゲットとして指定できるのはインスタンス・IP アドレス・Lambda 関数・別の ALB であり、S3 バケットを直接ターゲットにはできません。静的コンテンツは CloudFront のオリジンとして S3 を指定し、ビヘイビアで振り分けるのが定石です。一方、パス条件・ホストヘッダー条件・ソース IP 条件によるルールと固定レスポンス/リダイレクトは ALB のリスナールールで実現できます。
+
+**確認事項**: この設問は「実現できない要件はどれか」を問う否定形なので、緑(best)は正解として選ぶべき選択肢=S3 直接ルーティングに付けている。緑を「望ましい構成」と読むと逆に見えるため、ノード内に『これが設問の答え』と明記して補った。 / ALB のリスナールールで実現できる3条件(パス・ホストヘッダー・ソース IP)は誤答選択肢なのでグレー1ノードにまとめた。個別の機能差を問う問題を追加する場合は分割が必要。
+
+---
+
+## cmp62 — コンピューティング / level 3
+
+**問題**: レガシーな TCP プロトコル(独自ポート 9000)を話すクライアントが、送信元 IP に基づくアクセス制御を行うバックエンドへ接続する。ロードバランサーを挟んでもバックエンドのアプリがクライアントの実 IP をそのまま参照できる必要がある(アプリ改修は不可)。最適な構成はどれか?
+
+**正解**: NLB をインスタンス ID ターゲットで構成する(クライアント IP が保持される)
+
+**他の選択肢**: ALB を使い、X-Forwarded-For ヘッダーからアプリに IP を渡す / NLB を IP アドレスターゲットで構成し、プロキシプロトコル v2 を無効にする / Gateway Load Balancer を挟んでトラフィックを検査アプライアンスへ転送する
+
+**図解の主メッセージ**: アプリを改修せずに送信元 IP を参照させられるのは、クライアント IP を保持したまま転送する NLB のインスタンス ID ターゲットだけ。
+
+**採用パターン**: 分岐(2段の判断フロー)。誤答の3つは落ちる理由がそれぞれ別(L7 である・IP ターゲットで既定無効・用途違い)なので、2つの問いに割り当てると1枚で全部の理由が置ける。経路の並置は ALB と NLB の差はよく見えるが、同じ NLB でもターゲットタイプで結論が変わるという肝心の点が表しにくい。(候補: 分岐(2段の判断フロー): L4 かどうか → アプリ対応なしで IP が見えるか の順に4案をふるいにかける / 対比(通信経路の並置): ALB 経由と NLB 経由でバックエンドに届く送信元 IP がどう変わるかを2本の経路で見せる)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>独自ポート 9000 のレガシー TCP プロトコル<br/>バックエンドが送信元 IP でアクセス制御する<br/>アプリ改修は不可"]:::req
+    Q1{"L4 のまま透過的に転送するか?<br/>(L7 プロキシではないか)"}:::judge
+    Q2{"アプリ側の対応なしに<br/>クライアント IP が見えるか?"}:::judge
+    NLB["NLB をインスタンス ID ターゲットで構成する"]:::best
+    KEEP["クライアント IP を保持したままバックエンドへ転送する<br/>アプリを変更せず送信元 IP を参照できる"]:::best
+
+    ALB["ALB + X-Forwarded-For ヘッダー<br/>L7 プロキシなので送信元 IP が ALB のものになり<br/>ヘッダーを解釈する改修が必要"]:::alt
+    NLBIP["NLB の IP アドレスターゲット(プロキシプロトコル v2 無効)<br/>クライアント IP 保持が既定で無効<br/>v2 で伝達はできるがアプリ側の対応が必要"]:::alt
+    GWLB["Gateway Load Balancer で検査アプライアンスへ転送<br/>用途が異なる"]:::alt
+
+    REQ --> Q1
+    Q1 -->|"L4 のまま"| Q2
+    Q2 -->|"見える"| NLB
+    NLB --> KEEP
+    Q1 -.->|"L7 プロキシ"| ALB
+    Q1 -.->|"用途違い"| GWLB
+    Q2 -.->|"既定で無効"| NLBIP
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp62.svg`](../../web/diagrams/cmp62.svg)
+
+**解説**: NLB はインスタンス ID(または対応する構成)をターゲットにした場合、クライアント IP を保持したままバックエンドへ転送するため、アプリを変更せず送信元 IP を参照できます。ALB は L7 プロキシで送信元 IP が ALB のものになり、X-Forwarded-For をアプリが解釈する改修が必要です。IP ターゲットではクライアント IP 保持が既定で無効となり(プロキシプロトコル v2 で伝達可能だがアプリ側の対応が必要)、GWLB は用途が異なります。
+
+**確認事項**: 解説は「インスタンス ID(または対応する構成)」と幅を持たせているが、図では選択肢の表記どおりインスタンス ID ターゲットに絞った。 / IP ターゲットでもプロキシプロトコル v2 を有効にすれば IP を伝達できる点は、アプリ側の対応が必要という条件付きなのでノード内の但し書きにとどめ、独立した経路としては描いていない。
+
+---
+
+## cmp63 — コンピューティング / level 3
+
+**問題**: 既存の ALB 配下の EC2 で稼働する API を、段階的に Lambda ベースへ移行したい。同一のホスト名・パスを維持したまま、特定のパス(/v2/*)のみ Lambda へ流したい。追加のプロキシ層を設けたくない。最適な方法はどれか?
+
+**正解**: ALB に Lambda 関数をターゲットとするターゲットグループを作成し、/v2/* のリスナールールをそのターゲットグループへ向ける
+
+**他の選択肢**: API Gateway を ALB の前段に置き、/v2/* だけ Lambda 統合にする / CloudFront Functions で /v2/* を書き換え、Lambda 関数 URL へリダイレクトする / EC2 上のリバースプロキシから Lambda の Invoke API を呼び出す
+
+**図解の主メッセージ**: ALB は Lambda 関数をターゲットタイプとして直接サポートするので、パス条件のリスナールールを足すだけでホスト名も層も変えずに段階移行できる。
+
+**採用パターン**: 分岐(構成図)。「追加のプロキシ層を設けない」という要件は、層が1つも増えていない構成図を見せるのが最も直接的な証明になる。判断フローだと『層が増えない』という結論を文字で主張することになり、図の力が使えない。(候補: 分岐(構成図): 既存 ALB を起点にリスナールールで /v2/* と既定を振り分ける実構成をそのまま描く / 判断フロー: 「層を増やさずにパスだけ切り替えられるか」を問い、4案をふるいにかける)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>同一のホスト名・パスを維持したまま /v2/* だけ Lambda へ流す<br/>追加のプロキシ層は設けない"]:::req
+    ALB["既存の ALB(そのまま使う)"]:::best
+    RULE{"リスナールール<br/>パス条件 /v2/*"}:::judge
+    TGL["Lambda 関数をターゲットとする<br/>ターゲットグループ"]:::best
+    FN["Lambda 関数(新バージョン)"]:::best
+    TGE["既定のターゲットグループ(EC2)"]:::svc
+    KEEP["ホスト名・証明書・WAF 構成を維持したまま段階移行できる"]:::best
+
+    LAYERS["層を1つ足す他案<br/>API Gateway の前置 / CloudFront Functions から Lambda 関数 URL へリダイレクト<br/>EC2 リバースプロキシから Invoke<br/>いずれも層が増え URL やクライアント挙動に影響する"]:::alt
+
+    REQ --> ALB
+    ALB --> RULE
+    RULE -->|"/v2/*"| TGL
+    RULE -->|"その他"| TGE
+    TGL --> FN
+    TGL --> KEEP
+    REQ -.->|"層が増える"| LAYERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp63.svg`](../../web/diagrams/cmp63.svg)
+
+**解説**: ALB は Lambda 関数をターゲットタイプとして直接サポートし、リスナールールのパス条件で特定パスだけを Lambda へルーティングできます。これにより既存のホスト名・証明書・WAF 構成を維持したまま段階移行が可能です。API Gateway の前置や Lambda 関数 URL へのリダイレクトは層が増え、URL やクライアント挙動にも影響します。
+
+**確認事項**: 誤答3案は落ちる理由が同じ(層が増える)なので1ノードにまとめ、図の横幅を抑えた。ただし EC2 リバースプロキシ案だけは解説が個別に論じておらず、要件『追加のプロキシ層を設けない』に正面から反するという理由でまとめている。 / 既定のターゲットグループ(EC2)は移行元として図に残したが、問題文は既存構成の詳細を与えていないため『既定』以上の記述はしていない。

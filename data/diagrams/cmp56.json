@@ -1,0 +1,47 @@
+{
+  "question_id": "cmp56",
+  "purpose": "ECS のデプロイ方式選択が「割合を指定してトラフィックを移せるか」と「アラームで自動的に戻せるか」の2問で決まることを示す。",
+  "audience": "AWS 認定を学習中で、ECS のローリング更新と CodeDeploy の Blue/Green の違いを要件から選べるようにしたい人。",
+  "message": "割合指定のトラフィック移行と、CloudWatch アラーム発報時の自動ロールバックを両方持つのは CodeDeploy の ECS Blue/Green だけ。",
+  "source_summary": "CodeDeploy の ECS Blue/Green は新旧タスクセットを別ターゲットグループに配置し、Canary/Linear/All-at-once のトラフィック移行と、CloudWatch アラーム発報時の自動ロールバック、ベイクタイム後の旧環境削除までを自動化する。ECS ローリング更新には割合指定のトラフィック制御やベイク中のロールバック機構がなく、手動加重や Route 53 では DNS キャッシュと運用手数の問題が残る。",
+  "elements": [
+    { "id": "REQ", "label": "要件: 新バージョンへ10%を15分流してアラームを監視し、問題なければ残りを切り替え、異常時は即座に旧へ戻す", "type": "state", "priority": "primary" },
+    { "id": "Q1", "label": "割合を指定してトラフィックを移せるか", "type": "process", "priority": "primary" },
+    { "id": "Q2", "label": "アラーム発報時に自動でロールバックできるか", "type": "process", "priority": "primary" },
+    { "id": "BG", "label": "CodeDeploy の ECS Blue/Green デプロイ(新旧タスクセットを別ターゲットグループに配置)", "type": "artifact", "priority": "primary" },
+    { "id": "CANARY", "label": "Canary 設定: 10% を流し、15分後に 100% へ移行する", "type": "artifact", "priority": "primary" },
+    { "id": "ALARM", "label": "CloudWatch アラーム発報で自動ロールバックする", "type": "artifact", "priority": "primary" },
+    { "id": "BAKE", "label": "ベイクタイム後に旧環境を削除する", "type": "artifact", "priority": "support" },
+    { "id": "ROLLING", "label": "ECS のローリング更新(minimumHealthyPercent 100 / maximumPercent 200)", "type": "artifact", "priority": "secondary" },
+    { "id": "MANUAL", "label": "ALB のターゲットグループ2つを手動で加重変更する", "type": "artifact", "priority": "secondary" },
+    { "id": "R53", "label": "Route 53 の加重ルーティングで新旧 ALB へ 10:90 に分配する", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q1", "verb": "判断に持ち込む", "direction": "one-way", "kind": "flow" },
+    { "from": "Q1", "to": "Q2", "verb": "移せるなら次の問いへ", "direction": "one-way", "kind": "flow" },
+    { "from": "Q2", "to": "BG", "verb": "自動で戻せる", "direction": "one-way", "kind": "flow" },
+    { "from": "BG", "to": "CANARY", "verb": "移行を設定する", "direction": "one-way", "kind": "sequence" },
+    { "from": "BG", "to": "ALARM", "verb": "異常時に戻す", "direction": "one-way", "kind": "depend" },
+    { "from": "CANARY", "to": "BAKE", "verb": "移行後に片付ける", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q1", "to": "ROLLING", "verb": "割合指定のトラフィック制御がない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q2", "to": "MANUAL", "verb": "自動ロールバックにならず運用手数が残る", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q2", "to": "R53", "verb": "DNS キャッシュと運用手数の問題が残る", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(2段の判断フロー): 割合指定 → 自動ロールバック の順に4案をふるいにかけ、残った1つの中身を続けて示す",
+    "タイムライン: 0分(10%)→15分(100%)→ベイク→旧環境削除 の時間軸に、異常時の戻り道を添える"
+  ],
+  "selected_pattern": "分岐(2段の判断フロー)。設問が問うているのは「どの構成か」であり、決め手は割合制御と自動ロールバックの有無という2つの機能差なので、その2問で他案が脱落する形が最短で伝わる。タイムラインは Canary の動きは描けるが、なぜ他の3案ではだめかが図に入らない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "ALB の手動加重は「割合指定はできるが自動ロールバックがない」ため2問目で落とし、Route 53 も同じ位置に置いた。解説は両者をまとめて「DNS キャッシュと運用手数」と述べており、ALB 手動加重に DNS の論点は当たらないため図では運用手数のみを理由にしている。",
+    "Linear と All-at-once は解説に名前だけ出てくる移行方式で、この問題の判断には使わないため図から省いた。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>新バージョンへ10%を15分流し CloudWatch アラームを監視する<br/>問題なければ残りを切り替える / 異常時は即座に旧バージョンへ戻す\"]:::req\n    Q1{\"割合を指定して<br/>トラフィックを移せるか?\"}:::judge\n    Q2{\"アラーム発報時に<br/>自動でロールバックできるか?\"}:::judge\n    BG[\"CodeDeploy の ECS Blue/Green デプロイ<br/>新旧タスクセットを別ターゲットグループに配置する\"]:::best\n    CANARY[\"Canary 設定<br/>10% を流し 15分後に 100% へ移行する\"]:::best\n    ALARM[\"CloudWatch アラーム発報で自動ロールバックする\"]:::best\n    BAKE[\"ベイクタイム後に旧環境を削除する\"]:::best\n\n    ROLLING[\"ECS のローリング更新<br/>割合指定のトラフィック制御やベイク中のロールバック機構がない\"]:::alt\n    MANUAL[\"ALB のターゲットグループを手動で加重変更する<br/>自動ロールバックにならず運用手数が残る\"]:::alt\n    R53[\"Route 53 の加重ルーティング<br/>DNS キャッシュと運用手数の問題が残る\"]:::alt\n\n    REQ --> Q1\n    Q1 -->|\"移せる\"| Q2\n    Q2 -->|\"できる\"| BG\n    BG --> CANARY\n    BG --> ALARM\n    CANARY --> BAKE\n    Q1 -.->|\"割合制御なし\"| ROLLING\n    Q2 -.->|\"手動運用\"| MANUAL\n    Q2 -.->|\"DNSキャッシュ\"| R53"
+}

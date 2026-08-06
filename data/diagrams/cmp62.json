@@ -1,0 +1,43 @@
+{
+  "question_id": "cmp62",
+  "purpose": "ロードバランサー選択が「L4 でそのまま通すか、L7 でプロキシするか」と「アプリを直せるか」の2問で決まることを示す。",
+  "audience": "AWS 認定を学習中で、NLB と ALB のクライアント IP の扱いの違いを要件から選び分けたい人。",
+  "message": "アプリを改修せずに送信元 IP を参照させられるのは、クライアント IP を保持したまま転送する NLB のインスタンス ID ターゲットだけ。",
+  "source_summary": "NLB はインスタンス ID(または対応する構成)をターゲットにした場合、クライアント IP を保持したままバックエンドへ転送するため、アプリを変更せず送信元 IP を参照できる。ALB は L7 プロキシで送信元 IP が ALB のものになり、X-Forwarded-For をアプリが解釈する改修が必要。IP ターゲットではクライアント IP 保持が既定で無効となり(プロキシプロトコル v2 で伝達可能だがアプリ側の対応が必要)、GWLB は用途が異なる。",
+  "elements": [
+    { "id": "REQ", "label": "要件: 独自ポート 9000 のレガシー TCP、バックエンドが送信元 IP でアクセス制御、アプリ改修は不可", "type": "state", "priority": "primary" },
+    { "id": "Q1", "label": "L4 のまま透過的に転送するか(L7 プロキシではないか)", "type": "process", "priority": "primary" },
+    { "id": "Q2", "label": "アプリ側の対応なしにクライアント IP が見えるか", "type": "process", "priority": "primary" },
+    { "id": "NLB", "label": "NLB をインスタンス ID ターゲットで構成する", "type": "artifact", "priority": "primary" },
+    { "id": "KEEP", "label": "クライアント IP を保持したままバックエンドへ転送する(アプリ改修なしで送信元 IP を参照できる)", "type": "concept", "priority": "primary" },
+    { "id": "ALB", "label": "ALB + X-Forwarded-For ヘッダー", "type": "artifact", "priority": "secondary" },
+    { "id": "NLBIP", "label": "NLB の IP アドレスターゲット(プロキシプロトコル v2 は無効)", "type": "artifact", "priority": "secondary" },
+    { "id": "GWLB", "label": "Gateway Load Balancer で検査アプライアンスへ転送する", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q1", "verb": "判断に持ち込む", "direction": "one-way", "kind": "flow" },
+    { "from": "Q1", "to": "Q2", "verb": "L4 なら次の問いへ", "direction": "one-way", "kind": "flow" },
+    { "from": "Q2", "to": "NLB", "verb": "見える", "direction": "one-way", "kind": "flow" },
+    { "from": "NLB", "to": "KEEP", "verb": "IP を保持する", "direction": "one-way", "kind": "cause" },
+    { "from": "Q1", "to": "ALB", "verb": "L7 プロキシなので送信元が ALB になる", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q1", "to": "GWLB", "verb": "用途が異なる", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q2", "to": "NLBIP", "verb": "既定でクライアント IP 保持が無効", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(2段の判断フロー): L4 かどうか → アプリ対応なしで IP が見えるか の順に4案をふるいにかける",
+    "対比(通信経路の並置): ALB 経由と NLB 経由でバックエンドに届く送信元 IP がどう変わるかを2本の経路で見せる"
+  ],
+  "selected_pattern": "分岐(2段の判断フロー)。誤答の3つは落ちる理由がそれぞれ別(L7 である・IP ターゲットで既定無効・用途違い)なので、2つの問いに割り当てると1枚で全部の理由が置ける。経路の並置は ALB と NLB の差はよく見えるが、同じ NLB でもターゲットタイプで結論が変わるという肝心の点が表しにくい。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "解説は「インスタンス ID(または対応する構成)」と幅を持たせているが、図では選択肢の表記どおりインスタンス ID ターゲットに絞った。",
+    "IP ターゲットでもプロキシプロトコル v2 を有効にすれば IP を伝達できる点は、アプリ側の対応が必要という条件付きなのでノード内の但し書きにとどめ、独立した経路としては描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>独自ポート 9000 のレガシー TCP プロトコル<br/>バックエンドが送信元 IP でアクセス制御する<br/>アプリ改修は不可\"]:::req\n    Q1{\"L4 のまま透過的に転送するか?<br/>(L7 プロキシではないか)\"}:::judge\n    Q2{\"アプリ側の対応なしに<br/>クライアント IP が見えるか?\"}:::judge\n    NLB[\"NLB をインスタンス ID ターゲットで構成する\"]:::best\n    KEEP[\"クライアント IP を保持したままバックエンドへ転送する<br/>アプリを変更せず送信元 IP を参照できる\"]:::best\n\n    ALB[\"ALB + X-Forwarded-For ヘッダー<br/>L7 プロキシなので送信元 IP が ALB のものになり<br/>ヘッダーを解釈する改修が必要\"]:::alt\n    NLBIP[\"NLB の IP アドレスターゲット(プロキシプロトコル v2 無効)<br/>クライアント IP 保持が既定で無効<br/>v2 で伝達はできるがアプリ側の対応が必要\"]:::alt\n    GWLB[\"Gateway Load Balancer で検査アプライアンスへ転送<br/>用途が異なる\"]:::alt\n\n    REQ --> Q1\n    Q1 -->|\"L4 のまま\"| Q2\n    Q2 -->|\"見える\"| NLB\n    NLB --> KEEP\n    Q1 -.->|\"L7 プロキシ\"| ALB\n    Q1 -.->|\"用途違い\"| GWLB\n    Q2 -.->|\"既定で無効\"| NLBIP"
+}

@@ -1,0 +1,48 @@
+{
+  "question_id": "cmp60",
+  "purpose": "リフト&シフト移行が「移行前の把握」と「移行の実行・リハーサル」という2つのフェーズからなり、それぞれ担当サービスが違うことを示す。",
+  "audience": "AWS 認定を学習中で、移行系サービス(ADS / MGN / DataSync / DMS / VM Import)の対象と役割を区別したい人。",
+  "message": "移行前の依存関係の把握は Application Discovery Service、再構築なしの移行とテストカットオーバーは Application Migration Service と、フェーズごとに役割の合う2つを組み合わせる。",
+  "source_summary": "Application Discovery Service はオンプレミスのインベントリ・性能・ネットワーク依存関係を収集して移行計画に用いる。Application Migration Service(MGN)はブロックレベルの継続レプリケーションにより最小ダウンタイムのリフト&シフトと、本番に影響を与えないテストインスタンス起動を提供する。DataSync はファイル転送、DMS はデータベース移行が対象で、VM Import/Export は都度のインポートとなり継続レプリケーションやテスト起動の仕組みがない。",
+  "elements": [
+    { "id": "REQ", "label": "要件: VMware 上の Windows 40台をアプリ再構築なしで EC2 へ。移行前に依存関係とスペックを把握し、テストカットオーバーも行う", "type": "state", "priority": "primary" },
+    { "id": "ADS", "label": "AWS Application Discovery Service", "type": "artifact", "priority": "primary" },
+    { "id": "INV", "label": "インベントリ・性能・ネットワーク依存関係を収集して移行計画に用いる", "type": "process", "priority": "primary" },
+    { "id": "MGN", "label": "AWS Application Migration Service(MGN)", "type": "artifact", "priority": "primary" },
+    { "id": "REPL", "label": "ブロックレベルの継続レプリケーションで最小ダウンタイムのリフト&シフトを行う", "type": "process", "priority": "primary" },
+    { "id": "TEST", "label": "本番に影響を与えないテストインスタンスを起動する(リハーサル)", "type": "process", "priority": "primary" },
+    { "id": "DATASYNC", "label": "AWS DataSync(対象はファイル転送)", "type": "artifact", "priority": "secondary" },
+    { "id": "DMS", "label": "AWS Database Migration Service(対象はデータベース移行)", "type": "artifact", "priority": "secondary" },
+    { "id": "VMIE", "label": "VM Import/Export で OVA を一括インポートする", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "ADS", "verb": "計画フェーズを担う", "direction": "one-way", "kind": "flow" },
+    { "from": "ADS", "to": "INV", "verb": "収集する", "direction": "one-way", "kind": "sequence" },
+    { "from": "INV", "to": "MGN", "verb": "計画を移行へ渡す", "direction": "one-way", "kind": "sequence" },
+    { "from": "MGN", "to": "REPL", "verb": "移行する", "direction": "one-way", "kind": "sequence" },
+    { "from": "MGN", "to": "TEST", "verb": "リハーサルする", "direction": "one-way", "kind": "sequence" },
+    { "from": "REQ", "to": "DATASYNC", "verb": "対象が異なる(ファイル転送)", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "DMS", "verb": "対象が異なる(データベース)", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "VMIE", "verb": "継続レプリケーションやテスト起動の仕組みがない", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "移行前(計画)", "element_ids": ["ADS", "INV"] },
+    { "label": "移行(実行とリハーサル)", "element_ids": ["MGN", "REPL", "TEST"] }
+  ],
+  "candidate_patterns": [
+    "直列(2フェーズ): 計画フェーズと移行フェーズを枠で分け、担当サービスをそれぞれに置く",
+    "対比(対象別の並置): 4案をサーバー移行・ファイル・データベースなど対象で分類して並べる"
+  ],
+  "selected_pattern": "直列(2フェーズ)。設問が「組み合わせ」を問うており、2つのサービスがなぜ両方必要かはフェーズの前後関係で説明できる。対象別の並置は誤答の切り分けには効くが、正解が2つのサービスの組み合わせである理由が図に出ない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "DataSync 案は「ファイルを転送して手動で OS とアプリを入れる」という選択肢だが、解説はサービスの対象(ファイル転送)を理由に退けている。図もその粒度に合わせ、手動構築の是非は描いていない。",
+    "「アプリの再構築なし(リフト&シフト)」という条件は MGN 側のラベルに含めたが、フェーズを分ける判断軸としては使っていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>VMware 上の Windows サーバー40台をアプリ再構築なしで EC2 へ移行する<br/>移行前に各サーバーの依存関係とスペックを把握する<br/>移行のリハーサル(テストカットオーバー)も行う\"]:::req\n\n    subgraph P1[\"移行前(計画)\"]\n        ADS[\"AWS Application Discovery Service\"]:::best\n        INV[\"インベントリ・性能・ネットワーク依存関係を収集し<br/>移行計画に用いる\"]:::best\n    end\n\n    subgraph P2[\"移行(実行とリハーサル)\"]\n        MGN[\"AWS Application Migration Service(MGN)\"]:::best\n        REPL[\"ブロックレベルの継続レプリケーション<br/>最小ダウンタイムのリフト&シフト\"]:::best\n        TEST[\"本番に影響を与えないテストインスタンス起動\"]:::best\n    end\n\n    DATASYNC[\"AWS DataSync<br/>対象はファイル転送\"]:::alt\n    DMS[\"AWS Database Migration Service<br/>対象はデータベース移行\"]:::alt\n    VMIE[\"VM Import/Export で OVA を一括インポート<br/>継続レプリケーションやテスト起動の仕組みがない\"]:::alt\n\n    REQ --> ADS\n    ADS --> INV\n    INV --> MGN\n    MGN --> REPL\n    MGN --> TEST\n    REQ -.->|\"ファイル用\"| DATASYNC\n    REQ -.->|\"DB用\"| DMS\n    REQ -.->|\"都度移送\"| VMIE"
+}

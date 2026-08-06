@@ -1,0 +1,45 @@
+{
+  "question_id": "cmp57",
+  "purpose": "コスト系サービスは名前が似ていても主目的が異なり、「実測メトリクスから具体的な移行先タイプと削減見込みを出す」役目を負うのは Compute Optimizer だけであることを示す。",
+  "audience": "AWS 認定を学習中で、Compute Optimizer / Cost Explorer / Trusted Advisor / Budgets の役割分担を整理したい人。",
+  "message": "実測メトリクスを分析して具体的な移行先インスタンスタイプと削減見込み額まで出すのは Compute Optimizer で、他の3つは主目的がそれぞれ別にある。",
+  "source_summary": "Compute Optimizer は CloudWatch のメトリクス履歴を機械学習で分析し、EC2・Auto Scaling グループ・EBS・Lambda・ECS on Fargate に対して具体的な移行先タイプとパフォーマンスリスク・削減見込み額を提示する(Graviton など別アーキテクチャの推奨も可能)。メモリは既定で取得されないため CloudWatch エージェントを併用すると精度が上がる。Trusted Advisor は簡易チェック、Cost Explorer は購入コミットの推奨、Budgets は予算監視が主目的。",
+  "elements": [
+    { "id": "REQ", "label": "要件: 実測メトリクスから過剰なタイプ/サイズを特定し、Graviton や新世代への移行候補と削減見込み額を得る。エージェント導入は最小限", "type": "state", "priority": "primary" },
+    { "id": "Q", "label": "実測メトリクスから具体的な移行先タイプと削減見込み額を出せるか", "type": "process", "priority": "primary" },
+    { "id": "CO", "label": "AWS Compute Optimizer", "type": "artifact", "priority": "primary" },
+    { "id": "ML", "label": "CloudWatch のメトリクス履歴を機械学習で分析する", "type": "process", "priority": "primary" },
+    { "id": "OUT", "label": "移行先タイプ・パフォーマンスリスク・削減見込み額を提示する(Graviton など別アーキテクチャも可能)", "type": "artifact", "priority": "primary" },
+    { "id": "AGENT", "label": "メモリは既定で取得されないため CloudWatch エージェント併用で精度が上がる", "type": "concept", "priority": "support" },
+    { "id": "TA", "label": "Trusted Advisor の低使用率チェック(主目的は簡易チェック)", "type": "artifact", "priority": "secondary" },
+    { "id": "CE", "label": "Cost Explorer の RI 推奨レポート(主目的は購入コミットの推奨)", "type": "artifact", "priority": "secondary" },
+    { "id": "BUDGET", "label": "AWS Budgets の予算アラート(主目的は予算監視)", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q", "verb": "判断に持ち込む", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "CO", "verb": "出せる", "direction": "one-way", "kind": "flow" },
+    { "from": "CO", "to": "ML", "verb": "分析する", "direction": "one-way", "kind": "sequence" },
+    { "from": "ML", "to": "OUT", "verb": "推奨を出す", "direction": "one-way", "kind": "sequence" },
+    { "from": "ML", "to": "AGENT", "verb": "精度の前提を補う", "direction": "none", "kind": "other" },
+    { "from": "Q", "to": "TA", "verb": "簡易チェックにとどまる", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q", "to": "CE", "verb": "購入コミットの推奨が主目的", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q", "to": "BUDGET", "verb": "予算監視が主目的", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 1つの問いで4サービスをふるい、正解側だけ入力と出力を続けて描く",
+    "対比(目的別の並置): 4サービスを横に並べ、それぞれの主目的をラベルにして違いを見せる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。判断軸は「実測から移行先タイプと削減額まで出せるか」の1点で、その1問に対する各サービスの主目的の違いが落選理由になる。並置の対比でも違いは見えるが、どれが要件に当たるのかは読み手の照合に委ねられてしまう。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Compute Optimizer の対応対象(ASG・EBS・Lambda・ECS on Fargate)は解説にあるが、この問題は EC2 が主題なので図には入れていない。対象範囲を問う問題を足す場合は別図にしたい。",
+    "「エージェント導入は最小限」という要件と、精度向上のための CloudWatch エージェント併用は緊張関係にある。解説どおり併用は任意として注釈に置いたが、図では判断軸に使っていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>実測メトリクスから過剰なタイプ/サイズを特定する<br/>Graviton や新世代への移行候補と削減見込み額まで得る<br/>追加のエージェント導入は最小限にする\"]:::req\n    Q{\"実測メトリクスから<br/>移行先タイプと削減見込み額を<br/>出せるか?\"}:::judge\n    CO[\"AWS Compute Optimizer\"]:::best\n    ML[\"CloudWatch のメトリクス履歴を<br/>機械学習で分析する\"]:::best\n    OUT[\"移行先タイプ・パフォーマンスリスク・削減見込み額を提示する<br/>Graviton など別アーキテクチャの推奨も可能\"]:::best\n    AGENT[\"メモリは既定で取得されない<br/>CloudWatch エージェント併用で推奨精度が上がる\"]:::note\n\n    TA[\"Trusted Advisor の低使用率チェック<br/>簡易チェックが主目的\"]:::alt\n    CE[\"Cost Explorer の RI 推奨レポート<br/>購入コミットの推奨が主目的\"]:::alt\n    BUDGET[\"AWS Budgets の予算アラート<br/>予算監視が主目的\"]:::alt\n\n    REQ --> Q\n    Q -->|\"出せる\"| CO\n    CO --> ML\n    ML --> OUT\n    ML -.- AGENT\n    Q -.->|\"簡易チェック\"| TA\n    Q -.->|\"購入コミット\"| CE\n    Q -.->|\"予算監視\"| BUDGET"
+}

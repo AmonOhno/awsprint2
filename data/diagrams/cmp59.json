@@ -1,0 +1,50 @@
+{
+  "question_id": "cmp59",
+  "purpose": "スポット中断対策の決め手が「どのシグナルを、いつ受け取るか」という時間の問題であることを、中断までの時間軸上で示す。",
+  "audience": "AWS 認定を学習中で、スポットの中断通知は知っているが、リバランス推奨やキャパシティリバランスとの関係が整理できていない人。",
+  "message": "取りこぼしを減らせるのは、2分前の中断通知より早く出るリバランス推奨を受けて代替インスタンスを先行起動し、実質的な猶予を増やす対策だけ。",
+  "source_summary": "EC2 インスタンスリバランス推奨は2分前の中断通知より早いタイミングで発行されるシグナルで、キャパシティリバランスを有効にすると Auto Scaling が事前に代替インスタンスを起動してから旧インスタンスを外せるため、実質的な猶予が増える。スポットの上限価格を上げても現在のスポット価格は市場価格で決まり、キャパシティ不足による中断は防げない。persistent や hibernate は復旧手段であって取りこぼしの予防にはならない。",
+  "elements": [
+    { "id": "REQ", "label": "前提: ステートレス処理。2分前の中断通知を受けて作業を止める実装は済んでいるが取りこぼしが残る", "type": "state", "priority": "primary" },
+    { "id": "REBAL", "label": "EC2 インスタンスリバランス推奨(中断リスク上昇の予兆)", "type": "state", "priority": "primary" },
+    { "id": "CR", "label": "Auto Scaling のキャパシティリバランスを有効にする", "type": "artifact", "priority": "primary" },
+    { "id": "PRELAUNCH", "label": "代替インスタンスを先行起動してから旧インスタンスを外す", "type": "process", "priority": "primary" },
+    { "id": "NOTICE", "label": "中断通知(2分前)= 既存実装が反応している地点", "type": "state", "priority": "secondary" },
+    { "id": "STOP", "label": "中断", "type": "state", "priority": "secondary" },
+    { "id": "GAIN", "label": "実質的な猶予が増え、取りこぼしが減る", "type": "concept", "priority": "primary" },
+    { "id": "PRICE", "label": "上限価格をオンデマンドの2倍にする", "type": "artifact", "priority": "secondary" },
+    { "id": "PERSIST", "label": "persistent 型のスポットリクエストで自動再作成する", "type": "artifact", "priority": "secondary" },
+    { "id": "HIB", "label": "中断動作を hibernate にする", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "REBAL", "verb": "より早いシグナルを使う", "direction": "one-way", "kind": "flow" },
+    { "from": "REBAL", "to": "CR", "verb": "受けて動く", "direction": "one-way", "kind": "sequence" },
+    { "from": "CR", "to": "PRELAUNCH", "verb": "先行起動する", "direction": "one-way", "kind": "sequence" },
+    { "from": "REBAL", "to": "NOTICE", "verb": "その後に2分前の通知が届く", "direction": "one-way", "kind": "sequence" },
+    { "from": "NOTICE", "to": "STOP", "verb": "2分後に中断", "direction": "one-way", "kind": "sequence" },
+    { "from": "PRELAUNCH", "to": "GAIN", "verb": "猶予を増やす", "direction": "one-way", "kind": "cause" },
+    { "from": "REQ", "to": "PRICE", "verb": "キャパシティ不足による中断は防げない", "direction": "one-way", "kind": "contrast" },
+    { "from": "STOP", "to": "PERSIST", "verb": "中断後の復旧手段にとどまる", "direction": "one-way", "kind": "contrast" },
+    { "from": "STOP", "to": "HIB", "verb": "中断後の復旧手段にとどまる", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "中断までの時間軸", "element_ids": ["REBAL", "NOTICE", "STOP"] }
+  ],
+  "candidate_patterns": [
+    "タイムライン: リバランス推奨 → 中断通知(2分前) → 中断 の時間軸に、各対策が効く位置を置く",
+    "分岐(判断フロー): 「予防か復旧か」を問い、4つの選択肢を振り分ける"
+  ],
+  "selected_pattern": "タイムライン。この問題の決め手は対策の種類ではなく発生の順序(通知より早いシグナルがある)なので、時間軸に並べると「なぜ既存実装だけでは足りないか」と「なぜ persistent / hibernate では遅いか」が同じ1枚で読める。判断フローでは早い・遅いという肝心の差が表現できない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "リバランス推奨が中断通知よりどれだけ早いかは解説にも明示がないため、図では時間軸上の前後関係だけを描き、具体的な秒数は書いていない。",
+    "上限価格の案は時間軸上のどこにも乗らない性質の対策(中断そのものを防ごうとする案)なので、前提ノードから分けて置いた。",
+    "先行起動が中断通知より前に完了することは、時間軸上でリバランス推奨が通知より手前にあることで示している。先行起動から通知へ矢印を引くと『先行起動が通知を引き起こす』と誤読されるため、その線は引いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"前提<br/>スポットで動くステートレス処理<br/>2分前の中断通知を受けて作業を止める実装は済んでいる<br/>それでも処理の取りこぼしが残る\"]:::req\n\n    subgraph TL[\"中断までの時間軸\"]\n        REBAL[\"EC2 インスタンスリバランス推奨<br/>中断リスク上昇の予兆・中断通知より早く発行される\"]:::req\n        NOTICE[\"中断通知(2分前)<br/>既存実装が反応している地点\"]:::req\n        STOP[\"中断\"]:::req\n    end\n\n    CR[\"Auto Scaling のキャパシティリバランスを有効にする\"]:::best\n    PRELAUNCH[\"代替インスタンスを先行起動してから<br/>旧インスタンスを外す\"]:::best\n    GAIN[\"実質的な猶予が増え、取りこぼしが減る\"]:::best\n\n    PRICE[\"上限価格をオンデマンドの2倍にする<br/>スポット価格は市場価格で決まり<br/>キャパシティ不足による中断は防げない\"]:::alt\n    PERSIST[\"persistent 型で中断後に自動再作成する<br/>復旧手段であって予防にはならない\"]:::alt\n    HIB[\"中断動作を hibernate にする<br/>復旧手段であって予防にはならない\"]:::alt\n\n    REQ -->|\"より早い信号\"| REBAL\n    REBAL --> CR\n    CR --> PRELAUNCH\n    PRELAUNCH --> GAIN\n    REBAL -->|\"その後2分前\"| NOTICE\n    NOTICE --> STOP\n    REQ -.->|\"中断は防げず\"| PRICE\n    STOP -.->|\"中断後の復旧\"| PERSIST\n    STOP -.->|\"中断後の復旧\"| HIB"
+}
