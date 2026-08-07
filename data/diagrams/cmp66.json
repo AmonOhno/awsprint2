@@ -1,0 +1,46 @@
+{
+  "question_id": "cmp66",
+  "purpose": "エッジ系サービスの選択が「計算資源が物理的にどこに置かれるか」と「常設か一時利用か」の2点で決まることを示し、工場内に長期常設できるのが Outposts だけだと理解させる。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Outposts・Snowball Edge・Local Zones・Wavelength の名前は知っているが設置場所の違いを説明できない人。",
+  "message": "工場内で AWS と同じ API を長期に使いたいなら、計算資源を顧客のデータセンターに常設できるのは Outposts だけで、Local Zones と Wavelength は AWS 側の拠点、Snowball Edge は一時利用向けになる。",
+  "source_summary": "Outposts は AWS が設計・設置・運用する物理ラックを顧客のデータセンターに置き、EC2・EBS・S3 on Outposts・ECS/EKS などを同じ API で実行できるため、長期のオンプレミス常設と AWS 一貫運用の要件に合致する。Snowball Edge は一時的なエッジ処理やデータ移送向け、Local Zones と Wavelength は AWS 側の拠点であり工場内での実行にはならない。",
+  "elements": [
+    { "id": "REQ", "label": "要件: 工場内で AWS と同じ API・ツール、通信は断続的、ローカルで前処理、ラック搭載型を長期リース", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "計算資源を物理的にどこへ置くか", "type": "process", "priority": "primary" },
+    { "id": "OP", "label": "AWS Outposts ラック(EC2/EBS/ECS を同じ API で実行)", "type": "artifact", "priority": "primary" },
+    { "id": "SB", "label": "Snowball Edge Compute Optimized(一時的なエッジ処理・データ移送向け)", "type": "artifact", "priority": "secondary" },
+    { "id": "LZ", "label": "Local Zones(大都市圏に置かれた AWS 側の拠点)", "type": "artifact", "priority": "secondary" },
+    { "id": "WL", "label": "Wavelength Zone(5G ネットワーク内の AWS 側の拠点)", "type": "artifact", "priority": "secondary" },
+    { "id": "AGG", "label": "集約結果のみを親リージョンへ定期送信", "type": "process", "priority": "primary" },
+    { "id": "NOTE", "label": "工場内に置けるかで2つに分かれ、そのうえで長期常設かどうかで分かれる", "type": "other", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "J", "verb": "設置場所を問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "OP", "verb": "顧客の建物内に常設する", "direction": "one-way", "kind": "flow" },
+    { "from": "J", "to": "SB", "verb": "工場内に置けるが一時利用向け", "direction": "one-way", "kind": "contrast" },
+    { "from": "J", "to": "LZ", "verb": "AWS 側の拠点で工場内実行にならない", "direction": "one-way", "kind": "contrast" },
+    { "from": "J", "to": "WL", "verb": "AWS 側の拠点で工場内実行にならない", "direction": "one-way", "kind": "contrast" },
+    { "from": "OP", "to": "AGG", "verb": "前処理した結果を送る", "direction": "one-way", "kind": "flow" },
+    { "from": "J", "to": "NOTE", "verb": "判断の順序を補足する", "direction": "none", "kind": "other" }
+  ],
+  "groups": [
+    { "label": "工場内(お客様の建物)に置けるもの", "element_ids": ["OP", "SB"] },
+    { "label": "AWS 側の拠点にあるもの", "element_ids": ["LZ", "WL"] }
+  ],
+  "candidate_patterns": [
+    "配置マップ(場所による包含): 「工場内」と「AWS 側の拠点」の2枠に4選択肢を配置する",
+    "判断フロー: 「工場内に置けるか」→「長期常設か」を順に問い、4案をふるいにかける"
+  ],
+  "selected_pattern": "配置マップ(場所による包含)。この問題の誤答は「置かれる場所」を取り違えることで起きるので、場所の枠に入れて見せれば理由の文章を読まなくても差が分かる。判断フローでも同じ結論には至るが、場所の違いが線の分岐としてしか残らず、絵の力が弱い。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Snowball Edge は工場内に置ける点で Outposts と同じ枠に入るため、枠の中で緑とグレーが並ぶ。枠だけでは差が出ないので「一時的なエッジ処理・データ移送向け」というラベルで区別している。",
+    "断続的な通信そのもの(オフライン時の挙動)は解説が触れていないため、図では「集約結果のみを定期送信」という問題文の記述の範囲にとどめた。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>工場内で AWS と同じ API・ツールを使う<br/>通信は断続的・データはローカルで前処理<br/>ラック搭載型のハードウェアを長期リースできる\"]:::req\n    J{\"計算資源を<br/>物理的にどこへ置くか?\"}:::judge\n    NOTE[\"工場内に置けるかで分かれ<br/>そのうえで長期常設かどうかで分かれる\"]:::note\n\n    subgraph SITE[\"工場内(お客様の建物)\"]\n        OP[\"AWS Outposts ラック<br/>AWS が設計・設置・運用する物理ラック<br/>EC2 / EBS / S3 on Outposts / ECS・EKS を<br/>同じ API で実行できる\"]:::best\n        SB[\"Snowball Edge Compute Optimized<br/>一時的なエッジ処理・データ移送向け\"]:::alt\n    end\n\n    subgraph AWSSIDE[\"AWS 側の拠点\"]\n        LZ[\"Local Zones<br/>大都市圏に置かれた AWS の拠点\"]:::alt\n        WL[\"Wavelength Zone<br/>通信事業者の 5G ネットワーク内\"]:::alt\n    end\n\n    AGG[\"集約結果のみを親リージョンへ定期送信\"]:::best\n\n    REQ --> J\n    J -->|\"工場内\"| SITE\n    J -.->|\"AWS 拠点\"| AWSSIDE\n    OP --> AGG\n    J -.- NOTE"
+}

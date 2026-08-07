@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 63 問 / 全 400 問
+収録: 73 問 / 全 400 問
 
 ---
 
@@ -3258,3 +3258,523 @@ flowchart TD
 **解説**: ALB は Lambda 関数をターゲットタイプとして直接サポートし、リスナールールのパス条件で特定パスだけを Lambda へルーティングできます。これにより既存のホスト名・証明書・WAF 構成を維持したまま段階移行が可能です。API Gateway の前置や Lambda 関数 URL へのリダイレクトは層が増え、URL やクライアント挙動にも影響します。
 
 **確認事項**: 誤答3案は落ちる理由が同じ(層が増える)なので1ノードにまとめ、図の横幅を抑えた。ただし EC2 リバースプロキシ案だけは解説が個別に論じておらず、要件『追加のプロキシ層を設けない』に正面から反するという理由でまとめている。 / 既定のターゲットグループ(EC2)は移行元として図に残したが、問題文は既存構成の詳細を与えていないため『既定』以上の記述はしていない。
+
+---
+
+## cmp64 — コンピューティング / level 3
+
+**問題**: EC2 の Auto Scaling グループでスケールインが発生する際、最も古い起動設定/テンプレートバージョンのインスタンスから優先的に終了させ、かつ AZ 間の台数バランスを保ちたい。最も適切な設定はどれか?
+
+**正解**: 終了ポリシーに OldestLaunchTemplate を指定する(Auto Scaling は既定で AZ 間のバランスを優先したうえでポリシーを適用する)
+
+**他の選択肢**: 終了ポリシーに OldestInstance を指定し、AZ ごとに別々の Auto Scaling グループを作る / 終了ポリシーに ClosestToNextInstanceHour を指定する / 終了ポリシーを Default のままにし、スケールイン保護を古いインスタンスに付与する
+
+**図解の主メッセージ**: 終了対象は先に AZ の不均衡解消で AZ が絞られ、その中で終了ポリシーが適用されるので、AZ バランスのために構成を分ける必要はなく OldestLaunchTemplate を指定するだけでよい。
+
+**採用パターン**: 直列(2段階の絞り込み)+ 対比。この問題の肝は「AZ バランスとポリシーが競合せず、順番に効く」ことなので、順序を線で見せるのが最短で伝わる。表にすると各ポリシーの基準は並ぶが、AZ バランスが先に効くという肝心の順序が表現できない。(候補: 直列(2段階の絞り込み)+ 対比: AZ 選定 → ポリシー適用の順序を軸に、そこへ乗らない案を横に置く / テーブル: 4つの終了ポリシー × 基準 / 向く目的 の比較表)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>古い起動テンプレートのインスタンスから優先的に終了させたい<br/>AZ 間の台数バランスも保ちたい"]:::req
+    S1["第1段階<br/>不均衡を解消する AZ を選ぶ(Auto Scaling の既定動作)"]:::best
+    S2{"第2段階<br/>その AZ の中で<br/>終了ポリシーを適用"}:::judge
+    OLT["OldestLaunchTemplate<br/>古い起動テンプレート/バージョンのインスタンスを優先終了"]:::best
+    RESULT["AMI 更新後の入れ替えが自然に進む"]:::best
+    NOTE["AZ バランスは既定で先に効くため<br/>指定するのは終了の基準だけでよい"]:::note
+
+    subgraph OTHERS["要件を満たさない終了ポリシー / 構成"]
+        A1["OldestInstance + AZ ごとに別の ASG<br/>基準が起動時刻になり構成も分かれる"]:::alt
+        A2["ClosestToNextInstanceHour<br/>時間課金時代の名残でコスト最適化目的"]:::alt
+        A3["Default のまま + スケールイン保護<br/>保護は終了から除外する設定"]:::alt
+    end
+
+    REQ --> S1
+    S1 --> S2
+    S2 -->|"採用"| OLT
+    OLT --> RESULT
+    S1 -.- NOTE
+    S2 -.->|"要件外"| OTHERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp64.svg`](../../web/diagrams/cmp64.svg)
+
+**解説**: Auto Scaling は終了対象を選ぶ際、まず AZ 間の不均衡を解消する AZ を選び、その中で終了ポリシーを適用します。OldestLaunchTemplate は古い起動テンプレート(またはそのバージョン)のインスタンスを優先終了するため、AMI 更新後の入れ替えを自然に進められます。OldestInstance は起動時刻基準、ClosestToNextInstanceHour は時間課金時代の名残でコスト最適化目的です。
+
+**確認事項**: 選択肢4(Default + スケールイン保護)は解説が個別に論じていない。図では「スケールイン保護は終了から除外する設定」という語義だけを添え、性能や挙動の推測は足していない。 / 解説の「まず AZ 間の不均衡を解消する AZ を選ぶ」を第1段階として図示したが、不均衡がない場合の挙動は解説の範囲外なので描いていない。
+
+---
+
+## cmp65 — コンピューティング / level 3
+
+**問題**: コンテナ化されたステートレス Web アプリを、VPC・ロードバランサー・Auto Scaling の設計を自前で行わずに、GitHub のソースから自動ビルド・デプロイし、HTTPS エンドポイントと自動スケールを最小の運用で得たい。トラフィックがない時間帯のコストも抑えたい。最適なサービスはどれか?
+
+**正解**: AWS App Runner
+
+**他の選択肢**: Amazon ECS on EC2 とキャパシティプロバイダー / Amazon EKS と AWS Load Balancer Controller / AWS Elastic Beanstalk のマルチコンテナ環境
+
+**図解の主メッセージ**: VPC・ロードバランサー・Auto Scaling を自分で設計しないことが要件なら、ビルドから HTTPS・自動スケールまでを引き受けアイドル時は縮退する App Runner が唯一そのまま当てはまる。
+
+**採用パターン**: 判断フロー + 包含。要件が「自前で設計しない」の一点に集約されるので、分岐は1回で足りる。責任分界のレイヤー図は4サービス×4層の格子になり、解説が触れていない層まで塗り分けを迫られるため、書かれていない情報を足さずには描けない。(候補: 判断フロー + 包含: 「基盤の設計を誰が持つか」で分岐し、AWS 側が持つ範囲を枠で囲って見せる / レイヤー(責任分界)図: ビルド / ネットワーク / スケーリング / OS の各層を4サービスで塗り分ける)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>VPC・LB・Auto Scaling を自前で設計しない<br/>GitHub のソースから自動ビルド・デプロイ<br/>HTTPS と自動スケールを最小の運用で<br/>トラフィックがない時間帯のコストも抑えたい"]:::req
+    J{"基盤の設計・運用を<br/>誰が持つか?"}:::judge
+    AR["AWS App Runner"]:::best
+
+    subgraph MANAGED["App Runner が引き受ける範囲"]
+        BUILD["ソース/イメージから自動ビルド・デプロイ"]:::best
+        SERVE["HTTPS エンドポイント・自動スケール・ロードバランシング"]:::best
+        IDLE["アイドル時はコンピュートを縮退<br/>プロビジョニング済みメモリの低額課金のみ"]:::best
+    end
+
+    subgraph SELF["自分で設計・運用が残る選択肢"]
+        ECS["ECS on EC2 + キャパシティプロバイダー<br/>ネットワークとスケーリングの設計が必要"]:::alt
+        EKS["EKS + AWS Load Balancer Controller<br/>ネットワークとスケーリングの設計が必要"]:::alt
+        EB["Elastic Beanstalk のマルチコンテナ環境<br/>EC2 基盤の管理が残る"]:::alt
+    end
+
+    REQ --> J
+    J -->|"AWS 側"| AR
+    AR --> MANAGED
+    J -.->|"自分側"| SELF
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp65.svg`](../../web/diagrams/cmp65.svg)
+
+**解説**: App Runner はソースコードまたはコンテナイメージから自動でビルド・デプロイし、HTTPS エンドポイント・自動スケール・ロードバランシングをフルマネージドで提供します。アイドル時はコンピュートを縮退させプロビジョニング済みメモリの低額課金のみになるため、断続的トラフィックのコストも抑えられます。ECS/EKS は自由度が高い反面ネットワークやスケーリングの設計・運用が必要で、Beanstalk は EC2 基盤の管理が残ります。
+
+**確認事項**: ECS と EKS は解説がまとめて「ネットワークやスケーリングの設計・運用が必要」と論じているため、図でも同じ枠に並べて理由を1つにまとめた。 / GitHub 連携は解説が「ソースコードまたはコンテナイメージから」としか述べていないため、図でも接続方式(リポジトリ連携の具体手順)には踏み込んでいない。
+
+---
+
+## cmp66 — コンピューティング / level 3
+
+**問題**: 工場内で稼働する検査アプリを、通信が断続的なオンプレミス環境で AWS と同じ API・ツールで動かしたい。データはローカルで前処理し、集約結果のみを定期的に AWS へ送りたい。ラック搭載型のハードウェアを長期リースできる。最適な選択肢はどれか?
+
+**正解**: AWS Outposts ラックを設置し、ローカルで EC2/EBS/ECS を実行して結果を親リージョンへ送信する
+
+**他の選択肢**: AWS Snowball Edge Compute Optimized を継続的に借り続けて運用する / Local Zones にワークロードを配置し、工場から VPN で接続する / Wavelength Zone に配置し、5G ネットワーク経由で接続する
+
+**図解の主メッセージ**: 工場内で AWS と同じ API を長期に使いたいなら、計算資源を顧客のデータセンターに常設できるのは Outposts だけで、Local Zones と Wavelength は AWS 側の拠点、Snowball Edge は一時利用向けになる。
+
+**採用パターン**: 配置マップ(場所による包含)。この問題の誤答は「置かれる場所」を取り違えることで起きるので、場所の枠に入れて見せれば理由の文章を読まなくても差が分かる。判断フローでも同じ結論には至るが、場所の違いが線の分岐としてしか残らず、絵の力が弱い。(候補: 配置マップ(場所による包含): 「工場内」と「AWS 側の拠点」の2枠に4選択肢を配置する / 判断フロー: 「工場内に置けるか」→「長期常設か」を順に問い、4案をふるいにかける)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>工場内で AWS と同じ API・ツールを使う<br/>通信は断続的・データはローカルで前処理<br/>ラック搭載型のハードウェアを長期リースできる"]:::req
+    J{"計算資源を<br/>物理的にどこへ置くか?"}:::judge
+    NOTE["工場内に置けるかで分かれ<br/>そのうえで長期常設かどうかで分かれる"]:::note
+
+    subgraph SITE["工場内(お客様の建物)"]
+        OP["AWS Outposts ラック<br/>AWS が設計・設置・運用する物理ラック<br/>EC2 / EBS / S3 on Outposts / ECS・EKS を<br/>同じ API で実行できる"]:::best
+        SB["Snowball Edge Compute Optimized<br/>一時的なエッジ処理・データ移送向け"]:::alt
+    end
+
+    subgraph AWSSIDE["AWS 側の拠点"]
+        LZ["Local Zones<br/>大都市圏に置かれた AWS の拠点"]:::alt
+        WL["Wavelength Zone<br/>通信事業者の 5G ネットワーク内"]:::alt
+    end
+
+    AGG["集約結果のみを親リージョンへ定期送信"]:::best
+
+    REQ --> J
+    J -->|"工場内"| SITE
+    J -.->|"AWS 拠点"| AWSSIDE
+    OP --> AGG
+    J -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp66.svg`](../../web/diagrams/cmp66.svg)
+
+**解説**: Outposts は AWS が設計・設置・運用する物理ラックを顧客のデータセンターに置き、EC2・EBS・S3 on Outposts・ECS/EKS などを同じ API で実行できるため、長期のオンプレミス常設と AWS 一貫運用の要件に合致します。Snowball Edge は一時的なエッジ処理やデータ移送向け、Local Zones と Wavelength は AWS 側の拠点であり工場内での実行にはなりません。
+
+**確認事項**: Snowball Edge は工場内に置ける点で Outposts と同じ枠に入るため、枠の中で緑とグレーが並ぶ。枠だけでは差が出ないので「一時的なエッジ処理・データ移送向け」というラベルで区別している。 / 断続的な通信そのもの(オフライン時の挙動)は解説が触れていないため、図では「集約結果のみを定期送信」という問題文の記述の範囲にとどめた。
+
+---
+
+## cmp67 — コンピューティング / level 3
+
+**問題**: リアルタイム性が重要なマルチプレイヤーゲームで、特定都市のユーザーに対して一桁ミリ秒のレイテンシーが求められる。ゲームサーバーは EC2 上で動作し、同一 VPC 内の他リソースとも通信する。最も適切な配置はどれか?
+
+**正解**: 対象都市の AWS Local Zone にサブネットを拡張し、そこにゲームサーバーの EC2 を配置する
+
+**他の選択肢**: 対象都市に最も近いリージョンの複数 AZ にゲームサーバーを分散配置する / CloudFront のエッジロケーションに Lambda@Edge としてゲームロジックを配置する / Global Accelerator を有効化し、最寄りのエッジからリージョンへ最適化された経路で接続する
+
+**図解の主メッセージ**: 一桁ミリ秒が要る EC2 のゲームサーバーは、親リージョンの VPC を都市へ拡張できる Local Zone に置くしかなく、AZ 分散や経路最適化では物理距離が残る。
+
+**採用パターン**: 判断フロー(1問での分岐)。誤答3案は落ちる理由が「物理距離が残る」「用途が違う」と別種なので、枠に入れて位置だけで語らせるより、分岐の先に理由を1行ずつ添える方が誤読が少ない。配置マップは Global Accelerator のように場所ではなく経路の話である案をどこに置くか決められない。(候補: 判断フロー(1問での分岐): 「EC2 本体を対象都市に置けるか」で分け、置けない案の残る要因を並べる / 配置マップ: 都市とリージョンを2枠に描き、各案の処理がどちらで走るかを配置で見せる)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>特定都市のユーザーに一桁ミリ秒のレイテンシー<br/>ゲームサーバーは EC2 上で動作<br/>同一 VPC 内の他リソースとも通信する"]:::req
+    J{"ゲームサーバーの EC2 を<br/>対象都市に置けるか?"}:::judge
+    LZ["対象都市の AWS Local Zone<br/>リージョンの一部として大都市圏に配置"]:::best
+    SUBNET["親リージョンの VPC を拡張してサブネットを作る"]:::best
+    EC2["ゲームサーバーの EC2<br/>同一 VPC のまま都市内で動く"]:::best
+    RESULT["対象都市のユーザーに一桁ミリ秒"]:::best
+
+    subgraph OTHERS["サーバー本体を都市に置けない案"]
+        AZ["最寄りリージョンの複数 AZ に分散<br/>リージョン所在地までの物理距離が残る"]:::alt
+        GA["Global Accelerator<br/>経路最適化には有効だが物理距離は解消できない"]:::alt
+        LE["Lambda@Edge<br/>短時間の HTTP 処理向け<br/>ゲームサーバーには不適"]:::alt
+    end
+
+    REQ --> J
+    J -->|"置ける"| LZ
+    LZ --> SUBNET
+    SUBNET --> EC2
+    EC2 --> RESULT
+    J -.->|"置けない"| OTHERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/cmp67.svg`](../../web/diagrams/cmp67.svg)
+
+**解説**: Local Zones はリージョンの一部として大都市圏に配置されたインフラで、親リージョンの VPC を拡張してサブネットを作れるため、その都市のエンドユーザーに一桁ミリ秒のレイテンシーで EC2 を提供できます。AZ 分散はリージョン所在地までの物理距離が残り、Lambda@Edge は短時間の HTTP 処理向けでゲームサーバーには不適です。Global Accelerator は経路最適化に有効ですが、物理距離由来のレイテンシーは解消できません。
+
+**確認事項**: 「同一 VPC 内の他リソースとも通信する」という条件は、Local Zone が VPC の拡張である点と結び付く。図では VPC 拡張のノードで表しているが、他リソースとの通信経路そのものは解説の範囲外なので描いていない。 / Global Accelerator は経路最適化として有効という解説の評価を残すため、ラベルを「有効だが距離は残る」の形にして全否定に見えないようにした。
+
+---
+
+## db01 — データベース / level 1
+
+**問題**: RDS のマルチ AZ 配置とリードレプリカの目的の違いとして正しいのはどれか?
+
+**正解**: マルチ AZ は高可用性(自動フェイルオーバー)、リードレプリカは読み取り性能のスケーリングが目的
+
+**他の選択肢**: マルチ AZ は読み取り性能向上、リードレプリカは障害対策が目的 / どちらも読み取り性能向上のための機能で違いはない / リードレプリカは同期レプリケーション、マルチ AZ は非同期レプリケーションを使う
+
+**図解の主メッセージ**: 複製先を読み取りに使えないマルチ AZ は可用性のための機能、読み取りを分散できるリードレプリカは性能スケールのための機能で、同期/非同期の違いもこの目的の違いから来る。
+
+**採用パターン**: 分岐 + 対比。表でも同じ情報は並ぶが、この問題の誤答は「どちらがどちらか」の取り違えなので、1つの判断から2列が生まれる形にすると、読み取り可否という起点から目的が決まることまで一目で追える。(候補: 分岐 + 対比: 「複製先を読めるか」で2列に分け、各列に方式・目的・範囲を積む / テーブル: 2機能 × レプリケーション方式 / 読み取り可否 / 目的 / 作成範囲 の比較表)
+
+```mermaid
+flowchart TD
+    REQ["問い<br/>マルチ AZ 配置とリードレプリカ<br/>目的の違いは?"]:::req
+    J{"複製先を<br/>読み取りに使えるか?"}:::judge
+    NOTE["可用性ならマルチ AZ<br/>読み取りスケールなら<br/>リードレプリカ"]:::note
+
+    subgraph HA["マルチ AZ = 高可用性"]
+        M1["別 AZ のスタンバイへ同期レプリケーション"]:::best
+        M2["障害時に自動フェイルオーバー"]:::best
+        M3["スタンバイは読み取り不可"]:::best
+        M1 --> M2 --> M3
+    end
+
+    subgraph SCALE["リードレプリカ = 読み取りスケール"]
+        R1["非同期レプリケーション"]:::best
+        R2["読み取りトラフィックを分散"]:::best
+        R3["別リージョンにも作成できる"]:::best
+        R1 --> R2 --> R3
+    end
+
+    TRAP["誤答の型<br/>マルチ AZ を読み取り向上と読む<br/>リードレプリカを同期と読む"]:::alt
+
+    REQ -.- NOTE
+    REQ --> J
+    J -->|"使えない"| HA
+    J -->|"使える"| SCALE
+    HA -.->|"逆転が誤答"| TRAP
+    SCALE -.-> TRAP
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db01.svg`](../../web/diagrams/db01.svg)
+
+**解説**: マルチ AZ は同期レプリケーションのスタンバイを別 AZ に持ち、障害時に自動フェイルオーバーします(スタンバイは読み取り不可)。リードレプリカは非同期レプリケーションで読み取りトラフィックを分散します(別リージョンにも作成可)。「可用性ならマルチ AZ、読み取りスケールならリードレプリカ」と覚えます。
+
+**確認事項**: 正解は「両者の違いの記述」そのものなので、2列とも正解につながる要素(緑)にしてある。グレーは誤答の型(目的と方式の入れ替え)を1ノードにまとめて表した。 / 「同期しているから切り替えられる」という順序は解説が明示していない。図では M1→M2 を流れとして描いているが、これは同じ文に並記された2つの性質であり、因果の強さは主張していない。
+
+---
+
+## db02 — データベース / level 1
+
+**問題**: ミリ秒未満の応答が必要な、キーバリュー型の大規模セッションデータストアが必要。スキーマは柔軟でサーバー管理はしたくない。最適なサービスはどれか?
+
+**正解**: Amazon DynamoDB
+
+**他の選択肢**: Amazon RDS for MySQL / Amazon Redshift / Amazon Neptune
+
+**図解の主メッセージ**: ミリ秒未満・キーバリュー・柔軟なスキーマ・サーバー管理なしという4つの要件が同時に重なる先はフルマネージド NoSQL の DynamoDB だけで、他の3つは用途そのものが違う。
+
+**採用パターン**: 合流(要件の収束)。「4つの要件が全部そろって初めて DynamoDB に決まる」という構造が線の集まりでそのまま見える。マトリクスは 16 マスの充足を埋める必要があり、解説が個別に述べていないマス(RDS の応答速度など)まで断定することになる。(候補: 合流(要件の収束): 4つの要件を1点に集め、そこから正解サービスへ伸ばす / マトリクス: 4サービス × 4要件の充足表で塗り分ける)
+
+```mermaid
+flowchart TD
+    subgraph REQS["同時に満たすべき要件"]
+        R1["ミリ秒未満の応答"]:::req
+        R2["キーバリュー型・柔軟なスキーマ"]:::req
+        R3["大規模なセッションデータストア"]:::req
+        R4["サーバー管理をしたくない"]:::req
+    end
+
+    J{"4つを同時に<br/>満たすのは?"}:::judge
+    DDB["Amazon DynamoDB<br/>フルマネージドの NoSQL<br/>キーバリュー / ドキュメント"]:::best
+    F1["1 桁ミリ秒の応答"]:::best
+    F2["自動スケーリングでサーバー管理が不要"]:::best
+
+    subgraph OTHERS["用途が違うサービス"]
+        RDS["RDS for MySQL<br/>リレーショナル DB<br/>スキーマ定義とインスタンス管理"]:::alt
+        RS["Redshift<br/>分析用データウェアハウス"]:::alt
+        NEP["Neptune<br/>グラフ DB"]:::alt
+    end
+
+    R1 --> J
+    R2 --> J
+    R3 --> J
+    R4 --> J
+    J -->|"満たす"| DDB
+    DDB --> F1
+    DDB --> F2
+    J -.->|"用途が別"| OTHERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db02.svg`](../../web/diagrams/db02.svg)
+
+**解説**: DynamoDB はフルマネージドの NoSQL(キーバリュー/ドキュメント)データベースで、1 桁ミリ秒の応答と自動スケーリングが特徴です。「NoSQL」「キーバリュー」「サーバーレス」「無制限にスケール」がキーワードです。Redshift は分析用データウェアハウス、Neptune はグラフ DB で用途が異なります。
+
+**確認事項**: RDS for MySQL について解説は個別に論じていない。図では「リレーショナル DB(スキーマ定義とインスタンス管理が伴う)」という語義の範囲にとどめ、性能面の優劣は書いていない。 / 問題文の「ミリ秒未満」と解説の「1 桁ミリ秒」は表現が異なる。図では要件側を問題文、サービスの特徴側を解説の表現のまま併記している。
+
+---
+
+## db03 — データベース / level 2
+
+**問題**: RDS データベースへの読み取りクエリが特定の同じデータに集中し、レイテンシが問題になっている。マイクロ秒単位の応答を実現するために追加すべきものはどれか?
+
+**正解**: Amazon ElastiCache(Redis/Memcached)によるキャッシュ層
+
+**他の選択肢**: RDS インスタンスの垂直スケールアップ / S3 へのデータエクスポート / AWS Backup による定期バックアップ
+
+**図解の主メッセージ**: 読み取りが同じデータに集中しているなら、DB の手前にインメモリの ElastiCache を挟むことでマイクロ秒の応答が得られ、同時に DB 負荷も下がる。
+
+**採用パターン**: 構成図(直列 + 分岐)。「手前に1層足す」という解答そのものが構成の絵で、経路を見れば速くなる理由と DB 負荷が下がる理由が同時に読める。判断フローだと結論は出せるが、なぜ両方の効果が同時に得られるかが線として残らない。(候補: 構成図(直列 + 分岐): アプリ → キャッシュ → ミス時のみ DB という読み取り経路をそのまま描く / 判断フロー: 「マイクロ秒が要るか」「同じデータか」を順に問い、4案をふるいにかける)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>読み取りが特定の同じデータに集中<br/>マイクロ秒単位の応答が必要"]:::req
+    APP["アプリケーション"]:::svc
+    EC["Amazon ElastiCache(Redis/Memcached)<br/>インメモリのキャッシュ層"]:::best
+    HIT["ヒット時はマイクロ秒単位で応答"]:::best
+    RDS["RDS(元データ)"]:::svc
+    LOAD["読み取りを肩代わりするため DB 負荷も大幅に下がる"]:::best
+    NOTE["セッション共有やランキング<br/>(Sorted Set)が要るなら Redis"]:::note
+
+    subgraph OTHERS["マイクロ秒の応答をもたらさない案"]
+        UP["RDS インスタンスの垂直スケールアップ"]:::alt
+        S3["S3 へのデータエクスポート"]:::alt
+        BK["AWS Backup による定期バックアップ"]:::alt
+    end
+
+    REQ --> APP
+    APP --> EC
+    EC -->|"ヒット"| HIT
+    EC -.->|"ミス時のみ"| RDS
+    EC --> LOAD
+    EC -.- NOTE
+    REQ -.->|"要件外"| OTHERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db03.svg`](../../web/diagrams/db03.svg)
+
+**解説**: 同じデータへの読み取りが集中する場合、ElastiCache をキャッシュ層として追加するのが定石です。インメモリのためマイクロ秒単位の応答が可能で、DB 負荷も大幅に下がります。「マイクロ秒」「キャッシュ」がキーワードなら ElastiCache、セッション共有やランキング(Sorted Set)なら Redis を選びます。
+
+**確認事項**: 誤答3案は落ちる理由が同じ(マイクロ秒の応答をもたらさない)なので枠のラベルに一度だけ書き、各案には理由を重ねていない。垂直スケールアップが無効である程度は解説が数値で述べていないため、図でも比較値は出していない。 / キャッシュミス時の書き戻し方(Cache-Aside など)は解説の範囲外なので、図では「ミス時のみ」の線までにとどめた。
+
+---
+
+## db04 — データベース / level 2
+
+**問題**: Aurora の特徴として正しい説明はどれか?
+
+**正解**: データは 3 つの AZ に 6 つのコピーが自動保存され、MySQL 互換で最大 5 倍のスループットを謳う
+
+**他の選択肢**: データは単一 AZ にのみ保存されるため、スナップショットが必須 / Oracle と SQL Server のみ互換性がある / ストレージは事前にプロビジョニングした容量から拡張できない
+
+**図解の主メッセージ**: Aurora はストレージ層が 3 AZ に 6 コピーを自動レプリケーションして自動拡張する作りなので、単一 AZ・容量固定・Oracle/SQL Server 互換という記述はいずれもこの構造と両立しない。
+
+**採用パターン**: レイヤー(層の分離)図。誤答3つはすべて「ストレージ層の作り」か「互換性」のどちらかに反しており、層を描いておくとどの層に反するかが線でたどれる。表だと4行の正誤が並ぶだけで、Aurora の構造そのものが頭に残らない。(候補: レイヤー(層の分離)図: コンピュート層とストレージ層を積み、各層の性質から正誤を判定する / テーブル: 4つの記述 × 正誤 / 根拠 の一覧表)
+
+```mermaid
+flowchart TD
+    REQ["問い<br/>Aurora の特徴として<br/>正しい説明はどれか"]:::req
+
+    subgraph AUR["Aurora のアーキテクチャ(層が分離)"]
+        C["コンピュート層<br/>MySQL/PostgreSQL 互換<br/>最大 15 個のリードレプリカ・高速フェイルオーバー"]:::best
+        S["ストレージ層<br/>3 AZ × 2 = 6 コピーに自動レプリケーション<br/>10GB 単位で最大 128TB まで自動拡張"]:::best
+        C -->|"読み書き"| S
+    end
+
+    ANS["正解の記述<br/>3 AZ に 6 コピーが自動保存され<br/>MySQL 互換で最大 5 倍のスループットを謳う"]:::best
+    SV["Aurora Serverless(オンデマンド自動スケール)も選べる"]:::note
+
+    subgraph WRONG["この構造と矛盾するため誤り"]
+        W1["単一 AZ にのみ保存<br/>スナップショットが必須"]:::alt
+        W2["Oracle と SQL Server のみ互換性がある"]:::alt
+        W3["事前にプロビジョニングした容量から拡張できない"]:::alt
+    end
+
+    REQ --> AUR
+    S --> ANS
+    AUR -.- SV
+    AUR -.-> WRONG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db04.svg`](../../web/diagrams/db04.svg)
+
+**解説**: Aurora は MySQL/PostgreSQL 互換のクラウドネイティブ RDB で、ストレージ層が 3AZ×2 の 6 コピーに自動レプリケーションされ、10GB 単位で最大 128TB まで自動拡張します。最大 15 個のリードレプリカ、高速フェイルオーバー、Aurora Serverless(オンデマンド自動スケール)も特徴です。
+
+**確認事項**: 「最大 5 倍のスループット」は選択肢の文言であり、解説は数値の根拠を述べていない。図でも選択肢どおり『謳う』の形で引用し、性能の断定はしていない。 / 誤答のグレー枠は「実在するが要件を満たさない選択肢」ではなく『事実として誤った記述』である。この問題は構成選択ではなく知識確認型のため、共通スタイルのグレー(非最適)を誤りの意味に転用している。
+
+---
+
+## db05 — データベース / level 2
+
+**問題**: DynamoDB テーブルの項目が変更されたことをトリガーに、リアルタイムで Lambda 関数を実行したい。何を使うべきか?
+
+**正解**: DynamoDB Streams
+
+**他の選択肢**: DynamoDB Accelerator(DAX) / DynamoDB グローバルテーブル / ポイントインタイムリカバリ(PITR)
+
+**図解の主メッセージ**: 変更をイベントとして時系列に流せるのは DynamoDB Streams だけで、DAX・グローバルテーブル・PITR は読み取り高速化・複製・復元の機能でありトリガーの経路を持たない。
+
+**採用パターン**: 直列(イベントの流れ)+ 対比。要件が「変更が Lambda に届く」ことなので、届く線が1本引けるかどうかが判断そのものになる。分類図でも正解には至るが、『経路がある/ない』という肝心の差が言葉の分類でしか表せない。(候補: 直列(イベントの流れ)+ 対比: テーブル → Streams → Lambda の経路を描き、経路を持たない機能を並べる / 分類(階層): DynamoDB の付随機能を「高速化 / 複製 / 復元 / 変更配信」に分ける)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>テーブルの項目が変更されたことをトリガーに<br/>リアルタイムで Lambda 関数を実行したい"]:::req
+    TBL["DynamoDB テーブル"]:::svc
+    ST["DynamoDB Streams<br/>変更(作成・更新・削除)を時系列にキャプチャ"]:::best
+    ES["Lambda のイベントソースとして設定"]:::best
+    FN["Lambda 関数がほぼリアルタイムに起動"]:::best
+
+    subgraph OTHERS["変更をイベントとして配信する経路を持たない機能"]
+        DAX["DAX<br/>読み取りキャッシュ"]:::alt
+        GT["グローバルテーブル<br/>マルチリージョンレプリケーション"]:::alt
+        PITR["PITR<br/>ポイントインタイムリカバリ<br/>復元のための機能"]:::alt
+    end
+
+    REQ --> TBL
+    TBL -->|"変更発生"| ST
+    ST --> ES
+    ES --> FN
+    REQ -.->|"用途が別"| OTHERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db05.svg`](../../web/diagrams/db05.svg)
+
+**解説**: DynamoDB Streams はテーブルへの変更(作成・更新・削除)を時系列にキャプチャし、Lambda のイベントソースとして設定することでほぼリアルタイムに処理を起動できます。DAX は読み取りキャッシュ、グローバルテーブルはマルチリージョンレプリケーション、PITR は復元機能で、いずれもトリガー用途ではありません。
+
+**確認事項**: 解説の「ほぼリアルタイム」をそのまま使い、遅延の数値は書いていない(解説にないため)。 / Streams からの起動はイベントソースマッピングによるポーリング型だが、解説は『イベントソースとして設定する』としか述べていないため、図もその粒度に合わせている。
+
+---
+
+## db06 — データベース / level 1
+
+**問題**: RDS のマルチ AZ 配置の主目的として正しいものはどれか?
+
+**正解**: 高可用性(同期レプリケーションと自動フェイルオーバー)
+
+**他の選択肢**: 読み取り性能のスケールアウト / ストレージコストの削減 / リージョン間のデータ複製
+
+**図解の主メッセージ**: マルチ AZ は別 AZ のスタンバイへ同期レプリケーションし障害時に自動フェイルオーバーする構成で、スタンバイは読み取りにも使えないため主目的は可用性に限られる。
+
+**採用パターン**: 構成図の2状態(通常時 / 障害時)。主目的が可用性であることは、障害が起きたときに何が起きるかを見せるのが最も直接的。リードレプリカとの2列対比は db01 で扱っており、同じ絵を繰り返すより「スタンバイが昇格する」動きを見せた方がこの問題の引っかけに効く。(候補: 構成図の2状態(通常時 / 障害時): 同じ構成が障害でどう変わるかを2枠で並べる / 対比: マルチ AZ とリードレプリカを2列に並べて目的を書き分ける)
+
+```mermaid
+flowchart TD
+    REQ["問い<br/>RDS のマルチ AZ 配置の主目的は?"]:::req
+
+    subgraph NORMAL["通常時"]
+        direction TB
+        P["プライマリ(別 AZ の一方)"]:::svc
+        SB["スタンバイ(別 AZ)<br/>読み取りにも使えない"]:::svc
+        P -->|"同期複製"| SB
+    end
+
+    subgraph FAILOVER["障害時"]
+        direction TB
+        DNS["DNS 切り替えで自動フェイルオーバー<br/>通常 1〜2 分"]:::best
+        NEW["スタンバイが新しいプライマリになる"]:::best
+        DNS --> NEW
+    end
+
+    ANS["主目的 = 高可用性<br/>同期レプリケーションと自動フェイルオーバー"]:::best
+    TRAP["最頻出の引っかけ<br/>スタンバイは読み取りにも使えない(リードレプリカとは別物)"]:::note
+
+    subgraph OTHERS["主目的ではないもの"]
+        W1["読み取り性能のスケールアウト<br/>リードレプリカの役割"]:::alt
+        W2["ストレージコストの削減"]:::alt
+        W3["リージョン間のデータ複製"]:::alt
+    end
+
+    REQ --> NORMAL
+    NORMAL -->|"AZ 障害"| FAILOVER
+    FAILOVER --> ANS
+    SB -.- TRAP
+    REQ -.->|"目的が別"| OTHERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db06.svg`](../../web/diagrams/db06.svg)
+
+**解説**: マルチ AZ は別 AZ のスタンバイへ同期レプリケーションを行い、障害時に DNS 切り替えで自動フェイルオーバー(通常 1〜2 分)します。スタンバイは読み取りにも使えない(リードレプリカとは別物)点が最頻出の引っかけです。「マルチ AZ = 可用性、リードレプリカ = 読み取りスケール」と必ず区別します。
+
+**確認事項**: db01 と同じ知識を扱うが、あちらは「リードレプリカとの違い」、こちらは「主目的の確認」が問われている。図を意図的に別パターン(2状態の構成図)にして、復習時に同じ絵の繰り返しにならないようにした。 / AZ 名(AZ-a / AZ-b)は説明のための仮名で、問題文・解説には出てこない。別 AZ であることを示す以上の意味は持たせていない。

@@ -1,0 +1,52 @@
+{
+  "question_id": "db02",
+  "purpose": "4つの要件がすべて同じサービスを指していることを合流の形で示し、DynamoDB がキーワードの重なりで選ばれることを理解させる。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、データベースサービスの名前は知っているが、要件語からサービスを引き当てる練習が足りていない人。",
+  "message": "ミリ秒未満・キーバリュー・柔軟なスキーマ・サーバー管理なしという4つの要件が同時に重なる先はフルマネージド NoSQL の DynamoDB だけで、他の3つは用途そのものが違う。",
+  "source_summary": "DynamoDB はフルマネージドの NoSQL(キーバリュー/ドキュメント)データベースで、1 桁ミリ秒の応答と自動スケーリングが特徴。「NoSQL」「キーバリュー」「サーバーレス」「無制限にスケール」がキーワード。Redshift は分析用データウェアハウス、Neptune はグラフ DB で用途が異なる。",
+  "elements": [
+    { "id": "R1", "label": "要件: ミリ秒未満の応答", "type": "state", "priority": "primary" },
+    { "id": "R2", "label": "要件: キーバリュー型・柔軟なスキーマ", "type": "state", "priority": "primary" },
+    { "id": "R3", "label": "要件: 大規模なセッションデータストア", "type": "state", "priority": "primary" },
+    { "id": "R4", "label": "要件: サーバー管理をしたくない", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "4つを同時に満たすサービスはどれか", "type": "process", "priority": "primary" },
+    { "id": "DDB", "label": "Amazon DynamoDB(フルマネージド NoSQL)", "type": "artifact", "priority": "primary" },
+    { "id": "F1", "label": "1 桁ミリ秒の応答", "type": "concept", "priority": "primary" },
+    { "id": "F2", "label": "キーバリュー / ドキュメントで自動スケーリング", "type": "concept", "priority": "primary" },
+    { "id": "RDS", "label": "RDS for MySQL(リレーショナル DB)", "type": "artifact", "priority": "secondary" },
+    { "id": "RS", "label": "Redshift(分析用データウェアハウス)", "type": "artifact", "priority": "secondary" },
+    { "id": "NEP", "label": "Neptune(グラフ DB)", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "R1", "to": "J", "verb": "応答速度を要求する", "direction": "one-way", "kind": "flow" },
+    { "from": "R2", "to": "J", "verb": "データモデルを要求する", "direction": "one-way", "kind": "flow" },
+    { "from": "R3", "to": "J", "verb": "規模を要求する", "direction": "one-way", "kind": "flow" },
+    { "from": "R4", "to": "J", "verb": "運用形態を要求する", "direction": "one-way", "kind": "flow" },
+    { "from": "J", "to": "DDB", "verb": "すべて満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "DDB", "to": "F1", "verb": "応答速度で満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "DDB", "to": "F2", "verb": "モデルと拡張性で満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "J", "to": "RDS", "verb": "スキーマ定義とインスタンス管理が伴う", "direction": "one-way", "kind": "contrast" },
+    { "from": "J", "to": "RS", "verb": "分析用途で目的が違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "J", "to": "NEP", "verb": "グラフ用途で目的が違う", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "同時に満たすべき要件", "element_ids": ["R1", "R2", "R3", "R4"] },
+    { "label": "用途が違うサービス", "element_ids": ["RDS", "RS", "NEP"] }
+  ],
+  "candidate_patterns": [
+    "合流(要件の収束): 4つの要件を1点に集め、そこから正解サービスへ伸ばす",
+    "マトリクス: 4サービス × 4要件の充足表で塗り分ける"
+  ],
+  "selected_pattern": "合流(要件の収束)。「4つの要件が全部そろって初めて DynamoDB に決まる」という構造が線の集まりでそのまま見える。マトリクスは 16 マスの充足を埋める必要があり、解説が個別に述べていないマス(RDS の応答速度など)まで断定することになる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "RDS for MySQL について解説は個別に論じていない。図では「リレーショナル DB(スキーマ定義とインスタンス管理が伴う)」という語義の範囲にとどめ、性能面の優劣は書いていない。",
+    "問題文の「ミリ秒未満」と解説の「1 桁ミリ秒」は表現が異なる。図では要件側を問題文、サービスの特徴側を解説の表現のまま併記している。"
+  ],
+  "mermaid": "flowchart TD\n    subgraph REQS[\"同時に満たすべき要件\"]\n        R1[\"ミリ秒未満の応答\"]:::req\n        R2[\"キーバリュー型・柔軟なスキーマ\"]:::req\n        R3[\"大規模なセッションデータストア\"]:::req\n        R4[\"サーバー管理をしたくない\"]:::req\n    end\n\n    J{\"4つを同時に<br/>満たすのは?\"}:::judge\n    DDB[\"Amazon DynamoDB<br/>フルマネージドの NoSQL<br/>キーバリュー / ドキュメント\"]:::best\n    F1[\"1 桁ミリ秒の応答\"]:::best\n    F2[\"自動スケーリングでサーバー管理が不要\"]:::best\n\n    subgraph OTHERS[\"用途が違うサービス\"]\n        RDS[\"RDS for MySQL<br/>リレーショナル DB<br/>スキーマ定義とインスタンス管理\"]:::alt\n        RS[\"Redshift<br/>分析用データウェアハウス\"]:::alt\n        NEP[\"Neptune<br/>グラフ DB\"]:::alt\n    end\n\n    R1 --> J\n    R2 --> J\n    R3 --> J\n    R4 --> J\n    J -->|\"満たす\"| DDB\n    DDB --> F1\n    DDB --> F2\n    J -.->|\"用途が別\"| OTHERS"
+}

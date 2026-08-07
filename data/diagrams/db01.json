@@ -1,0 +1,50 @@
+{
+  "question_id": "db01",
+  "purpose": "マルチ AZ とリードレプリカの違いが「複製先を読み取りに使えるか」という一点から派生することを示し、目的の取り違えを防ぐ。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、両者の名前は知っているが目的とレプリケーション方式の対応を混同する人。",
+  "message": "複製先を読み取りに使えないマルチ AZ は可用性のための機能、読み取りを分散できるリードレプリカは性能スケールのための機能で、同期/非同期の違いもこの目的の違いから来る。",
+  "source_summary": "マルチ AZ は同期レプリケーションのスタンバイを別 AZ に持ち、障害時に自動フェイルオーバーする(スタンバイは読み取り不可)。リードレプリカは非同期レプリケーションで読み取りトラフィックを分散する(別リージョンにも作成可)。「可用性ならマルチ AZ、読み取りスケールならリードレプリカ」と覚える。",
+  "elements": [
+    { "id": "REQ", "label": "問い: マルチ AZ 配置とリードレプリカの目的の違い", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "複製先を読み取りに使えるか", "type": "process", "priority": "primary" },
+    { "id": "M1", "label": "別 AZ のスタンバイへ同期レプリケーション", "type": "process", "priority": "primary" },
+    { "id": "M2", "label": "障害時に自動フェイルオーバー", "type": "process", "priority": "primary" },
+    { "id": "M3", "label": "スタンバイは読み取り不可", "type": "state", "priority": "primary" },
+    { "id": "R1", "label": "非同期レプリケーション", "type": "process", "priority": "primary" },
+    { "id": "R2", "label": "読み取りトラフィックを分散", "type": "process", "priority": "primary" },
+    { "id": "R3", "label": "別リージョンにも作成可", "type": "state", "priority": "primary" },
+    { "id": "TRAP", "label": "目的とレプリケーション方式を入れ替えた記述(誤答)", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "可用性ならマルチ AZ、読み取りスケールならリードレプリカ", "type": "other", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "J", "verb": "違いの起点を問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "M1", "verb": "使えない側はマルチ AZ", "direction": "one-way", "kind": "flow" },
+    { "from": "M1", "to": "M2", "verb": "同期しているから切り替えられる", "direction": "one-way", "kind": "cause" },
+    { "from": "M2", "to": "M3", "verb": "待機専用であることの帰結", "direction": "one-way", "kind": "flow" },
+    { "from": "J", "to": "R1", "verb": "使える側はリードレプリカ", "direction": "one-way", "kind": "flow" },
+    { "from": "R1", "to": "R2", "verb": "遅延を許す代わりに分散できる", "direction": "one-way", "kind": "cause" },
+    { "from": "R2", "to": "R3", "verb": "配置範囲を広げられる", "direction": "one-way", "kind": "flow" },
+    { "from": "J", "to": "TRAP", "verb": "目的を逆に読むのが誤答", "direction": "one-way", "kind": "contrast" },
+    { "from": "J", "to": "NOTE", "verb": "覚え方を補足する", "direction": "none", "kind": "other" }
+  ],
+  "groups": [
+    { "label": "マルチ AZ = 高可用性", "element_ids": ["M1", "M2", "M3"] },
+    { "label": "リードレプリカ = 読み取りスケール", "element_ids": ["R1", "R2", "R3"] }
+  ],
+  "candidate_patterns": [
+    "分岐 + 対比: 「複製先を読めるか」で2列に分け、各列に方式・目的・範囲を積む",
+    "テーブル: 2機能 × レプリケーション方式 / 読み取り可否 / 目的 / 作成範囲 の比較表"
+  ],
+  "selected_pattern": "分岐 + 対比。表でも同じ情報は並ぶが、この問題の誤答は「どちらがどちらか」の取り違えなので、1つの判断から2列が生まれる形にすると、読み取り可否という起点から目的が決まることまで一目で追える。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "正解は「両者の違いの記述」そのものなので、2列とも正解につながる要素(緑)にしてある。グレーは誤答の型(目的と方式の入れ替え)を1ノードにまとめて表した。",
+    "「同期しているから切り替えられる」という順序は解説が明示していない。図では M1→M2 を流れとして描いているが、これは同じ文に並記された2つの性質であり、因果の強さは主張していない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"問い<br/>マルチ AZ 配置とリードレプリカ<br/>目的の違いは?\"]:::req\n    J{\"複製先を<br/>読み取りに使えるか?\"}:::judge\n    NOTE[\"可用性ならマルチ AZ<br/>読み取りスケールなら<br/>リードレプリカ\"]:::note\n\n    subgraph HA[\"マルチ AZ = 高可用性\"]\n        M1[\"別 AZ のスタンバイへ同期レプリケーション\"]:::best\n        M2[\"障害時に自動フェイルオーバー\"]:::best\n        M3[\"スタンバイは読み取り不可\"]:::best\n        M1 --> M2 --> M3\n    end\n\n    subgraph SCALE[\"リードレプリカ = 読み取りスケール\"]\n        R1[\"非同期レプリケーション\"]:::best\n        R2[\"読み取りトラフィックを分散\"]:::best\n        R3[\"別リージョンにも作成できる\"]:::best\n        R1 --> R2 --> R3\n    end\n\n    TRAP[\"誤答の型<br/>マルチ AZ を読み取り向上と読む<br/>リードレプリカを同期と読む\"]:::alt\n\n    REQ -.- NOTE\n    REQ --> J\n    J -->|\"使えない\"| HA\n    J -->|\"使える\"| SCALE\n    HA -.->|\"逆転が誤答\"| TRAP\n    SCALE -.-> TRAP"
+}

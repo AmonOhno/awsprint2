@@ -1,0 +1,51 @@
+{
+  "question_id": "db06",
+  "purpose": "マルチ AZ の通常時と障害時の姿を並べて示し、スタンバイが読み取りに使えないことから主目的が可用性だと確認できるようにする。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、マルチ AZ を読み取り性能の機能だと取り違えやすい人。",
+  "message": "マルチ AZ は別 AZ のスタンバイへ同期レプリケーションし障害時に自動フェイルオーバーする構成で、スタンバイは読み取りにも使えないため主目的は可用性に限られる。",
+  "source_summary": "マルチ AZ は別 AZ のスタンバイへ同期レプリケーションを行い、障害時に DNS 切り替えで自動フェイルオーバー(通常 1〜2 分)する。スタンバイは読み取りにも使えない(リードレプリカとは別物)点が最頻出の引っかけ。「マルチ AZ = 可用性、リードレプリカ = 読み取りスケール」と必ず区別する。",
+  "elements": [
+    { "id": "REQ", "label": "問い: RDS マルチ AZ 配置の主目的はどれか", "type": "state", "priority": "primary" },
+    { "id": "P", "label": "プライマリ(AZ-a)", "type": "artifact", "priority": "primary" },
+    { "id": "SB", "label": "スタンバイ(AZ-b)— 読み取りにも使えない", "type": "artifact", "priority": "primary" },
+    { "id": "DNS", "label": "DNS 切り替えで自動フェイルオーバー(通常 1〜2 分)", "type": "process", "priority": "primary" },
+    { "id": "NEW", "label": "スタンバイが新しいプライマリになる", "type": "state", "priority": "primary" },
+    { "id": "ANS", "label": "主目的 = 高可用性(同期レプリケーションと自動フェイルオーバー)", "type": "concept", "priority": "primary" },
+    { "id": "TRAP", "label": "最頻出の引っかけ: スタンバイを読み取りに使えると思い込む", "type": "other", "priority": "support" },
+    { "id": "W1", "label": "読み取り性能のスケールアウト(リードレプリカの役割)", "type": "artifact", "priority": "secondary" },
+    { "id": "W2", "label": "ストレージコストの削減", "type": "artifact", "priority": "secondary" },
+    { "id": "W3", "label": "リージョン間のデータ複製", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "P", "verb": "通常時の姿から確かめる", "direction": "one-way", "kind": "sequence" },
+    { "from": "P", "to": "SB", "verb": "同期レプリケーションする", "direction": "one-way", "kind": "flow" },
+    { "from": "P", "to": "DNS", "verb": "障害が起きると切り替わる", "direction": "one-way", "kind": "sequence" },
+    { "from": "DNS", "to": "NEW", "verb": "昇格する", "direction": "one-way", "kind": "flow" },
+    { "from": "NEW", "to": "ANS", "verb": "可用性を担保する", "direction": "one-way", "kind": "cause" },
+    { "from": "SB", "to": "TRAP", "verb": "読めない点を補足する", "direction": "none", "kind": "other" },
+    { "from": "REQ", "to": "W1", "verb": "リードレプリカの役割で別物", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "W2", "verb": "主目的ではない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "W3", "verb": "主目的ではない", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "通常時", "element_ids": ["P", "SB"] },
+    { "label": "障害時", "element_ids": ["DNS", "NEW"] },
+    { "label": "主目的ではないもの", "element_ids": ["W1", "W2", "W3"] }
+  ],
+  "candidate_patterns": [
+    "構成図の2状態(通常時 / 障害時): 同じ構成が障害でどう変わるかを2枠で並べる",
+    "対比: マルチ AZ とリードレプリカを2列に並べて目的を書き分ける"
+  ],
+  "selected_pattern": "構成図の2状態(通常時 / 障害時)。主目的が可用性であることは、障害が起きたときに何が起きるかを見せるのが最も直接的。リードレプリカとの2列対比は db01 で扱っており、同じ絵を繰り返すより「スタンバイが昇格する」動きを見せた方がこの問題の引っかけに効く。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "db01 と同じ知識を扱うが、あちらは「リードレプリカとの違い」、こちらは「主目的の確認」が問われている。図を意図的に別パターン(2状態の構成図)にして、復習時に同じ絵の繰り返しにならないようにした。",
+    "AZ 名(AZ-a / AZ-b)は説明のための仮名で、問題文・解説には出てこない。別 AZ であることを示す以上の意味は持たせていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"問い<br/>RDS のマルチ AZ 配置の主目的は?\"]:::req\n\n    subgraph NORMAL[\"通常時\"]\n        direction TB\n        P[\"プライマリ(別 AZ の一方)\"]:::svc\n        SB[\"スタンバイ(別 AZ)<br/>読み取りにも使えない\"]:::svc\n        P -->|\"同期複製\"| SB\n    end\n\n    subgraph FAILOVER[\"障害時\"]\n        direction TB\n        DNS[\"DNS 切り替えで自動フェイルオーバー<br/>通常 1〜2 分\"]:::best\n        NEW[\"スタンバイが新しいプライマリになる\"]:::best\n        DNS --> NEW\n    end\n\n    ANS[\"主目的 = 高可用性<br/>同期レプリケーションと自動フェイルオーバー\"]:::best\n    TRAP[\"最頻出の引っかけ<br/>スタンバイは読み取りにも使えない(リードレプリカとは別物)\"]:::note\n\n    subgraph OTHERS[\"主目的ではないもの\"]\n        W1[\"読み取り性能のスケールアウト<br/>リードレプリカの役割\"]:::alt\n        W2[\"ストレージコストの削減\"]:::alt\n        W3[\"リージョン間のデータ複製\"]:::alt\n    end\n\n    REQ --> NORMAL\n    NORMAL -->|\"AZ 障害\"| FAILOVER\n    FAILOVER --> ANS\n    SB -.- TRAP\n    REQ -.->|\"目的が別\"| OTHERS"
+}

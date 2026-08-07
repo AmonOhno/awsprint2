@@ -1,0 +1,48 @@
+{
+  "question_id": "cmp65",
+  "purpose": "コンテナ実行サービスの選択が「基盤の設計・運用を誰が持つか」の差であることを示し、自前で設計しないという要件がそのまま App Runner を指すことを理解させる。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、ECS・EKS・Beanstalk・App Runner の名前は知っているが、どこまで自分で設計するかの差を説明できない人。",
+  "message": "VPC・ロードバランサー・Auto Scaling を自分で設計しないことが要件なら、ビルドから HTTPS・自動スケールまでを引き受けアイドル時は縮退する App Runner が唯一そのまま当てはまる。",
+  "source_summary": "App Runner はソースコードまたはコンテナイメージから自動でビルド・デプロイし、HTTPS エンドポイント・自動スケール・ロードバランシングをフルマネージドで提供する。アイドル時はコンピュートを縮退させプロビジョニング済みメモリの低額課金のみになる。ECS/EKS は自由度が高い反面ネットワークやスケーリングの設計・運用が必要で、Beanstalk は EC2 基盤の管理が残る。",
+  "elements": [
+    { "id": "REQ", "label": "要件: VPC/LB/Auto Scaling を自前設計しない、GitHub から自動ビルド・デプロイ、HTTPS と自動スケール、アイドル時のコストも抑える", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "基盤の設計・運用を誰が持つか", "type": "process", "priority": "primary" },
+    { "id": "AR", "label": "AWS App Runner", "type": "artifact", "priority": "primary" },
+    { "id": "BUILD", "label": "ソース/イメージから自動ビルド・デプロイ", "type": "process", "priority": "primary" },
+    { "id": "SERVE", "label": "HTTPS エンドポイント・自動スケール・ロードバランシングをフルマネージド提供", "type": "process", "priority": "primary" },
+    { "id": "IDLE", "label": "アイドル時はコンピュートを縮退し、プロビジョニング済みメモリの低額課金のみ", "type": "concept", "priority": "primary" },
+    { "id": "ECS", "label": "ECS on EC2 + キャパシティプロバイダー", "type": "artifact", "priority": "secondary" },
+    { "id": "EKS", "label": "EKS + AWS Load Balancer Controller", "type": "artifact", "priority": "secondary" },
+    { "id": "EB", "label": "Elastic Beanstalk のマルチコンテナ環境", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "J", "verb": "設計の担い手を問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "AR", "verb": "AWS 側が持つ", "direction": "one-way", "kind": "flow" },
+    { "from": "AR", "to": "BUILD", "verb": "ビルドを引き受ける", "direction": "one-way", "kind": "flow" },
+    { "from": "AR", "to": "SERVE", "verb": "公開と伸縮を引き受ける", "direction": "one-way", "kind": "flow" },
+    { "from": "AR", "to": "IDLE", "verb": "無トラフィック時のコストを抑える", "direction": "one-way", "kind": "cause" },
+    { "from": "J", "to": "ECS", "verb": "ネットワークとスケーリングの設計が残る", "direction": "one-way", "kind": "contrast" },
+    { "from": "J", "to": "EKS", "verb": "ネットワークとスケーリングの設計が残る", "direction": "one-way", "kind": "contrast" },
+    { "from": "J", "to": "EB", "verb": "EC2 基盤の管理が残る", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "App Runner が引き受ける範囲", "element_ids": ["BUILD", "SERVE", "IDLE"] },
+    { "label": "自分で設計・運用が残る選択肢", "element_ids": ["ECS", "EKS", "EB"] }
+  ],
+  "candidate_patterns": [
+    "判断フロー + 包含: 「基盤の設計を誰が持つか」で分岐し、AWS 側が持つ範囲を枠で囲って見せる",
+    "レイヤー(責任分界)図: ビルド / ネットワーク / スケーリング / OS の各層を4サービスで塗り分ける"
+  ],
+  "selected_pattern": "判断フロー + 包含。要件が「自前で設計しない」の一点に集約されるので、分岐は1回で足りる。責任分界のレイヤー図は4サービス×4層の格子になり、解説が触れていない層まで塗り分けを迫られるため、書かれていない情報を足さずには描けない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "ECS と EKS は解説がまとめて「ネットワークやスケーリングの設計・運用が必要」と論じているため、図でも同じ枠に並べて理由を1つにまとめた。",
+    "GitHub 連携は解説が「ソースコードまたはコンテナイメージから」としか述べていないため、図でも接続方式(リポジトリ連携の具体手順)には踏み込んでいない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>VPC・LB・Auto Scaling を自前で設計しない<br/>GitHub のソースから自動ビルド・デプロイ<br/>HTTPS と自動スケールを最小の運用で<br/>トラフィックがない時間帯のコストも抑えたい\"]:::req\n    J{\"基盤の設計・運用を<br/>誰が持つか?\"}:::judge\n    AR[\"AWS App Runner\"]:::best\n\n    subgraph MANAGED[\"App Runner が引き受ける範囲\"]\n        BUILD[\"ソース/イメージから自動ビルド・デプロイ\"]:::best\n        SERVE[\"HTTPS エンドポイント・自動スケール・ロードバランシング\"]:::best\n        IDLE[\"アイドル時はコンピュートを縮退<br/>プロビジョニング済みメモリの低額課金のみ\"]:::best\n    end\n\n    subgraph SELF[\"自分で設計・運用が残る選択肢\"]\n        ECS[\"ECS on EC2 + キャパシティプロバイダー<br/>ネットワークとスケーリングの設計が必要\"]:::alt\n        EKS[\"EKS + AWS Load Balancer Controller<br/>ネットワークとスケーリングの設計が必要\"]:::alt\n        EB[\"Elastic Beanstalk のマルチコンテナ環境<br/>EC2 基盤の管理が残る\"]:::alt\n    end\n\n    REQ --> J\n    J -->|\"AWS 側\"| AR\n    AR --> MANAGED\n    J -.->|\"自分側\"| SELF"
+}

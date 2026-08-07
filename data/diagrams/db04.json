@@ -1,0 +1,46 @@
+{
+  "question_id": "db04",
+  "purpose": "Aurora のコンピュートとストレージが分離した構造を1枚で示し、誤答の3記述がその構造と矛盾することを見て取れるようにする。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Aurora を「速い RDS」程度に理解しており、ストレージ層の作りを説明できない人。",
+  "message": "Aurora はストレージ層が 3 AZ に 6 コピーを自動レプリケーションして自動拡張する作りなので、単一 AZ・容量固定・Oracle/SQL Server 互換という記述はいずれもこの構造と両立しない。",
+  "source_summary": "Aurora は MySQL/PostgreSQL 互換のクラウドネイティブ RDB で、ストレージ層が 3AZ×2 の 6 コピーに自動レプリケーションされ、10GB 単位で最大 128TB まで自動拡張する。最大 15 個のリードレプリカ、高速フェイルオーバー、Aurora Serverless(オンデマンド自動スケール)も特徴。",
+  "elements": [
+    { "id": "REQ", "label": "問い: Aurora の特徴として正しい説明はどれか", "type": "state", "priority": "primary" },
+    { "id": "C", "label": "コンピュート層: MySQL/PostgreSQL 互換、最大 15 のリードレプリカ、高速フェイルオーバー", "type": "artifact", "priority": "primary" },
+    { "id": "S", "label": "ストレージ層: 3 AZ × 2 の 6 コピーへ自動レプリケーション、10GB 単位で最大 128TB まで自動拡張", "type": "artifact", "priority": "primary" },
+    { "id": "ANS", "label": "正解の記述: 3 AZ に 6 コピー + MySQL 互換で最大 5 倍のスループットを謳う", "type": "concept", "priority": "primary" },
+    { "id": "SV", "label": "Aurora Serverless(オンデマンド自動スケール)も選べる", "type": "other", "priority": "support" },
+    { "id": "W1", "label": "単一 AZ にのみ保存されるためスナップショットが必須", "type": "artifact", "priority": "secondary" },
+    { "id": "W2", "label": "Oracle と SQL Server のみ互換性がある", "type": "artifact", "priority": "secondary" },
+    { "id": "W3", "label": "事前にプロビジョニングした容量から拡張できない", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "C", "verb": "構造から確かめる", "direction": "one-way", "kind": "sequence" },
+    { "from": "C", "to": "S", "verb": "読み書きを預ける(層が分離している)", "direction": "one-way", "kind": "flow" },
+    { "from": "S", "to": "ANS", "verb": "この作りが正解の記述と一致する", "direction": "one-way", "kind": "cause" },
+    { "from": "C", "to": "SV", "verb": "コンピュート側の別形態を補足する", "direction": "none", "kind": "other" },
+    { "from": "S", "to": "W1", "verb": "6 コピーの分散と矛盾する", "direction": "one-way", "kind": "contrast" },
+    { "from": "C", "to": "W2", "verb": "MySQL/PostgreSQL 互換と矛盾する", "direction": "one-way", "kind": "contrast" },
+    { "from": "S", "to": "W3", "verb": "自動拡張と矛盾する", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "Aurora のアーキテクチャ", "element_ids": ["C", "S"] },
+    { "label": "この構造と矛盾するため誤り", "element_ids": ["W1", "W2", "W3"] }
+  ],
+  "candidate_patterns": [
+    "レイヤー(層の分離)図: コンピュート層とストレージ層を積み、各層の性質から正誤を判定する",
+    "テーブル: 4つの記述 × 正誤 / 根拠 の一覧表"
+  ],
+  "selected_pattern": "レイヤー(層の分離)図。誤答3つはすべて「ストレージ層の作り」か「互換性」のどちらかに反しており、層を描いておくとどの層に反するかが線でたどれる。表だと4行の正誤が並ぶだけで、Aurora の構造そのものが頭に残らない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「最大 5 倍のスループット」は選択肢の文言であり、解説は数値の根拠を述べていない。図でも選択肢どおり『謳う』の形で引用し、性能の断定はしていない。",
+    "誤答のグレー枠は「実在するが要件を満たさない選択肢」ではなく『事実として誤った記述』である。この問題は構成選択ではなく知識確認型のため、共通スタイルのグレー(非最適)を誤りの意味に転用している。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"問い<br/>Aurora の特徴として<br/>正しい説明はどれか\"]:::req\n\n    subgraph AUR[\"Aurora のアーキテクチャ(層が分離)\"]\n        C[\"コンピュート層<br/>MySQL/PostgreSQL 互換<br/>最大 15 個のリードレプリカ・高速フェイルオーバー\"]:::best\n        S[\"ストレージ層<br/>3 AZ × 2 = 6 コピーに自動レプリケーション<br/>10GB 単位で最大 128TB まで自動拡張\"]:::best\n        C -->|\"読み書き\"| S\n    end\n\n    ANS[\"正解の記述<br/>3 AZ に 6 コピーが自動保存され<br/>MySQL 互換で最大 5 倍のスループットを謳う\"]:::best\n    SV[\"Aurora Serverless(オンデマンド自動スケール)も選べる\"]:::note\n\n    subgraph WRONG[\"この構造と矛盾するため誤り\"]\n        W1[\"単一 AZ にのみ保存<br/>スナップショットが必須\"]:::alt\n        W2[\"Oracle と SQL Server のみ互換性がある\"]:::alt\n        W3[\"事前にプロビジョニングした容量から拡張できない\"]:::alt\n    end\n\n    REQ --> AUR\n    S --> ANS\n    AUR -.- SV\n    AUR -.-> WRONG"
+}

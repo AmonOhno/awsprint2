@@ -1,0 +1,47 @@
+{
+  "question_id": "cmp64",
+  "purpose": "Auto Scaling の終了対象が「AZ を選ぶ」→「ポリシーを適用する」の2段階で決まることを示し、AZ バランスが既定で先に効くため設定すべきは終了の基準だけだと理解させる。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、終了ポリシーの名前は知っているが AZ バランスとの関係を説明できない人。",
+  "message": "終了対象は先に AZ の不均衡解消で AZ が絞られ、その中で終了ポリシーが適用されるので、AZ バランスのために構成を分ける必要はなく OldestLaunchTemplate を指定するだけでよい。",
+  "source_summary": "Auto Scaling は終了対象を選ぶ際、まず AZ 間の不均衡を解消する AZ を選び、その中で終了ポリシーを適用する。OldestLaunchTemplate は古い起動テンプレート(またはそのバージョン)のインスタンスを優先終了するため、AMI 更新後の入れ替えを自然に進められる。OldestInstance は起動時刻基準、ClosestToNextInstanceHour は時間課金時代の名残でコスト最適化目的。",
+  "elements": [
+    { "id": "REQ", "label": "要件: 古い起動テンプレートのインスタンスから優先終了し、AZ 間の台数バランスも保つ", "type": "state", "priority": "primary" },
+    { "id": "S1", "label": "第1段階: 不均衡を解消する AZ を選ぶ(Auto Scaling の既定動作)", "type": "process", "priority": "primary" },
+    { "id": "S2", "label": "第2段階: 選ばれた AZ の中で終了ポリシーを適用する", "type": "process", "priority": "primary" },
+    { "id": "OLT", "label": "OldestLaunchTemplate(古い起動テンプレート/バージョンから終了)", "type": "artifact", "priority": "primary" },
+    { "id": "RESULT", "label": "AMI 更新後の入れ替えが自然に進む", "type": "concept", "priority": "primary" },
+    { "id": "NOTE", "label": "AZ バランスは既定で先に効くので、指定するのは終了の基準だけでよい", "type": "other", "priority": "support" },
+    { "id": "A1", "label": "OldestInstance + AZ ごとに別の Auto Scaling グループ", "type": "artifact", "priority": "secondary" },
+    { "id": "A2", "label": "ClosestToNextInstanceHour", "type": "artifact", "priority": "secondary" },
+    { "id": "A3", "label": "Default のまま + 古いインスタンスへのスケールイン保護", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "S1", "verb": "終了対象の選定を始める", "direction": "one-way", "kind": "sequence" },
+    { "from": "S1", "to": "S2", "verb": "AZ が絞られたうえでポリシーへ渡す", "direction": "one-way", "kind": "sequence" },
+    { "from": "S2", "to": "OLT", "verb": "要件に合う基準として採用する", "direction": "one-way", "kind": "flow" },
+    { "from": "OLT", "to": "RESULT", "verb": "古い世代から置き換わる", "direction": "one-way", "kind": "cause" },
+    { "from": "S1", "to": "NOTE", "verb": "既定動作を補足する", "direction": "none", "kind": "other" },
+    { "from": "S2", "to": "A1", "verb": "基準が起動時刻になり構成も分かれる", "direction": "one-way", "kind": "contrast" },
+    { "from": "S2", "to": "A2", "verb": "目的がコスト最適化で基準が違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "S2", "to": "A3", "verb": "終了から除外する設定で優先終了にならない", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "要件を満たさない終了ポリシー / 構成", "element_ids": ["A1", "A2", "A3"] }
+  ],
+  "candidate_patterns": [
+    "直列(2段階の絞り込み)+ 対比: AZ 選定 → ポリシー適用の順序を軸に、そこへ乗らない案を横に置く",
+    "テーブル: 4つの終了ポリシー × 基準 / 向く目的 の比較表"
+  ],
+  "selected_pattern": "直列(2段階の絞り込み)+ 対比。この問題の肝は「AZ バランスとポリシーが競合せず、順番に効く」ことなので、順序を線で見せるのが最短で伝わる。表にすると各ポリシーの基準は並ぶが、AZ バランスが先に効くという肝心の順序が表現できない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "選択肢4(Default + スケールイン保護)は解説が個別に論じていない。図では「スケールイン保護は終了から除外する設定」という語義だけを添え、性能や挙動の推測は足していない。",
+    "解説の「まず AZ 間の不均衡を解消する AZ を選ぶ」を第1段階として図示したが、不均衡がない場合の挙動は解説の範囲外なので描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>古い起動テンプレートのインスタンスから優先的に終了させたい<br/>AZ 間の台数バランスも保ちたい\"]:::req\n    S1[\"第1段階<br/>不均衡を解消する AZ を選ぶ(Auto Scaling の既定動作)\"]:::best\n    S2{\"第2段階<br/>その AZ の中で<br/>終了ポリシーを適用\"}:::judge\n    OLT[\"OldestLaunchTemplate<br/>古い起動テンプレート/バージョンのインスタンスを優先終了\"]:::best\n    RESULT[\"AMI 更新後の入れ替えが自然に進む\"]:::best\n    NOTE[\"AZ バランスは既定で先に効くため<br/>指定するのは終了の基準だけでよい\"]:::note\n\n    subgraph OTHERS[\"要件を満たさない終了ポリシー / 構成\"]\n        A1[\"OldestInstance + AZ ごとに別の ASG<br/>基準が起動時刻になり構成も分かれる\"]:::alt\n        A2[\"ClosestToNextInstanceHour<br/>時間課金時代の名残でコスト最適化目的\"]:::alt\n        A3[\"Default のまま + スケールイン保護<br/>保護は終了から除外する設定\"]:::alt\n    end\n\n    REQ --> S1\n    S1 --> S2\n    S2 -->|\"採用\"| OLT\n    OLT --> RESULT\n    S1 -.- NOTE\n    S2 -.->|\"要件外\"| OTHERS"
+}

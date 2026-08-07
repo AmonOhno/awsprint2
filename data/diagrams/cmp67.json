@@ -1,0 +1,47 @@
+{
+  "question_id": "cmp67",
+  "purpose": "一桁ミリ秒という要件が「ゲームサーバー本体を対象都市に置けるか」に還元されることを示し、経路最適化やエッジ関数では物理距離が残ることを理解させる。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Local Zones・Global Accelerator・Lambda@Edge の名前は知っているが、レイテンシー対策としての違いを説明できない人。",
+  "message": "一桁ミリ秒が要る EC2 のゲームサーバーは、親リージョンの VPC を都市へ拡張できる Local Zone に置くしかなく、AZ 分散や経路最適化では物理距離が残る。",
+  "source_summary": "Local Zones はリージョンの一部として大都市圏に配置されたインフラで、親リージョンの VPC を拡張してサブネットを作れるため、その都市のエンドユーザーに一桁ミリ秒のレイテンシーで EC2 を提供できる。AZ 分散はリージョン所在地までの物理距離が残り、Lambda@Edge は短時間の HTTP 処理向けでゲームサーバーには不適。Global Accelerator は経路最適化に有効だが、物理距離由来のレイテンシーは解消できない。",
+  "elements": [
+    { "id": "REQ", "label": "要件: 特定都市のユーザーに一桁ミリ秒、ゲームサーバーは EC2、同一 VPC 内の他リソースとも通信", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "EC2 本体を対象都市に置けるか", "type": "process", "priority": "primary" },
+    { "id": "LZ", "label": "対象都市の AWS Local Zone(リージョンの一部)", "type": "artifact", "priority": "primary" },
+    { "id": "SUBNET", "label": "親リージョンの VPC を拡張してサブネットを作る", "type": "process", "priority": "primary" },
+    { "id": "EC2", "label": "ゲームサーバーの EC2(同一 VPC のまま都市内で動く)", "type": "artifact", "priority": "primary" },
+    { "id": "RESULT", "label": "対象都市のエンドユーザーに一桁ミリ秒", "type": "concept", "priority": "primary" },
+    { "id": "AZ", "label": "最寄りリージョンの複数 AZ に分散配置", "type": "artifact", "priority": "secondary" },
+    { "id": "GA", "label": "Global Accelerator による経路最適化", "type": "artifact", "priority": "secondary" },
+    { "id": "LE", "label": "CloudFront エッジの Lambda@Edge", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "J", "verb": "サーバーの置き場所を問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "LZ", "verb": "都市内に置ける", "direction": "one-way", "kind": "flow" },
+    { "from": "LZ", "to": "SUBNET", "verb": "VPC をそのまま伸ばす", "direction": "one-way", "kind": "flow" },
+    { "from": "SUBNET", "to": "EC2", "verb": "都市内に EC2 を置く", "direction": "one-way", "kind": "flow" },
+    { "from": "EC2", "to": "RESULT", "verb": "物理距離が縮む", "direction": "one-way", "kind": "cause" },
+    { "from": "J", "to": "AZ", "verb": "リージョン所在地までの距離が残る", "direction": "one-way", "kind": "contrast" },
+    { "from": "J", "to": "GA", "verb": "経路は最適化できるが距離は残る", "direction": "one-way", "kind": "contrast" },
+    { "from": "J", "to": "LE", "verb": "短時間の HTTP 処理向けで用途が違う", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "ゲームサーバー本体を都市に置けない案", "element_ids": ["AZ", "GA", "LE"] }
+  ],
+  "candidate_patterns": [
+    "判断フロー(1問での分岐): 「EC2 本体を対象都市に置けるか」で分け、置けない案の残る要因を並べる",
+    "配置マップ: 都市とリージョンを2枠に描き、各案の処理がどちらで走るかを配置で見せる"
+  ],
+  "selected_pattern": "判断フロー(1問での分岐)。誤答3案は落ちる理由が「物理距離が残る」「用途が違う」と別種なので、枠に入れて位置だけで語らせるより、分岐の先に理由を1行ずつ添える方が誤読が少ない。配置マップは Global Accelerator のように場所ではなく経路の話である案をどこに置くか決められない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「同一 VPC 内の他リソースとも通信する」という条件は、Local Zone が VPC の拡張である点と結び付く。図では VPC 拡張のノードで表しているが、他リソースとの通信経路そのものは解説の範囲外なので描いていない。",
+    "Global Accelerator は経路最適化として有効という解説の評価を残すため、ラベルを「有効だが距離は残る」の形にして全否定に見えないようにした。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>特定都市のユーザーに一桁ミリ秒のレイテンシー<br/>ゲームサーバーは EC2 上で動作<br/>同一 VPC 内の他リソースとも通信する\"]:::req\n    J{\"ゲームサーバーの EC2 を<br/>対象都市に置けるか?\"}:::judge\n    LZ[\"対象都市の AWS Local Zone<br/>リージョンの一部として大都市圏に配置\"]:::best\n    SUBNET[\"親リージョンの VPC を拡張してサブネットを作る\"]:::best\n    EC2[\"ゲームサーバーの EC2<br/>同一 VPC のまま都市内で動く\"]:::best\n    RESULT[\"対象都市のユーザーに一桁ミリ秒\"]:::best\n\n    subgraph OTHERS[\"サーバー本体を都市に置けない案\"]\n        AZ[\"最寄りリージョンの複数 AZ に分散<br/>リージョン所在地までの物理距離が残る\"]:::alt\n        GA[\"Global Accelerator<br/>経路最適化には有効だが物理距離は解消できない\"]:::alt\n        LE[\"Lambda@Edge<br/>短時間の HTTP 処理向け<br/>ゲームサーバーには不適\"]:::alt\n    end\n\n    REQ --> J\n    J -->|\"置ける\"| LZ\n    LZ --> SUBNET\n    SUBNET --> EC2\n    EC2 --> RESULT\n    J -.->|\"置けない\"| OTHERS"
+}

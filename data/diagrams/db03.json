@@ -1,0 +1,49 @@
+{
+  "question_id": "db03",
+  "purpose": "同じデータへの読み取り集中に対しては、DB の手前にインメモリのキャッシュ層を足すのが定石であることを構成図で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、レイテンシー問題をまずインスタンスの増強で解こうとしてしまう人。",
+  "message": "読み取りが同じデータに集中しているなら、DB の手前にインメモリの ElastiCache を挟むことでマイクロ秒の応答が得られ、同時に DB 負荷も下がる。",
+  "source_summary": "同じデータへの読み取りが集中する場合、ElastiCache をキャッシュ層として追加するのが定石。インメモリのためマイクロ秒単位の応答が可能で、DB 負荷も大幅に下がる。「マイクロ秒」「キャッシュ」がキーワードなら ElastiCache、セッション共有やランキング(Sorted Set)なら Redis を選ぶ。",
+  "elements": [
+    { "id": "REQ", "label": "要件: 読み取りが特定の同じデータに集中、マイクロ秒単位の応答が必要", "type": "state", "priority": "primary" },
+    { "id": "APP", "label": "アプリケーション", "type": "actor", "priority": "primary" },
+    { "id": "EC", "label": "Amazon ElastiCache(Redis/Memcached)= インメモリのキャッシュ層", "type": "artifact", "priority": "primary" },
+    { "id": "HIT", "label": "ヒット時はマイクロ秒単位で返す", "type": "concept", "priority": "primary" },
+    { "id": "RDS", "label": "RDS(元データ)", "type": "artifact", "priority": "primary" },
+    { "id": "LOAD", "label": "DB 負荷も大幅に下がる", "type": "concept", "priority": "primary" },
+    { "id": "NOTE", "label": "セッション共有やランキング(Sorted Set)が要るなら Redis を選ぶ", "type": "other", "priority": "support" },
+    { "id": "UP", "label": "RDS インスタンスの垂直スケールアップ", "type": "artifact", "priority": "secondary" },
+    { "id": "S3", "label": "S3 へのデータエクスポート", "type": "artifact", "priority": "secondary" },
+    { "id": "BK", "label": "AWS Backup による定期バックアップ", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "APP", "verb": "読み取り集中が起きている", "direction": "one-way", "kind": "flow" },
+    { "from": "APP", "to": "EC", "verb": "まずキャッシュに問い合わせる", "direction": "one-way", "kind": "flow" },
+    { "from": "EC", "to": "HIT", "verb": "インメモリで返す", "direction": "one-way", "kind": "cause" },
+    { "from": "EC", "to": "RDS", "verb": "ミス時だけ元データを読む", "direction": "one-way", "kind": "flow" },
+    { "from": "EC", "to": "LOAD", "verb": "読み取りを肩代わりする", "direction": "one-way", "kind": "cause" },
+    { "from": "EC", "to": "NOTE", "verb": "エンジン選択を補足する", "direction": "none", "kind": "other" },
+    { "from": "REQ", "to": "UP", "verb": "マイクロ秒の応答をもたらさない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "S3", "verb": "マイクロ秒の応答をもたらさない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "BK", "verb": "マイクロ秒の応答をもたらさない", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "マイクロ秒の応答をもたらさない案", "element_ids": ["UP", "S3", "BK"] }
+  ],
+  "candidate_patterns": [
+    "構成図(直列 + 分岐): アプリ → キャッシュ → ミス時のみ DB という読み取り経路をそのまま描く",
+    "判断フロー: 「マイクロ秒が要るか」「同じデータか」を順に問い、4案をふるいにかける"
+  ],
+  "selected_pattern": "構成図(直列 + 分岐)。「手前に1層足す」という解答そのものが構成の絵で、経路を見れば速くなる理由と DB 負荷が下がる理由が同時に読める。判断フローだと結論は出せるが、なぜ両方の効果が同時に得られるかが線として残らない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "誤答3案は落ちる理由が同じ(マイクロ秒の応答をもたらさない)なので枠のラベルに一度だけ書き、各案には理由を重ねていない。垂直スケールアップが無効である程度は解説が数値で述べていないため、図でも比較値は出していない。",
+    "キャッシュミス時の書き戻し方(Cache-Aside など)は解説の範囲外なので、図では「ミス時のみ」の線までにとどめた。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>読み取りが特定の同じデータに集中<br/>マイクロ秒単位の応答が必要\"]:::req\n    APP[\"アプリケーション\"]:::svc\n    EC[\"Amazon ElastiCache(Redis/Memcached)<br/>インメモリのキャッシュ層\"]:::best\n    HIT[\"ヒット時はマイクロ秒単位で応答\"]:::best\n    RDS[\"RDS(元データ)\"]:::svc\n    LOAD[\"読み取りを肩代わりするため DB 負荷も大幅に下がる\"]:::best\n    NOTE[\"セッション共有やランキング<br/>(Sorted Set)が要るなら Redis\"]:::note\n\n    subgraph OTHERS[\"マイクロ秒の応答をもたらさない案\"]\n        UP[\"RDS インスタンスの垂直スケールアップ\"]:::alt\n        S3[\"S3 へのデータエクスポート\"]:::alt\n        BK[\"AWS Backup による定期バックアップ\"]:::alt\n    end\n\n    REQ --> APP\n    APP --> EC\n    EC -->|\"ヒット\"| HIT\n    EC -.->|\"ミス時のみ\"| RDS\n    EC --> LOAD\n    EC -.- NOTE\n    REQ -.->|\"要件外\"| OTHERS"
+}
