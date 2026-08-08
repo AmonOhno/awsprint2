@@ -1,0 +1,48 @@
+{
+  "question_id": "db16",
+  "purpose": "「キーバリュー参照か、複雑な JOIN・集計か」というデータモデルの問いを先頭に置き、そこから DynamoDB が決まる筋道を示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、データベースの選択を性能要件だけで決めようとしがちな人。",
+  "message": "必要なのが大規模なキーバリュー参照なら、規模によらず 1 桁ミリ秒でサーバー管理も要らない DynamoDB が答えで、複雑な JOIN や集計が要るならリレーショナル側へ振れる。",
+  "source_summary": "DynamoDB はフルマネージドの NoSQL(キーバリュー/ドキュメント)データベースで、規模によらず 1 桁ミリ秒の性能を発揮し、サーバー管理は不要。テーブルスキーマの柔軟性と無制限のスケーラビリティが特徴。複雑な JOIN や集計が必要なリレーショナル要件には RDS/Aurora を選ぶ。",
+  "elements": [
+    { "id": "REQ", "label": "大規模なキーバリュー型データを 1 桁ミリ秒・サーバー管理なし・無制限にスケールさせたい", "type": "state", "priority": "primary" },
+    { "id": "Q", "label": "必要なのはキーバリュー参照か、複雑な JOIN・集計か", "type": "process", "priority": "primary" },
+    { "id": "DDB", "label": "Amazon DynamoDB(フルマネージド NoSQL)", "type": "artifact", "priority": "primary" },
+    { "id": "F1", "label": "規模によらず 1 桁ミリ秒", "type": "state", "priority": "primary" },
+    { "id": "F2", "label": "テーブルスキーマが柔軟", "type": "state", "priority": "primary" },
+    { "id": "F3", "label": "無制限のスケーラビリティ / サーバー管理は不要", "type": "state", "priority": "primary" },
+    { "id": "RDS", "label": "Amazon RDS(複雑な JOIN・集計が要るならこちら)", "type": "artifact", "priority": "secondary" },
+    { "id": "W1", "label": "Amazon Redshift", "type": "artifact", "priority": "secondary" },
+    { "id": "W2", "label": "Amazon Neptune", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q", "verb": "データモデルから問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q", "to": "DDB", "verb": "キーバリューなら決まる", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "RDS", "verb": "JOIN・集計ならこちら", "direction": "one-way", "kind": "flow" },
+    { "from": "DDB", "to": "F1", "verb": "性能要件を満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "DDB", "to": "F2", "verb": "スキーマ要件を満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "DDB", "to": "F3", "verb": "運用要件を満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "REQ", "to": "W1", "verb": "用途そのものが違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "W2", "verb": "用途そのものが違う", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "DynamoDB が満たすもの", "element_ids": ["F1", "F2", "F3"] },
+    { "label": "用途そのものが違う選択肢", "element_ids": ["W1", "W2"] }
+  ],
+  "candidate_patterns": [
+    "分岐(データモデルで選ぶ): キーバリュー参照か JOIN・集計かの1問で振り分ける",
+    "合流(要件の収束): 1 桁ミリ秒・キーバリュー・サーバー管理なし・無制限スケールの4要件を1つのサービスへ集める"
+  ],
+  "selected_pattern": "分岐(データモデルで選ぶ)。解説が最後に「複雑な JOIN や集計なら RDS/Aurora」と対にしているとおり、判断の起点は性能値ではなくデータモデルなので、その1問を先頭に置くのが解説の筋と一致する。合流図は同じ DynamoDB 選定を扱う db02 で採用済みで、こちらで繰り返すと復習時に同じ絵になる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "RDS は選択肢の1つ(誤答)だが、解説が「リレーショナル要件ならこちら」と積極的な行き先として挙げているため、分岐のもう一方の枝に置いてグレーで示した。単なる×として脇に置くと、解説の対の構図が図から落ちる。",
+    "Redshift と Neptune には個別の説明を付けていない。解説がこの2つに触れていないため、用途が違うという1グループに束ねている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>大規模なキーバリュー型データ(セッション・ゲームデータ)<br/>1 桁ミリ秒・サーバー管理なし・無制限にスケール\"]:::req\n    Q{\"必要なのは<br/>キーバリュー参照か<br/>複雑な JOIN・集計か\"}:::judge\n    DDB[\"Amazon DynamoDB<br/>フルマネージドの NoSQL<br/>キーバリュー / ドキュメント\"]:::best\n    RDS[\"Amazon RDS<br/>複雑な JOIN・集計が要るならこちら\"]:::alt\n\n    subgraph FIT[\"DynamoDB が満たすもの\"]\n        F1[\"規模によらず 1 桁ミリ秒\"]:::best\n        F2[\"テーブルスキーマが柔軟\"]:::best\n        F3[\"無制限のスケーラビリティ<br/>サーバー管理は不要\"]:::best\n    end\n\n    subgraph OTHERS[\"用途そのものが違う選択肢\"]\n        W1[\"Amazon Redshift\"]:::alt\n        W2[\"Amazon Neptune\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"キーバリュー\"| DDB\n    Q -->|\"JOIN・集計\"| RDS\n    DDB --> F1\n    DDB --> F2\n    DDB --> F3\n    REQ -.->|\"用途が違う\"| OTHERS"
+}

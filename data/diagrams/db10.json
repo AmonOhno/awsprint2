@@ -1,0 +1,48 @@
+{
+  "question_id": "db10",
+  "purpose": "日次スナップショットとトランザクションログという2つの保存物を時間軸に並べ、「任意時点」へ戻せる理由が目で追えるようにする。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、自動バックアップを「日次の戻し先しかない」ものだと思っている人。",
+  "message": "自動バックアップは日次スナップショットに加えてトランザクションログを保存するため、保持期間内なら秒単位の任意時点へ復元できる。",
+  "source_summary": "自動バックアップは日次スナップショットとトランザクションログを保存し、保持期間(最大 35 日)内なら秒単位の任意時点へ復元できる。インスタンス削除時に自動バックアップは既定では消えるため、長期保存したい場合は手動スナップショットを取得する。",
+  "elements": [
+    { "id": "REQ", "label": "問い: 自動バックアップで可能になることはどれか", "type": "state", "priority": "primary" },
+    { "id": "D1", "label": "日次スナップショット(前日)", "type": "artifact", "priority": "primary" },
+    { "id": "TLOG", "label": "トランザクションログ(スナップショットの間を埋める)", "type": "artifact", "priority": "primary" },
+    { "id": "D2", "label": "日次スナップショット(当日)", "type": "artifact", "priority": "primary" },
+    { "id": "ANY", "label": "保持期間内の任意時点へ復元(ポイントインタイムリカバリ)", "type": "state", "priority": "primary" },
+    { "id": "NOTE", "label": "インスタンス削除で自動バックアップは既定で消える / 長期保存は手動スナップショット", "type": "other", "priority": "support" },
+    { "id": "W1", "label": "リージョン間の同期レプリケーション", "type": "artifact", "priority": "secondary" },
+    { "id": "W2", "label": "読み取り性能の向上", "type": "artifact", "priority": "secondary" },
+    { "id": "W3", "label": "インスタンス削除後も無期限の保存", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "D1", "verb": "保存されるものから追う", "direction": "one-way", "kind": "sequence" },
+    { "from": "D1", "to": "TLOG", "verb": "間を継続的に記録する", "direction": "one-way", "kind": "sequence" },
+    { "from": "TLOG", "to": "D2", "verb": "次のスナップショットへ続く", "direction": "one-way", "kind": "sequence" },
+    { "from": "TLOG", "to": "ANY", "verb": "任意時点まで再生できる", "direction": "one-way", "kind": "cause" },
+    { "from": "ANY", "to": "NOTE", "verb": "保持の限界を補足する", "direction": "none", "kind": "other" },
+    { "from": "REQ", "to": "W1", "verb": "自動バックアップの機能ではない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "W2", "verb": "自動バックアップの機能ではない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "W3", "verb": "削除で消えるため成立しない", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "保持期間(最大 35 日)", "element_ids": ["D1", "TLOG", "D2"] },
+    { "label": "自動バックアップの機能ではないもの", "element_ids": ["W1", "W2", "W3"] }
+  ],
+  "candidate_patterns": [
+    "タイムライン: 日次スナップショットとログを時間軸に並べ、間の任意時点を指す",
+    "合流: 「スナップショット」と「ログ」の2入力が揃って任意時点復元になる形にする"
+  ],
+  "selected_pattern": "タイムライン。この問題の要は「日次の点ではなく、その間のどこへでも戻れる」ことなので、時間軸に点(スナップショット)と線(ログ)を並べるのが最も直接的。合流図でも同じ2要素は示せるが、『間を埋める』という時間的な意味が絵から落ちる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "スナップショットを「前日 / 当日」と書いたのは時間軸であることを示すためで、問題文が特定の日付を指しているわけではない。",
+    "db11(手動スナップショット)と知識が隣接するため、こちらでは削除時の扱いを注釈1つに留め、対比そのものは db11 の図に持たせている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"問い<br/>自動バックアップで<br/>可能になることはどれか\"]:::req\n\n    subgraph KEEP[\"保持期間(最大 35 日)\"]\n        direction LR\n        D1[\"日次スナップショット<br/>(前日)\"]:::svc\n        TLOG[\"トランザクションログ<br/>スナップショットの間を埋める\"]:::svc\n        D2[\"日次スナップショット<br/>(当日)\"]:::svc\n        D1 --> TLOG --> D2\n    end\n\n    ANY[\"保持期間内の任意時点へ復元<br/>ポイントインタイムリカバリ(秒単位)\"]:::best\n    NOTE[\"インスタンス削除で自動バックアップは既定で消える<br/>長期保存したいなら手動スナップショットを取得する\"]:::note\n\n    subgraph OTHERS[\"自動バックアップの機能ではないもの\"]\n        W1[\"リージョン間の同期レプリケーション\"]:::alt\n        W2[\"読み取り性能の向上\"]:::alt\n        W3[\"インスタンス削除後も無期限の保存\"]:::alt\n    end\n\n    REQ --> D1\n    TLOG --> ANY\n    ANY -.- NOTE\n    REQ -.->|\"当てはまらない\"| OTHERS"
+}

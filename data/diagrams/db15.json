@@ -1,0 +1,159 @@
+{
+  "question_id": "db15",
+  "purpose": "Aurora の2種類のエンドポイントと接続先を1枚に描き、読み取り分散が「繋ぎ先を選ぶだけ」で済むことを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、クラスターエンドポイントとリーダーエンドポイントの役割を取り違えやすい人。",
+  "message": "Aurora は接続先をエンドポイントで抽象化しており、リーダーエンドポイントに繋ぐだけで全リードレプリカへ自動分散される。",
+  "source_summary": "Aurora のリーダーエンドポイントは、クラスター内の全リードレプリカへ接続を自動的に負荷分散する専用エンドポイント。書き込みはクラスター(ライター)エンドポイントへ向ける。レプリカの追加・削除・フェイルオーバー時もエンドポイントが自動追従するため、アプリの接続先変更は不要。",
+  "elements": [
+    {
+      "id": "APP",
+      "label": "アプリケーション",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "WEP",
+      "label": "クラスター(ライター)エンドポイント",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "REP",
+      "label": "リーダーエンドポイント(読み取り用)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "WRITER",
+      "label": "ライターインスタンス",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "R1",
+      "label": "リードレプリカ 1",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "R2",
+      "label": "リードレプリカ 2",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE1",
+      "label": "クラスターエンドポイントは書き込み先で、読み取りの分散はしない",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "NOTE2",
+      "label": "レプリカの追加・削除・フェイルオーバー時も自動追従するのでアプリの接続先変更は不要",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "W1",
+      "label": "各レプリカの IP を順番に使う",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "W2",
+      "label": "ALB をレプリカの前段に置く",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "APP",
+      "to": "WEP",
+      "verb": "書き込みを送る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "APP",
+      "to": "REP",
+      "verb": "読み取りを送る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "WEP",
+      "to": "WRITER",
+      "verb": "ライターへ向ける",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "REP",
+      "to": "R1",
+      "verb": "自動で分散する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "REP",
+      "to": "R2",
+      "verb": "自動で分散する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "WEP",
+      "to": "NOTE1",
+      "verb": "役割の違いを補足する",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "REP",
+      "to": "NOTE2",
+      "verb": "運用上の利点を補足する",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "APP",
+      "to": "W1",
+      "verb": "自前で分散する必要はない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "APP",
+      "to": "W2",
+      "verb": "自前で分散する必要はない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "自前で分散させる案(不要な手間)",
+      "element_ids": [
+        "W1",
+        "W2"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "構成図(エンドポイントと接続先): 2種類のエンドポイントから伸びる線でどこへ繋がるかを描く",
+    "対比: 4つの選択肢を「自動で分散する / 自前で分散する」の2列に並べる"
+  ],
+  "selected_pattern": "構成図(エンドポイントと接続先)。誤答の中心はクラスターエンドポイントとの取り違えなので、両方のエンドポイントを描いて線の行き先を分けるのが最短の説明になる。対比表でも正誤は付くが、クラスターエンドポイントが「間違い」ではなく「書き込み用」であることが伝わらない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "クラスターエンドポイントは誤答だがグレー(alt)ではなく白(svc)にした。存在しない/使えないものではなく書き込み用として正しく使うものであり、グレーにすると『使ってはいけない』と読めてしまうため。理由は注釈で補っている。",
+    "レプリカを 2 台描いたのは分散の対象が複数であることを示すためで、台数そのものは問題文に無い。"
+  ],
+  "mermaid": "flowchart TD\n    APP[\"アプリケーション\"]:::req\n    WEP[\"クラスター(ライター)<br/>エンドポイント\"]:::svc\n    REP[\"リーダーエンドポイント<br/>読み取り用\"]:::best\n    WRITER[\"ライターインスタンス\"]:::svc\n    R1[\"リードレプリカ 1\"]:::best\n    R2[\"リードレプリカ 2\"]:::best\n    NOTE1[\"クラスターエンドポイントは書き込み先<br/>読み取りの分散はしない\"]:::note\n    NOTE2[\"レプリカの追加・削除・フェイルオーバー時も<br/>エンドポイントが自動追従するため<br/>アプリの接続先変更は不要\"]:::note\n\n    subgraph OTHERS[\"自前で分散させる案(不要な手間)\"]\n        W1[\"各レプリカの IP を順番に使う\"]:::alt\n        W2[\"ALB をレプリカの前段に置く\"]:::alt\n    end\n\n    APP -->|\"書き込み\"| WEP\n    APP -->|\"読み取り\"| REP\n    WEP --> WRITER\n    REP -->|\"自動分散\"| R1\n    REP -->|\"自動分散\"| R2\n    WEP -.- NOTE1\n    REP -.- NOTE2\n    APP -.->|\"不要\"| OTHERS"
+}

@@ -1,0 +1,45 @@
+{
+  "question_id": "db09",
+  "purpose": "枯渇しているのが「接続数」であって計算資源ではないという切り分けを最初に置き、増強系の対処が的外れになる理由をまとめて示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、性能問題をとりあえずインスタンス増強で解こうとしがちな人。",
+  "message": "枯渇しているのは DB の接続数であって計算資源ではないので、接続をプールして再利用する RDS Proxy が根本解決になる。",
+  "source_summary": "RDS Proxy はデータベース接続をプールして再利用し、Lambda のような大量の短命接続から DB を保護する。フェイルオーバー時間の短縮や IAM 認証・Secrets Manager 統合の利点もある。インスタンスの増強は接続数問題の根本解決にならず、コストも増大する。",
+  "elements": [
+    { "id": "REQ", "label": "Lambda の同時実行数が急増し DB 接続数が枯渇してエラーが多発", "type": "state", "priority": "primary" },
+    { "id": "Q", "label": "枯渇しているのは接続数か、計算資源か", "type": "process", "priority": "primary" },
+    { "id": "CONN", "label": "接続数 — 短命な接続が大量に作られている", "type": "state", "priority": "primary" },
+    { "id": "PROXY", "label": "RDS Proxy が接続をプールして再利用する", "type": "artifact", "priority": "primary" },
+    { "id": "GAIN", "label": "フェイルオーバー時間の短縮・IAM 認証・Secrets Manager 統合", "type": "other", "priority": "support" },
+    { "id": "W1", "label": "DB インスタンスを最大サイズへ変更する", "type": "artifact", "priority": "secondary" },
+    { "id": "W2", "label": "Lambda のメモリを増やす", "type": "artifact", "priority": "secondary" },
+    { "id": "W3", "label": "マルチ AZ を有効にする", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q", "verb": "まず切り分ける", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q", "to": "CONN", "verb": "接続数だと判断する", "direction": "one-way", "kind": "flow" },
+    { "from": "CONN", "to": "PROXY", "verb": "接続を集約して解決する", "direction": "one-way", "kind": "cause" },
+    { "from": "PROXY", "to": "GAIN", "verb": "付随する利点を補う", "direction": "none", "kind": "other" },
+    { "from": "Q", "to": "W1", "verb": "接続数問題は残る", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q", "to": "W2", "verb": "接続数問題は残る", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q", "to": "W3", "verb": "接続数問題は残る", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "接続数の枯渇に効かない選択肢", "element_ids": ["W1", "W2", "W3"] }
+  ],
+  "candidate_patterns": [
+    "分岐(ボトルネックの切り分け): 「接続数か計算資源か」の1問で正解と誤答3つを一度に振り分ける",
+    "構成図(手前に1層挟む): Lambda と DB の間に Proxy を置いた構成を描く"
+  ],
+  "selected_pattern": "分岐(ボトルネックの切り分け)。誤答3つはいずれも「資源を増やす」方向の対処で、切り分けの1問を置くだけで3つまとめて外れる理由が説明できる。構成図でも正解は示せるが、なぜ増強では駄目なのかが絵に残らない(構成図の型は db03 で使っており、同じ絵の繰り返しにもなる)。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "解説が明示するコスト増の指摘は「インスタンスを最大サイズへ変更する」ノードにだけ書いた。他の2つはコストの話が解説に無いため、外れる理由をグループ名(接続数の枯渇に効かない)で示すに留めた。",
+    "接続プールの上限値や Proxy 経由のレイテンシーは問題文・解説に無いため描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"状況<br/>Lambda の同時実行数が急増し<br/>DB 接続数が枯渇してエラーが多発\"]:::req\n    Q{\"枯渇しているのは<br/>接続数か、計算資源か\"}:::judge\n    CONN[\"接続数<br/>短命な接続が大量に作られている\"]:::best\n    PROXY[\"RDS Proxy<br/>接続をプールして再利用し<br/>DB を保護する\"]:::best\n    GAIN[\"付随する利点<br/>フェイルオーバー時間の短縮<br/>IAM 認証・Secrets Manager 統合\"]:::note\n\n    subgraph OTHERS[\"接続数の枯渇に効かない選択肢\"]\n        W1[\"DB インスタンスを最大サイズへ変更<br/>接続数問題は残りコストだけ増える\"]:::alt\n        W2[\"Lambda のメモリを増やす\"]:::alt\n        W3[\"マルチ AZ を有効にする\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"接続数\"| CONN\n    CONN --> PROXY\n    PROXY -.- GAIN\n    Q -.->|\"資源増強\"| OTHERS"
+}

@@ -1,0 +1,46 @@
+{
+  "question_id": "db07",
+  "purpose": "読み取りと書き込みの経路が分かれる様子を1枚で示し、読み取り負荷を逃がせる選択肢がリードレプリカだけであることを確認できるようにする。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、RDS の可用性機能と性能スケール機能を混同しやすい人。",
+  "message": "読み取りクエリを別インスタンスへ向けられるのはリードレプリカだけで、そのぶんプライマリは書き込みに専念できる。",
+  "source_summary": "リードレプリカは非同期レプリケーションで複製される読み取り専用インスタンスで、参照系クエリやレポート処理をオフロードできる。アプリ側で読み取り接続先をレプリカのエンドポイントへ向ける必要がある。非同期のためわずかなレプリケーション遅延がある。",
+  "elements": [
+    { "id": "REQ", "label": "読み取り負荷の増大で書き込み性能に影響が出ている", "type": "state", "priority": "primary" },
+    { "id": "APP", "label": "アプリケーション", "type": "artifact", "priority": "primary" },
+    { "id": "PRI", "label": "プライマリ(RDS)— 書き込みを担当", "type": "artifact", "priority": "primary" },
+    { "id": "REP", "label": "リードレプリカ(読み取り専用インスタンス)", "type": "artifact", "priority": "primary" },
+    { "id": "NOTE", "label": "読み取り接続先はアプリ側でレプリカのエンドポイントへ向ける / 非同期のためわずかな遅延がある", "type": "other", "priority": "support" },
+    { "id": "W1", "label": "マルチ AZ を有効にする", "type": "artifact", "priority": "secondary" },
+    { "id": "W2", "label": "インスタンスを停止して再起動する", "type": "artifact", "priority": "secondary" },
+    { "id": "W3", "label": "バックアップ保持期間を延ばす", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "APP", "verb": "接続元から追う", "direction": "one-way", "kind": "sequence" },
+    { "from": "APP", "to": "PRI", "verb": "書き込みを送る", "direction": "one-way", "kind": "flow" },
+    { "from": "APP", "to": "REP", "verb": "読み取りを送る", "direction": "one-way", "kind": "flow" },
+    { "from": "PRI", "to": "REP", "verb": "非同期に複製する", "direction": "one-way", "kind": "flow" },
+    { "from": "REP", "to": "NOTE", "verb": "前提を補足する", "direction": "none", "kind": "other" },
+    { "from": "REQ", "to": "W1", "verb": "読み取りを分散しない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "W2", "verb": "読み取りを分散しない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "W3", "verb": "読み取りを分散しない", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "読み取り負荷を分散しない選択肢", "element_ids": ["W1", "W2", "W3"] }
+  ],
+  "candidate_patterns": [
+    "構成図(経路の分離): 読み取りと書き込みが別のインスタンスへ向かう線を描く",
+    "判断フロー: 「増えているのは読み取りか書き込みか」から分岐させる"
+  ],
+  "selected_pattern": "構成図(経路の分離)。解答そのものが「読み取りの向き先を別インスタンスに変える」ことなので、線が2本に分かれる絵を見れば、なぜプライマリの負荷が下がるのかまで同時に読める。判断フローだと結論には至るが、負荷が下がる理由が絵に残らない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "誤答のマルチ AZ には「可用性のための構成」といった説明を付けていない。db07 の解説はマルチ AZ に触れていないため、この図では「読み取りを分散しない側」に置くだけに留めた(違いそのものは db01・db06 の図で扱っている)。",
+    "レプリケーション遅延の許容量は問題文に無いため、注釈で存在を示すだけにして具体的な秒数は書いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>読み取り負荷の増大で<br/>書き込み性能に影響が出ている\"]:::req\n    APP[\"アプリケーション\"]:::svc\n    PRI[\"プライマリ(RDS)<br/>書き込みを担当\"]:::svc\n    REP[\"リードレプリカ<br/>読み取り専用インスタンス\"]:::best\n    NOTE[\"読み取り接続先はアプリ側で<br/>レプリカのエンドポイントへ向ける<br/>非同期のためわずかな遅延がある\"]:::note\n\n    subgraph OTHERS[\"読み取り負荷を分散しない選択肢\"]\n        W1[\"マルチ AZ を有効にする\"]:::alt\n        W2[\"インスタンスを停止して再起動する\"]:::alt\n        W3[\"バックアップ保持期間を延ばす\"]:::alt\n    end\n\n    REQ --> APP\n    APP -->|\"書き込み\"| PRI\n    APP -->|\"読み取り\"| REP\n    PRI -->|\"非同期複製\"| REP\n    REP -.- NOTE\n    REQ -.->|\"分散しない\"| OTHERS"
+}

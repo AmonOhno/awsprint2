@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 73 問 / 全 400 問
+収録: 83 問 / 全 400 問
 
 ---
 
@@ -3778,3 +3778,513 @@ flowchart TD
 **解説**: マルチ AZ は別 AZ のスタンバイへ同期レプリケーションを行い、障害時に DNS 切り替えで自動フェイルオーバー(通常 1〜2 分)します。スタンバイは読み取りにも使えない(リードレプリカとは別物)点が最頻出の引っかけです。「マルチ AZ = 可用性、リードレプリカ = 読み取りスケール」と必ず区別します。
 
 **確認事項**: db01 と同じ知識を扱うが、あちらは「リードレプリカとの違い」、こちらは「主目的の確認」が問われている。図を意図的に別パターン(2状態の構成図)にして、復習時に同じ絵の繰り返しにならないようにした。 / AZ 名(AZ-a / AZ-b)は説明のための仮名で、問題文・解説には出てこない。別 AZ であることを示す以上の意味は持たせていない。
+
+---
+
+## db07 — データベース / level 1
+
+**問題**: RDS で読み取りクエリの負荷が増大し、書き込み性能に影響が出始めた。読み取り負荷を分散する適切な方法はどれか?
+
+**正解**: リードレプリカを追加し、読み取りをそちらへ向ける
+
+**他の選択肢**: マルチ AZ を有効にする / インスタンスを停止して再起動する / バックアップ保持期間を延ばす
+
+**図解の主メッセージ**: 読み取りクエリを別インスタンスへ向けられるのはリードレプリカだけで、そのぶんプライマリは書き込みに専念できる。
+
+**採用パターン**: 構成図(経路の分離)。解答そのものが「読み取りの向き先を別インスタンスに変える」ことなので、線が2本に分かれる絵を見れば、なぜプライマリの負荷が下がるのかまで同時に読める。判断フローだと結論には至るが、負荷が下がる理由が絵に残らない。(候補: 構成図(経路の分離): 読み取りと書き込みが別のインスタンスへ向かう線を描く / 判断フロー: 「増えているのは読み取りか書き込みか」から分岐させる)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>読み取り負荷の増大で<br/>書き込み性能に影響が出ている"]:::req
+    APP["アプリケーション"]:::svc
+    PRI["プライマリ(RDS)<br/>書き込みを担当"]:::svc
+    REP["リードレプリカ<br/>読み取り専用インスタンス"]:::best
+    NOTE["読み取り接続先はアプリ側で<br/>レプリカのエンドポイントへ向ける<br/>非同期のためわずかな遅延がある"]:::note
+
+    subgraph OTHERS["読み取り負荷を分散しない選択肢"]
+        W1["マルチ AZ を有効にする"]:::alt
+        W2["インスタンスを停止して再起動する"]:::alt
+        W3["バックアップ保持期間を延ばす"]:::alt
+    end
+
+    REQ --> APP
+    APP -->|"書き込み"| PRI
+    APP -->|"読み取り"| REP
+    PRI -->|"非同期複製"| REP
+    REP -.- NOTE
+    REQ -.->|"分散しない"| OTHERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db07.svg`](../../web/diagrams/db07.svg)
+
+**解説**: リードレプリカは非同期レプリケーションで複製される読み取り専用インスタンスで、参照系クエリやレポート処理をオフロードできます。アプリ側で読み取り接続先をレプリカのエンドポイントへ向ける必要があります。非同期のためわずかなレプリケーション遅延がある点も押さえます。
+
+**確認事項**: 誤答のマルチ AZ には「可用性のための構成」といった説明を付けていない。db07 の解説はマルチ AZ に触れていないため、この図では「読み取りを分散しない側」に置くだけに留めた(違いそのものは db01・db06 の図で扱っている)。 / レプリケーション遅延の許容量は問題文に無いため、注釈で存在を示すだけにして具体的な秒数は書いていない。
+
+---
+
+## db08 — データベース / level 2
+
+**問題**: RDS のデータを別リージョンでも参照できるようにし、リージョン障害時にはそのコピーを昇格して DR とすることも想定したい。どの機能を使うか?
+
+**正解**: クロスリージョンリードレプリカ
+
+**他の選択肢**: マルチ AZ 配置 / 自動バックアップ / RDS Proxy
+
+**図解の主メッセージ**: 別リージョンからの低レイテンシー読み取りと、災害時に昇格してスタンドアロン DB になる DR を1つで満たすのはクロスリージョンリードレプリカだけ。
+
+**採用パターン**: 構成図(2リージョン)。この問題の争点は「どのリージョンに何があるか」なので、リージョンの枠を描くだけでマルチ AZ が同一リージョン内の話であることまで同時に伝わる。合流図は要件の数が2つしかなく、線を集める形にする利点が小さい。(候補: 構成図(2リージョン): リージョンの枠を2つ描き、複製の線と昇格の線を分けて引く / 合流(要件の収束): 「現地読み取り」と「DR」の2要件を1つのサービスへ集める)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>別リージョンでも参照でき<br/>リージョン障害時は昇格して DR にしたい"]:::req
+
+    subgraph PRIM["プライマリリージョン"]
+        SRC["RDS プライマリ"]:::svc
+    end
+
+    subgraph SEC["別リージョン"]
+        direction TB
+        CRR["クロスリージョン<br/>リードレプリカ"]:::best
+        LOCAL["現地からの低レイテンシー読み取り"]:::best
+        PROMO["昇格(プロモート)して<br/>スタンドアロン DB になる = DR"]:::best
+    end
+
+    subgraph OTHERS["2つの要求を同時に満たさない選択肢"]
+        W1["マルチ AZ 配置<br/>同一リージョン内の可用性対策"]:::alt
+        W2["自動バックアップ"]:::alt
+        W3["RDS Proxy"]:::alt
+    end
+
+    REQ --> SRC
+    SRC -->|"非同期複製"| CRR
+    CRR --> LOCAL
+    CRR -.->|"災害時"| PROMO
+    REQ -.->|"満たさない"| OTHERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db08.svg`](../../web/diagrams/db08.svg)
+
+**解説**: クロスリージョンリードレプリカは別リージョンへ非同期複製され、現地からの低レイテンシー読み取りと、災害時のスタンドアロン DB への昇格(プロモート)による DR を両立します。マルチ AZ は同一リージョン内の可用性対策であり、リージョン障害には対応できません。
+
+**確認事項**: 昇格は災害時にだけ起きるので破線矢印(条件付き)で描いた。通常時は読み取り専用のままである点を線種で区別している。 / リージョン名は問題文に無いため「プライマリリージョン / 別リージョン」という一般名にした。
+
+---
+
+## db09 — データベース / level 2
+
+**問題**: Lambda 関数から RDS へ接続するアプリで、同時実行数の急増により DB 接続数が枯渇してエラーが多発している。どのサービスで解決すべきか?
+
+**正解**: RDS Proxy を導入して接続をプーリングする
+
+**他の選択肢**: DB インスタンスを最大サイズへ変更する / Lambda のメモリを増やす / マルチ AZ を有効にする
+
+**図解の主メッセージ**: 枯渇しているのは DB の接続数であって計算資源ではないので、接続をプールして再利用する RDS Proxy が根本解決になる。
+
+**採用パターン**: 分岐(ボトルネックの切り分け)。誤答3つはいずれも「資源を増やす」方向の対処で、切り分けの1問を置くだけで3つまとめて外れる理由が説明できる。構成図でも正解は示せるが、なぜ増強では駄目なのかが絵に残らない(構成図の型は db03 で使っており、同じ絵の繰り返しにもなる)。(候補: 分岐(ボトルネックの切り分け): 「接続数か計算資源か」の1問で正解と誤答3つを一度に振り分ける / 構成図(手前に1層挟む): Lambda と DB の間に Proxy を置いた構成を描く)
+
+```mermaid
+flowchart TD
+    REQ["状況<br/>Lambda の同時実行数が急増し<br/>DB 接続数が枯渇してエラーが多発"]:::req
+    Q{"枯渇しているのは<br/>接続数か、計算資源か"}:::judge
+    CONN["接続数<br/>短命な接続が大量に作られている"]:::best
+    PROXY["RDS Proxy<br/>接続をプールして再利用し<br/>DB を保護する"]:::best
+    GAIN["付随する利点<br/>フェイルオーバー時間の短縮<br/>IAM 認証・Secrets Manager 統合"]:::note
+
+    subgraph OTHERS["接続数の枯渇に効かない選択肢"]
+        W1["DB インスタンスを最大サイズへ変更<br/>接続数問題は残りコストだけ増える"]:::alt
+        W2["Lambda のメモリを増やす"]:::alt
+        W3["マルチ AZ を有効にする"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"接続数"| CONN
+    CONN --> PROXY
+    PROXY -.- GAIN
+    Q -.->|"資源増強"| OTHERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db09.svg`](../../web/diagrams/db09.svg)
+
+**解説**: RDS Proxy はデータベース接続をプールして再利用し、Lambda のような大量の短命接続から DB を保護します。フェイルオーバー時間の短縮や IAM 認証・Secrets Manager 統合の利点もあります。インスタンスの増強は接続数問題の根本解決にならず、コストも増大します。
+
+**確認事項**: 解説が明示するコスト増の指摘は「インスタンスを最大サイズへ変更する」ノードにだけ書いた。他の2つはコストの話が解説に無いため、外れる理由をグループ名(接続数の枯渇に効かない)で示すに留めた。 / 接続プールの上限値や Proxy 経由のレイテンシーは問題文・解説に無いため描いていない。
+
+---
+
+## db10 — データベース / level 1
+
+**問題**: RDS の自動バックアップで可能になることはどれか?
+
+**正解**: 保持期間内の任意時点への復元(ポイントインタイムリカバリ)
+
+**他の選択肢**: リージョン間の同期レプリケーション / 読み取り性能の向上 / インスタンス削除後も無期限の保存
+
+**図解の主メッセージ**: 自動バックアップは日次スナップショットに加えてトランザクションログを保存するため、保持期間内なら秒単位の任意時点へ復元できる。
+
+**採用パターン**: タイムライン。この問題の要は「日次の点ではなく、その間のどこへでも戻れる」ことなので、時間軸に点(スナップショット)と線(ログ)を並べるのが最も直接的。合流図でも同じ2要素は示せるが、『間を埋める』という時間的な意味が絵から落ちる。(候補: タイムライン: 日次スナップショットとログを時間軸に並べ、間の任意時点を指す / 合流: 「スナップショット」と「ログ」の2入力が揃って任意時点復元になる形にする)
+
+```mermaid
+flowchart TD
+    REQ["問い<br/>自動バックアップで<br/>可能になることはどれか"]:::req
+
+    subgraph KEEP["保持期間(最大 35 日)"]
+        direction LR
+        D1["日次スナップショット<br/>(前日)"]:::svc
+        TLOG["トランザクションログ<br/>スナップショットの間を埋める"]:::svc
+        D2["日次スナップショット<br/>(当日)"]:::svc
+        D1 --> TLOG --> D2
+    end
+
+    ANY["保持期間内の任意時点へ復元<br/>ポイントインタイムリカバリ(秒単位)"]:::best
+    NOTE["インスタンス削除で自動バックアップは既定で消える<br/>長期保存したいなら手動スナップショットを取得する"]:::note
+
+    subgraph OTHERS["自動バックアップの機能ではないもの"]
+        W1["リージョン間の同期レプリケーション"]:::alt
+        W2["読み取り性能の向上"]:::alt
+        W3["インスタンス削除後も無期限の保存"]:::alt
+    end
+
+    REQ --> D1
+    TLOG --> ANY
+    ANY -.- NOTE
+    REQ -.->|"当てはまらない"| OTHERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db10.svg`](../../web/diagrams/db10.svg)
+
+**解説**: 自動バックアップは日次スナップショットとトランザクションログを保存し、保持期間(最大 35 日)内なら秒単位の任意時点へ復元できます。インスタンス削除時に自動バックアップは(既定では)消える点が重要で、長期保存したい場合は手動スナップショットを取得します。
+
+**確認事項**: スナップショットを「前日 / 当日」と書いたのは時間軸であることを示すためで、問題文が特定の日付を指しているわけではない。 / db11(手動スナップショット)と知識が隣接するため、こちらでは削除時の扱いを注釈1つに留め、対比そのものは db11 の図に持たせている。
+
+---
+
+## db11 — データベース / level 2
+
+**問題**: RDS インスタンスを削除する予定だが、監査のためデータを数年間復元可能な形で残したい。どうすべきか?
+
+**正解**: 削除前に手動スナップショットを取得する
+
+**他の選択肢**: 自動バックアップに任せる / リードレプリカを残す / CloudWatch Logs にエクスポートする
+
+**図解の主メッセージ**: 自動バックアップはインスタンスの寿命に縛られて削除とともに失われるが、手動スナップショットは明示的に削除するまで残るので、数年の監査保管には削除前の手動スナップショットが要る。
+
+**採用パターン**: 対比(削除イベントを境にした2分岐)。差が出るのは削除の瞬間だけなので、その1点を分岐に置けば「残る/消える」がそのまま答えになる。タイムラインは db10 で使っており、こちらで繰り返すと同じ絵に見えるうえ、保持年数が問題文に無いため軸の目盛りを描けない。(候補: 対比(削除イベントを境にした2分岐): 同じ削除に対して残るもの・消えるものを左右に並べる / タイムライン: 取得から数年後までの保持期間を時間軸に描く)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>インスタンス削除後も監査のため<br/>数年間復元できるようにしたい"]:::req
+    EVENT{"インスタンスの削除"}:::judge
+
+    subgraph AUTO["自動バックアップに任せた場合"]
+        A1["削除に伴い失われる<br/>最終スナップショットを選ばない限り"]:::alt
+    end
+
+    subgraph MANUAL["削除前に手動スナップショットを取得した場合"]
+        direction TB
+        M1["明示的に削除するまで<br/>無期限に保持される"]:::best
+        M2["新しいインスタンスへ<br/>いつでも復元できる"]:::best
+        M1 --> M2
+    end
+
+    subgraph OTHERS["長期の復元手段にならない選択肢"]
+        W1["リードレプリカを残す"]:::alt
+        W2["CloudWatch Logs にエクスポート"]:::alt
+    end
+
+    REQ --> EVENT
+    EVENT -->|"自動のみ"| A1
+    EVENT -->|"手動を取得"| M1
+    REQ -.->|"要件を満たさない"| OTHERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db11.svg`](../../web/diagrams/db11.svg)
+
+**解説**: 手動スナップショットは明示的に削除するまで無期限に保持され、そこから新しいインスタンスをいつでも復元できます。自動バックアップはインスタンス削除に伴い失われる(最終スナップショットの取得を選ばない限り)ため、長期保管には手動スナップショットが正解です。
+
+**確認事項**: 誤答2つには外れる理由を書き添えていない。解説がこの2つに触れていないため、要件(削除後も数年復元できる)を満たす経路が無いことをグループ名で示すだけにした。 / 「最終スナップショットの取得を選ばない限り」という例外は自動側のノードに残した。これを落とすと言い切りが強すぎて解説とずれる。
+
+---
+
+## db12 — データベース / level 2
+
+**問題**: Amazon Aurora の特徴として正しいものはどれか?
+
+**正解**: データは 3 つの AZ に 6 コピー保存され、ストレージは自動拡張する
+
+**他の選択肢**: ストレージは単一 AZ に保存される / リードレプリカは最大 2 台まで / MySQL とは互換性がない
+
+**図解の主メッセージ**: Aurora はストレージが 3 AZ に 6 コピーで自動拡張し、MySQL/PostgreSQL 互換でリードレプリカは最大 15 台なので、単一 AZ・レプリカ 2 台・互換なしという記述はどれもこの作りと食い違う。
+
+**採用パターン**: 対比(記述と事実の1対1突き合わせ)。誤答3つが単一 AZ・台数・互換性という別々の観点なので、層に整理するより1つずつ横に正解を置いた方が読む手数が少ない。レイヤー図は同じ Aurora の耐久性を扱う db04 で採用済みで、こちらで繰り返すと復習時に同じ絵になる。(候補: 対比(記述と事実の1対1突き合わせ): 誤りの記述の隣に実際の仕様を置く / レイヤー(層の分離): コンピュート層とストレージ層を描き、どの層の説明かで正誤を判定する)
+
+```mermaid
+flowchart TD
+    REQ["問い<br/>Aurora の特徴として<br/>正しいものはどれか"]:::req
+    A1["ストレージは単一 AZ に保存される"]:::alt
+    B1["3 AZ に 6 コピー保存され<br/>ストレージは自動拡張する"]:::best
+    A2["リードレプリカは最大 2 台まで"]:::alt
+    B2["リードレプリカは最大 15 台"]:::svc
+    A3["MySQL とは互換性がない"]:::alt
+    B3["MySQL / PostgreSQL 互換"]:::svc
+    NOTE["容量は最大 128TB(現行世代 256TB)まで自動拡張<br/>フェイルオーバーも標準 RDS より高速(通常 30 秒以内)"]:::note
+
+    REQ --> A1
+    REQ --> A2
+    REQ --> A3
+    A1 -->|"実際は"| B1
+    A2 -->|"実際は"| B2
+    A3 -->|"実際は"| B3
+    B1 -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db12.svg`](../../web/diagrams/db12.svg)
+
+**解説**: Aurora は MySQL/PostgreSQL 互換のクラウドネイティブ DB で、ストレージ層が 3 AZ × 2 = 6 コピーに自動複製され、最大 128TB(現行世代では 256TB)まで自動拡張します。リードレプリカは最大 15 台で、フェイルオーバーも標準 RDS より高速(通常 30 秒以内)です。この耐久性アーキテクチャは頻出ポイントです。
+
+**確認事項**: 正解の記述(3 AZ に 6 コピー・自動拡張)だけを緑にし、他の2つの事実(15 台・互換)は白のサービス色にした。3つとも緑にすると、どれが選ぶべき記述かが図から読めなくなるため。 / db04 も Aurora の耐久性を問うが、あちらは「層の作り」、こちらは「記述の突き合わせ」に振り分けた。両方に出てくる 6 コピーの数字は意図的に重複させている(頻出ポイントのため)。
+
+---
+
+## db13 — データベース / level 2
+
+**問題**: グローバル展開するサービスで、DB のリージョン障害時に RPO 1 秒・RTO 1 分未満での復旧と、各地からの低レイテンシー読み取りを実現したい。どの構成が適切か?
+
+**正解**: Aurora Global Database
+
+**他の選択肢**: RDS マルチ AZ / DynamoDB オンデマンド / RDS の日次スナップショットをコピー
+
+**図解の主メッセージ**: 障害の範囲がリージョン全体で、かつ RPO 1 秒・RTO 1 分未満が要るなら、ストレージレベルで複製する Aurora Global Database しか残らない。
+
+**採用パターン**: 分岐(2段の判断フロー)。誤答が外れる理由が「範囲が足りない(マルチ AZ)」「速さが足りない(日次コピー)」と段階的にずれているので、問いを2つ順に置くだけで振り分けが終わる。マトリクスは DynamoDB オンデマンドが軸に載らず(そもそもリレーショナルではない)、4マスのうち置き場のない選択肢が出る。(候補: 分岐(2段の判断フロー): 障害の範囲 → 復旧の速さ の順で選択肢を絞る / マトリクス: 「同一リージョン / 複数リージョン」×「復旧が秒〜分 / 時間単位」の2軸に4案を配置する)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>リージョン障害から RPO 1 秒・RTO 1 分未満で復旧<br/>各地から低レイテンシー読み取り"]:::req
+    Q1{"守るべき障害の範囲は<br/>リージョン全体か?"}:::judge
+    Q2{"RPO 秒・RTO 分の<br/>速さが要るか?"}:::judge
+    AGD["Aurora Global Database<br/>ストレージレベルで 1 秒未満の遅延<br/>最大 5 つのセカンダリリージョン"]:::best
+    LOCAL["各リージョンで<br/>ローカル読み取りができる"]:::best
+    PROMO["災害時は 1 分未満で<br/>セカンダリを昇格できる"]:::best
+    W1["RDS マルチ AZ<br/>同一リージョン内の対策"]:::alt
+    W2["RDS の日次スナップショットをコピー<br/>日次では RPO 1 秒に届かない"]:::alt
+    W3["DynamoDB オンデマンド<br/>リレーショナル DB ではない"]:::alt
+
+    REQ --> Q1
+    Q1 -->|"AZ 単位"| W1
+    Q1 -->|"リージョン全体"| Q2
+    Q2 -->|"日次で可"| W2
+    Q2 -->|"秒・分が要る"| AGD
+    AGD --> LOCAL
+    AGD --> PROMO
+    REQ -.->|"前提が違う"| W3
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db13.svg`](../../web/diagrams/db13.svg)
+
+**解説**: Aurora Global Database はストレージレベルのレプリケーションにより 1 秒未満の遅延で最大 5 つのセカンダリリージョンへ複製し、災害時は 1 分未満でセカンダリを昇格できます。各リージョンでローカル読み取りも可能です。「RPO 秒・RTO 分のグローバル RDB 要件 = Aurora Global Database」で判断します。
+
+**確認事項**: 「日次スナップショットのコピーでは RPO 1 秒に届かない」は解説に明記が無いが、日次という語と要件の秒単位を突き合わせただけの範囲に留めている。 / DynamoDB オンデマンドだけは判断フローの外(破線)に置いた。問われているのがリレーショナル DB の構成であり、2つの問いのどちらでもなく前提で外れるため。
+
+---
+
+## db14 — データベース / level 2
+
+**問題**: 利用が不定期で予測できない社内アプリのリレーショナル DB を、アイドル時のコストを抑えつつ負荷に応じて自動で処理能力を増減させたい。どれが適切か?
+
+**正解**: Aurora Serverless v2
+
+**他の選択肢**: RDS の最大サイズインスタンス / Redshift / EC2 に MySQL を自前構築
+
+**図解の主メッセージ**: 利用が不定期で予測できないなら、ピークに合わせた固定サイズは谷でも容量を持ち続けるが、Aurora Serverless v2 は ACU 単位で秒ごとに増減するのでアイドル時のコストが下がる。
+
+**採用パターン**: 対比(固定容量 と 追従容量)。この問題が問うているのはサービス名ではなく「アイドル時にコストが残るかどうか」なので、谷での振る舞いを横に並べるとコスト差の理由がそのまま見える。判断フローだと結論(Serverless)には着くが、なぜ安くなるのかが絵から落ちる。(候補: 対比(固定容量 と 追従容量): 同じ負荷の谷に対する振る舞いを左右に並べる / 判断フロー: 「負荷が予測できるか」の1問で Serverless とプロビジョンドを振り分ける)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>利用が不定期で予測できない社内アプリの RDB<br/>アイドル時のコストを抑えたい"]:::req
+    Q{"容量を固定するか<br/>負荷に追従させるか"}:::judge
+
+    subgraph FIXED["容量を固定する場合"]
+        direction TB
+        F1["ピークに合わせて選ぶ"]:::alt
+        F2["負荷の谷でも同じ容量のまま<br/>遊休コストが大きい"]:::alt
+        F1 --> F2
+    end
+
+    subgraph SVLS["容量を負荷に追従させる場合"]
+        direction TB
+        S1["Aurora Serverless v2<br/>ACU 単位で秒単位にオートスケール"]:::best
+        S2["負荷の谷では最小容量まで下がる"]:::best
+        S1 --> S2
+    end
+
+    subgraph OTHERS["要件に合わない選択肢"]
+        W1["Redshift"]:::alt
+        W2["EC2 に MySQL を自前構築"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"固定する"| F1
+    Q -->|"追従させる"| S1
+    REQ -.->|"要件に合わない"| OTHERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db14.svg`](../../web/diagrams/db14.svg)
+
+**解説**: Aurora Serverless v2 は ACU 単位で秒単位の細かいオートスケーリングを行い、負荷の谷では最小容量まで下がるため、不定期・予測不能なワークロードのコストを最適化できます。固定サイズのインスタンスはピークに合わせると遊休コストが大きくなります。「使用頻度が不定期な RDB = Aurora Serverless」が定番です。
+
+**確認事項**: Redshift と EC2 自前構築には個別の否定理由を書いていない。解説がこの2つに触れていないため、要件(自動で増減するリレーショナル DB)に合わないという1つのグループに束ねた。 / ACU の最小値や課金単価は問題文・解説に無いため描いていない。「谷では最小容量まで下がる」という解説どおりの表現に留めている。
+
+---
+
+## db15 — データベース / level 1
+
+**問題**: Aurora クラスターで、複数のリードレプリカへ読み取りクエリを自動分散させる最も簡単な方法はどれか?
+
+**正解**: リーダーエンドポイントに接続する
+
+**他の選択肢**: 各レプリカの IP を順番に使う / クラスターエンドポイントに接続する / ALB をレプリカの前段に置く
+
+**図解の主メッセージ**: Aurora は接続先をエンドポイントで抽象化しており、リーダーエンドポイントに繋ぐだけで全リードレプリカへ自動分散される。
+
+**採用パターン**: 構成図(エンドポイントと接続先)。誤答の中心はクラスターエンドポイントとの取り違えなので、両方のエンドポイントを描いて線の行き先を分けるのが最短の説明になる。対比表でも正誤は付くが、クラスターエンドポイントが「間違い」ではなく「書き込み用」であることが伝わらない。(候補: 構成図(エンドポイントと接続先): 2種類のエンドポイントから伸びる線でどこへ繋がるかを描く / 対比: 4つの選択肢を「自動で分散する / 自前で分散する」の2列に並べる)
+
+```mermaid
+flowchart TD
+    APP["アプリケーション"]:::req
+    WEP["クラスター(ライター)<br/>エンドポイント"]:::svc
+    REP["リーダーエンドポイント<br/>読み取り用"]:::best
+    WRITER["ライターインスタンス"]:::svc
+    R1["リードレプリカ 1"]:::best
+    R2["リードレプリカ 2"]:::best
+    NOTE1["クラスターエンドポイントは書き込み先<br/>読み取りの分散はしない"]:::note
+    NOTE2["レプリカの追加・削除・フェイルオーバー時も<br/>エンドポイントが自動追従するため<br/>アプリの接続先変更は不要"]:::note
+
+    subgraph OTHERS["自前で分散させる案(不要な手間)"]
+        W1["各レプリカの IP を順番に使う"]:::alt
+        W2["ALB をレプリカの前段に置く"]:::alt
+    end
+
+    APP -->|"書き込み"| WEP
+    APP -->|"読み取り"| REP
+    WEP --> WRITER
+    REP -->|"自動分散"| R1
+    REP -->|"自動分散"| R2
+    WEP -.- NOTE1
+    REP -.- NOTE2
+    APP -.->|"不要"| OTHERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db15.svg`](../../web/diagrams/db15.svg)
+
+**解説**: Aurora のリーダーエンドポイントは、クラスター内の全リードレプリカへ接続を自動的に負荷分散する専用エンドポイントです。書き込みはクラスター(ライター)エンドポイントへ向けます。レプリカの追加・削除・フェイルオーバー時もエンドポイントが自動追従するため、アプリの接続先変更は不要です。
+
+**確認事項**: クラスターエンドポイントは誤答だがグレー(alt)ではなく白(svc)にした。存在しない/使えないものではなく書き込み用として正しく使うものであり、グレーにすると『使ってはいけない』と読めてしまうため。理由は注釈で補っている。 / レプリカを 2 台描いたのは分散の対象が複数であることを示すためで、台数そのものは問題文に無い。
+
+---
+
+## db16 — データベース / level 1
+
+**問題**: 1 桁ミリ秒の応答が必要な大規模なキーバリュー型データ(ユーザーセッション、ゲームデータなど)を、サーバー管理なしで無制限にスケールさせたい。どのサービスが適切か?
+
+**正解**: Amazon DynamoDB
+
+**他の選択肢**: Amazon RDS / Amazon Redshift / Amazon Neptune
+
+**図解の主メッセージ**: 必要なのが大規模なキーバリュー参照なら、規模によらず 1 桁ミリ秒でサーバー管理も要らない DynamoDB が答えで、複雑な JOIN や集計が要るならリレーショナル側へ振れる。
+
+**採用パターン**: 分岐(データモデルで選ぶ)。解説が最後に「複雑な JOIN や集計なら RDS/Aurora」と対にしているとおり、判断の起点は性能値ではなくデータモデルなので、その1問を先頭に置くのが解説の筋と一致する。合流図は同じ DynamoDB 選定を扱う db02 で採用済みで、こちらで繰り返すと復習時に同じ絵になる。(候補: 分岐(データモデルで選ぶ): キーバリュー参照か JOIN・集計かの1問で振り分ける / 合流(要件の収束): 1 桁ミリ秒・キーバリュー・サーバー管理なし・無制限スケールの4要件を1つのサービスへ集める)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>大規模なキーバリュー型データ(セッション・ゲームデータ)<br/>1 桁ミリ秒・サーバー管理なし・無制限にスケール"]:::req
+    Q{"必要なのは<br/>キーバリュー参照か<br/>複雑な JOIN・集計か"}:::judge
+    DDB["Amazon DynamoDB<br/>フルマネージドの NoSQL<br/>キーバリュー / ドキュメント"]:::best
+    RDS["Amazon RDS<br/>複雑な JOIN・集計が要るならこちら"]:::alt
+
+    subgraph FIT["DynamoDB が満たすもの"]
+        F1["規模によらず 1 桁ミリ秒"]:::best
+        F2["テーブルスキーマが柔軟"]:::best
+        F3["無制限のスケーラビリティ<br/>サーバー管理は不要"]:::best
+    end
+
+    subgraph OTHERS["用途そのものが違う選択肢"]
+        W1["Amazon Redshift"]:::alt
+        W2["Amazon Neptune"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"キーバリュー"| DDB
+    Q -->|"JOIN・集計"| RDS
+    DDB --> F1
+    DDB --> F2
+    DDB --> F3
+    REQ -.->|"用途が違う"| OTHERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db16.svg`](../../web/diagrams/db16.svg)
+
+**解説**: DynamoDB はフルマネージドの NoSQL(キーバリュー/ドキュメント)データベースで、規模によらず 1 桁ミリ秒の性能を発揮し、サーバー管理は不要です。テーブルスキーマの柔軟性と無制限のスケーラビリティが特徴です。複雑な JOIN や集計が必要なリレーショナル要件には RDS/Aurora を選びます。
+
+**確認事項**: RDS は選択肢の1つ(誤答)だが、解説が「リレーショナル要件ならこちら」と積極的な行き先として挙げているため、分岐のもう一方の枝に置いてグレーで示した。単なる×として脇に置くと、解説の対の構図が図から落ちる。 / Redshift と Neptune には個別の説明を付けていない。解説がこの2つに触れていないため、用途が違うという1グループに束ねている。

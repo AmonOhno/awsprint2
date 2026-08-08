@@ -1,0 +1,45 @@
+{
+  "question_id": "db11",
+  "purpose": "「インスタンスの削除」を境目に置き、自動バックアップと手動スナップショットで残るものが変わることを1枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、自動バックアップがあれば長期保管も足りると考えがちな人。",
+  "message": "自動バックアップはインスタンスの寿命に縛られて削除とともに失われるが、手動スナップショットは明示的に削除するまで残るので、数年の監査保管には削除前の手動スナップショットが要る。",
+  "source_summary": "手動スナップショットは明示的に削除するまで無期限に保持され、そこから新しいインスタンスをいつでも復元できる。自動バックアップはインスタンス削除に伴い失われる(最終スナップショットの取得を選ばない限り)ため、長期保管には手動スナップショットが正解。",
+  "elements": [
+    { "id": "REQ", "label": "インスタンス削除後も監査のため数年間復元できるようにしたい", "type": "state", "priority": "primary" },
+    { "id": "EVENT", "label": "インスタンスの削除(この時点で扱いが分かれる)", "type": "process", "priority": "primary" },
+    { "id": "A1", "label": "自動バックアップは削除に伴い失われる(最終スナップショットを選ばない限り)", "type": "state", "priority": "primary" },
+    { "id": "M1", "label": "手動スナップショットは明示的に削除するまで無期限に保持される", "type": "state", "priority": "primary" },
+    { "id": "M2", "label": "そこから新しいインスタンスをいつでも復元できる", "type": "state", "priority": "primary" },
+    { "id": "W1", "label": "リードレプリカを残す", "type": "artifact", "priority": "secondary" },
+    { "id": "W2", "label": "CloudWatch Logs にエクスポートする", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "EVENT", "verb": "境目を置いて考える", "direction": "one-way", "kind": "sequence" },
+    { "from": "EVENT", "to": "A1", "verb": "自動に任せた場合", "direction": "one-way", "kind": "flow" },
+    { "from": "EVENT", "to": "M1", "verb": "削除前に手動取得した場合", "direction": "one-way", "kind": "flow" },
+    { "from": "M1", "to": "M2", "verb": "復元できる状態が続く", "direction": "one-way", "kind": "flow" },
+    { "from": "REQ", "to": "W1", "verb": "数年の復元手段にならない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "W2", "verb": "数年の復元手段にならない", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "自動バックアップに任せた場合", "element_ids": ["A1"] },
+    { "label": "削除前に手動スナップショットを取得した場合", "element_ids": ["M1", "M2"] },
+    { "label": "長期の復元手段にならない選択肢", "element_ids": ["W1", "W2"] }
+  ],
+  "candidate_patterns": [
+    "対比(削除イベントを境にした2分岐): 同じ削除に対して残るもの・消えるものを左右に並べる",
+    "タイムライン: 取得から数年後までの保持期間を時間軸に描く"
+  ],
+  "selected_pattern": "対比(削除イベントを境にした2分岐)。差が出るのは削除の瞬間だけなので、その1点を分岐に置けば「残る/消える」がそのまま答えになる。タイムラインは db10 で使っており、こちらで繰り返すと同じ絵に見えるうえ、保持年数が問題文に無いため軸の目盛りを描けない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "誤答2つには外れる理由を書き添えていない。解説がこの2つに触れていないため、要件(削除後も数年復元できる)を満たす経路が無いことをグループ名で示すだけにした。",
+    "「最終スナップショットの取得を選ばない限り」という例外は自動側のノードに残した。これを落とすと言い切りが強すぎて解説とずれる。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>インスタンス削除後も監査のため<br/>数年間復元できるようにしたい\"]:::req\n    EVENT{\"インスタンスの削除\"}:::judge\n\n    subgraph AUTO[\"自動バックアップに任せた場合\"]\n        A1[\"削除に伴い失われる<br/>最終スナップショットを選ばない限り\"]:::alt\n    end\n\n    subgraph MANUAL[\"削除前に手動スナップショットを取得した場合\"]\n        direction TB\n        M1[\"明示的に削除するまで<br/>無期限に保持される\"]:::best\n        M2[\"新しいインスタンスへ<br/>いつでも復元できる\"]:::best\n        M1 --> M2\n    end\n\n    subgraph OTHERS[\"長期の復元手段にならない選択肢\"]\n        W1[\"リードレプリカを残す\"]:::alt\n        W2[\"CloudWatch Logs にエクスポート\"]:::alt\n    end\n\n    REQ --> EVENT\n    EVENT -->|\"自動のみ\"| A1\n    EVENT -->|\"手動を取得\"| M1\n    REQ -.->|\"要件を満たさない\"| OTHERS"
+}

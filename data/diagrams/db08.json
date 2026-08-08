@@ -1,0 +1,47 @@
+{
+  "question_id": "db08",
+  "purpose": "「別リージョンで読める」と「昇格して DR になる」という2つの要求が、1つの構成で同時に満たされることを1枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、マルチ AZ をリージョン障害の対策だと取り違えやすい人。",
+  "message": "別リージョンからの低レイテンシー読み取りと、災害時に昇格してスタンドアロン DB になる DR を1つで満たすのはクロスリージョンリードレプリカだけ。",
+  "source_summary": "クロスリージョンリードレプリカは別リージョンへ非同期複製され、現地からの低レイテンシー読み取りと、災害時のスタンドアロン DB への昇格(プロモート)による DR を両立する。マルチ AZ は同一リージョン内の可用性対策でありリージョン障害には対応できない。",
+  "elements": [
+    { "id": "REQ", "label": "別リージョンでも参照でき、リージョン障害時は昇格して DR にしたい", "type": "state", "priority": "primary" },
+    { "id": "SRC", "label": "RDS プライマリ(元のリージョン)", "type": "artifact", "priority": "primary" },
+    { "id": "CRR", "label": "クロスリージョンリードレプリカ", "type": "artifact", "priority": "primary" },
+    { "id": "LOCAL", "label": "現地からの低レイテンシー読み取り", "type": "state", "priority": "primary" },
+    { "id": "PROMO", "label": "昇格(プロモート)してスタンドアロン DB になる = DR", "type": "state", "priority": "primary" },
+    { "id": "W1", "label": "マルチ AZ 配置(同一リージョン内の可用性対策)", "type": "artifact", "priority": "secondary" },
+    { "id": "W2", "label": "自動バックアップ", "type": "artifact", "priority": "secondary" },
+    { "id": "W3", "label": "RDS Proxy", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "SRC", "verb": "元の構成から追う", "direction": "one-way", "kind": "sequence" },
+    { "from": "SRC", "to": "CRR", "verb": "別リージョンへ非同期複製する", "direction": "one-way", "kind": "flow" },
+    { "from": "CRR", "to": "LOCAL", "verb": "現地の読み取りに応える", "direction": "one-way", "kind": "flow" },
+    { "from": "CRR", "to": "PROMO", "verb": "災害時に昇格する", "direction": "one-way", "kind": "flow" },
+    { "from": "REQ", "to": "W1", "verb": "リージョン障害に対応できない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "W2", "verb": "現地読み取りにならない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "W3", "verb": "複製の機能ではない", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "プライマリリージョン", "element_ids": ["SRC"] },
+    { "label": "別リージョン", "element_ids": ["CRR", "LOCAL", "PROMO"] },
+    { "label": "2つの要求を同時に満たさない選択肢", "element_ids": ["W1", "W2", "W3"] }
+  ],
+  "candidate_patterns": [
+    "構成図(2リージョン): リージョンの枠を2つ描き、複製の線と昇格の線を分けて引く",
+    "合流(要件の収束): 「現地読み取り」と「DR」の2要件を1つのサービスへ集める"
+  ],
+  "selected_pattern": "構成図(2リージョン)。この問題の争点は「どのリージョンに何があるか」なので、リージョンの枠を描くだけでマルチ AZ が同一リージョン内の話であることまで同時に伝わる。合流図は要件の数が2つしかなく、線を集める形にする利点が小さい。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "昇格は災害時にだけ起きるので破線矢印(条件付き)で描いた。通常時は読み取り専用のままである点を線種で区別している。",
+    "リージョン名は問題文に無いため「プライマリリージョン / 別リージョン」という一般名にした。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>別リージョンでも参照でき<br/>リージョン障害時は昇格して DR にしたい\"]:::req\n\n    subgraph PRIM[\"プライマリリージョン\"]\n        SRC[\"RDS プライマリ\"]:::svc\n    end\n\n    subgraph SEC[\"別リージョン\"]\n        direction TB\n        CRR[\"クロスリージョン<br/>リードレプリカ\"]:::best\n        LOCAL[\"現地からの低レイテンシー読み取り\"]:::best\n        PROMO[\"昇格(プロモート)して<br/>スタンドアロン DB になる = DR\"]:::best\n    end\n\n    subgraph OTHERS[\"2つの要求を同時に満たさない選択肢\"]\n        W1[\"マルチ AZ 配置<br/>同一リージョン内の可用性対策\"]:::alt\n        W2[\"自動バックアップ\"]:::alt\n        W3[\"RDS Proxy\"]:::alt\n    end\n\n    REQ --> SRC\n    SRC -->|\"非同期複製\"| CRR\n    CRR --> LOCAL\n    CRR -.->|\"災害時\"| PROMO\n    REQ -.->|\"満たさない\"| OTHERS"
+}

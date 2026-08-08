@@ -1,0 +1,43 @@
+{
+  "question_id": "db12",
+  "purpose": "誤りの記述それぞれを Aurora の実際の作りと1対1で突き合わせ、どの数値・仕様と食い違うのかを1枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Aurora の耐久性アーキテクチャの数字(3 AZ / 6 コピー / 15 台)がうろ覚えな人。",
+  "message": "Aurora はストレージが 3 AZ に 6 コピーで自動拡張し、MySQL/PostgreSQL 互換でリードレプリカは最大 15 台なので、単一 AZ・レプリカ 2 台・互換なしという記述はどれもこの作りと食い違う。",
+  "source_summary": "Aurora は MySQL/PostgreSQL 互換のクラウドネイティブ DB で、ストレージ層が 3 AZ × 2 = 6 コピーに自動複製され、最大 128TB(現行世代では 256TB)まで自動拡張する。リードレプリカは最大 15 台で、フェイルオーバーも標準 RDS より高速(通常 30 秒以内)。この耐久性アーキテクチャが頻出ポイント。",
+  "elements": [
+    { "id": "REQ", "label": "問い: Aurora の特徴として正しいものはどれか", "type": "state", "priority": "primary" },
+    { "id": "A1", "label": "誤りの記述: ストレージは単一 AZ に保存される", "type": "artifact", "priority": "secondary" },
+    { "id": "B1", "label": "実際: 3 AZ に 6 コピー保存され、ストレージは自動拡張する", "type": "artifact", "priority": "primary" },
+    { "id": "A2", "label": "誤りの記述: リードレプリカは最大 2 台まで", "type": "artifact", "priority": "secondary" },
+    { "id": "B2", "label": "実際: リードレプリカは最大 15 台", "type": "artifact", "priority": "primary" },
+    { "id": "A3", "label": "誤りの記述: MySQL とは互換性がない", "type": "artifact", "priority": "secondary" },
+    { "id": "B3", "label": "実際: MySQL / PostgreSQL 互換", "type": "artifact", "priority": "primary" },
+    { "id": "NOTE", "label": "容量は最大 128TB(現行世代 256TB)まで自動拡張 / フェイルオーバーも標準 RDS より高速(通常 30 秒以内)", "type": "other", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "A1", "verb": "記述を1つずつ当たる", "direction": "one-way", "kind": "sequence" },
+    { "from": "REQ", "to": "A2", "verb": "記述を1つずつ当たる", "direction": "one-way", "kind": "sequence" },
+    { "from": "REQ", "to": "A3", "verb": "記述を1つずつ当たる", "direction": "one-way", "kind": "sequence" },
+    { "from": "A1", "to": "B1", "verb": "実際の作りと食い違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "A2", "to": "B2", "verb": "実際の台数と食い違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "A3", "to": "B3", "verb": "実際の互換性と食い違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "B1", "to": "NOTE", "verb": "数値を補足する", "direction": "none", "kind": "other" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "対比(記述と事実の1対1突き合わせ): 誤りの記述の隣に実際の仕様を置く",
+    "レイヤー(層の分離): コンピュート層とストレージ層を描き、どの層の説明かで正誤を判定する"
+  ],
+  "selected_pattern": "対比(記述と事実の1対1突き合わせ)。誤答3つが単一 AZ・台数・互換性という別々の観点なので、層に整理するより1つずつ横に正解を置いた方が読む手数が少ない。レイヤー図は同じ Aurora の耐久性を扱う db04 で採用済みで、こちらで繰り返すと復習時に同じ絵になる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "正解の記述(3 AZ に 6 コピー・自動拡張)だけを緑にし、他の2つの事実(15 台・互換)は白のサービス色にした。3つとも緑にすると、どれが選ぶべき記述かが図から読めなくなるため。",
+    "db04 も Aurora の耐久性を問うが、あちらは「層の作り」、こちらは「記述の突き合わせ」に振り分けた。両方に出てくる 6 コピーの数字は意図的に重複させている(頻出ポイントのため)。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"問い<br/>Aurora の特徴として<br/>正しいものはどれか\"]:::req\n    A1[\"ストレージは単一 AZ に保存される\"]:::alt\n    B1[\"3 AZ に 6 コピー保存され<br/>ストレージは自動拡張する\"]:::best\n    A2[\"リードレプリカは最大 2 台まで\"]:::alt\n    B2[\"リードレプリカは最大 15 台\"]:::svc\n    A3[\"MySQL とは互換性がない\"]:::alt\n    B3[\"MySQL / PostgreSQL 互換\"]:::svc\n    NOTE[\"容量は最大 128TB(現行世代 256TB)まで自動拡張<br/>フェイルオーバーも標準 RDS より高速(通常 30 秒以内)\"]:::note\n\n    REQ --> A1\n    REQ --> A2\n    REQ --> A3\n    A1 -->|\"実際は\"| B1\n    A2 -->|\"実際は\"| B2\n    A3 -->|\"実際は\"| B3\n    B1 -.- NOTE"
+}

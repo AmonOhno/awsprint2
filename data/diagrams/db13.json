@@ -1,0 +1,45 @@
+{
+  "question_id": "db13",
+  "purpose": "「障害の範囲」と「復旧の速さ」という2段の問いで、リージョン障害向けの選択肢が1つに絞られる過程を示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、マルチ AZ とグローバル構成の守備範囲を混同しやすい人。",
+  "message": "障害の範囲がリージョン全体で、かつ RPO 1 秒・RTO 1 分未満が要るなら、ストレージレベルで複製する Aurora Global Database しか残らない。",
+  "source_summary": "Aurora Global Database はストレージレベルのレプリケーションにより 1 秒未満の遅延で最大 5 つのセカンダリリージョンへ複製し、災害時は 1 分未満でセカンダリを昇格できる。各リージョンでローカル読み取りも可能。「RPO 秒・RTO 分のグローバル RDB 要件 = Aurora Global Database」で判断する。",
+  "elements": [
+    { "id": "REQ", "label": "リージョン障害から RPO 1 秒・RTO 1 分未満で復旧し、各地から低レイテンシー読み取りをしたい", "type": "state", "priority": "primary" },
+    { "id": "Q1", "label": "守るべき障害の範囲はリージョン全体か", "type": "process", "priority": "primary" },
+    { "id": "Q2", "label": "RPO 秒・RTO 分の速さが要るか", "type": "process", "priority": "primary" },
+    { "id": "AGD", "label": "Aurora Global Database(ストレージレベルで 1 秒未満の遅延、最大 5 セカンダリ)", "type": "artifact", "priority": "primary" },
+    { "id": "LOCAL", "label": "各リージョンでローカル読み取りができる", "type": "state", "priority": "primary" },
+    { "id": "PROMO", "label": "災害時は 1 分未満でセカンダリを昇格できる", "type": "state", "priority": "primary" },
+    { "id": "W1", "label": "RDS マルチ AZ(同一リージョン内の対策)", "type": "artifact", "priority": "secondary" },
+    { "id": "W2", "label": "RDS の日次スナップショットをコピー", "type": "artifact", "priority": "secondary" },
+    { "id": "W3", "label": "DynamoDB オンデマンド", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q1", "verb": "まず範囲を問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q1", "to": "W1", "verb": "同一リージョン内なら該当", "direction": "one-way", "kind": "flow" },
+    { "from": "Q1", "to": "Q2", "verb": "リージョン全体なら次の問いへ", "direction": "one-way", "kind": "flow" },
+    { "from": "Q2", "to": "W2", "verb": "日次で足りるなら該当", "direction": "one-way", "kind": "flow" },
+    { "from": "Q2", "to": "AGD", "verb": "秒・分の速さが要るなら該当", "direction": "one-way", "kind": "flow" },
+    { "from": "AGD", "to": "LOCAL", "verb": "現地読み取りも満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "AGD", "to": "PROMO", "verb": "DR の要件も満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "REQ", "to": "W3", "verb": "リレーショナル DB ではない", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(2段の判断フロー): 障害の範囲 → 復旧の速さ の順で選択肢を絞る",
+    "マトリクス: 「同一リージョン / 複数リージョン」×「復旧が秒〜分 / 時間単位」の2軸に4案を配置する"
+  ],
+  "selected_pattern": "分岐(2段の判断フロー)。誤答が外れる理由が「範囲が足りない(マルチ AZ)」「速さが足りない(日次コピー)」と段階的にずれているので、問いを2つ順に置くだけで振り分けが終わる。マトリクスは DynamoDB オンデマンドが軸に載らず(そもそもリレーショナルではない)、4マスのうち置き場のない選択肢が出る。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「日次スナップショットのコピーでは RPO 1 秒に届かない」は解説に明記が無いが、日次という語と要件の秒単位を突き合わせただけの範囲に留めている。",
+    "DynamoDB オンデマンドだけは判断フローの外(破線)に置いた。問われているのがリレーショナル DB の構成であり、2つの問いのどちらでもなく前提で外れるため。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>リージョン障害から RPO 1 秒・RTO 1 分未満で復旧<br/>各地から低レイテンシー読み取り\"]:::req\n    Q1{\"守るべき障害の範囲は<br/>リージョン全体か?\"}:::judge\n    Q2{\"RPO 秒・RTO 分の<br/>速さが要るか?\"}:::judge\n    AGD[\"Aurora Global Database<br/>ストレージレベルで 1 秒未満の遅延<br/>最大 5 つのセカンダリリージョン\"]:::best\n    LOCAL[\"各リージョンで<br/>ローカル読み取りができる\"]:::best\n    PROMO[\"災害時は 1 分未満で<br/>セカンダリを昇格できる\"]:::best\n    W1[\"RDS マルチ AZ<br/>同一リージョン内の対策\"]:::alt\n    W2[\"RDS の日次スナップショットをコピー<br/>日次では RPO 1 秒に届かない\"]:::alt\n    W3[\"DynamoDB オンデマンド<br/>リレーショナル DB ではない\"]:::alt\n\n    REQ --> Q1\n    Q1 -->|\"AZ 単位\"| W1\n    Q1 -->|\"リージョン全体\"| Q2\n    Q2 -->|\"日次で可\"| W2\n    Q2 -->|\"秒・分が要る\"| AGD\n    AGD --> LOCAL\n    AGD --> PROMO\n    REQ -.->|\"前提が違う\"| W3"
+}
