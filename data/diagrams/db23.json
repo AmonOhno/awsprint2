@@ -1,0 +1,45 @@
+{
+  "question_id": "db23",
+  "purpose": "GSI と LSI の使い分けを「検索したいキーがベースと同じパーティションキーか」の1問に還元し、後から追加できるかという制約も同時に押さえる。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、GSI と LSI の名前は知っているが違いが混ざる人。",
+  "message": "ベースと違うパーティションキー(顧客 ID)で検索したいので、テーブル作成後でも追加できる GSI を作る。",
+  "source_summary": "GSI はベーステーブルと異なるパーティションキー/ソートキーで検索できるインデックスで、テーブル作成後でも追加できる。LSI は同一パーティションキー内の別ソートキー用で、テーブル作成時にしか定義できない。スキャン+フィルタは全件読み取りのため大規模テーブルではコストと遅延が深刻。",
+  "elements": [
+    { "id": "REQ", "label": "注文テーブル(パーティションキー: 注文 ID)に「顧客 ID で注文一覧」の新要件・スキャンは避けたい", "type": "state", "priority": "primary" },
+    { "id": "Q", "label": "検索したいキーはベースと同じパーティションキーか", "type": "process", "priority": "primary" },
+    { "id": "GSI", "label": "グローバルセカンダリインデックス(GSI)", "type": "artifact", "priority": "primary" },
+    { "id": "DIFFKEY", "label": "ベースと異なるパーティションキー/ソートキーで検索できる", "type": "state", "priority": "primary" },
+    { "id": "ADD", "label": "テーブル作成後でも追加できる", "type": "state", "priority": "primary" },
+    { "id": "LSI", "label": "ローカルセカンダリインデックス(LSI)", "type": "artifact", "priority": "secondary" },
+    { "id": "SCAN", "label": "テーブル全体をスキャンしてフィルタ", "type": "artifact", "priority": "secondary" },
+    { "id": "SPLIT", "label": "テーブルを分割して手動管理", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "今回は別のパーティションキー、しかも後から追加", "type": "other", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q", "verb": "検索キーから問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q", "to": "GSI", "verb": "違うキー→GSI", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "LSI", "verb": "同じキーで別ソート→LSI", "direction": "one-way", "kind": "flow" },
+    { "from": "GSI", "to": "DIFFKEY", "verb": "検索要件を満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "GSI", "to": "ADD", "verb": "後付けの制約を満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "REQ", "to": "SCAN", "verb": "避けたい方式", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "SPLIT", "verb": "運用負荷が増える", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q", "to": "NOTE", "verb": "当てはめ方を補う", "direction": "none", "kind": "other" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「ベースと同じパーティションキーか」の1問で GSI と LSI に振り分ける",
+    "テーブル(比較表): GSI と LSI について、キーの自由度・追加できる時期・用途を行で比べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。比較表は覚え直しには向くが、この問題の答えは「顧客 ID = 別のパーティションキー」という当てはめ1回で出る。その1回を図の中心に置く分岐の方が、解答時の思考をそのまま再現できる。LSI の作成時期の制約は枝の先のラベルとして残せるので、表にしなくても情報は落ちない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "LSI は「同じパーティションキーで別ソートキー」という別要件の行き先なので、単なる×ではなく分岐のもう一方の枝に置いた。ただし今回の要件では作成時期の制約からも外れるため、その点はラベルに明記している。",
+    "スキャン+フィルタとテーブル分割は判断の枝ではなく、要件から直接外れる案として破線でぶら下げている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>注文テーブル(パーティションキー: 注文 ID)に<br/>「顧客 ID で注文一覧」の新しいクエリ<br/>スキャンは避けたい\"]:::req\n    Q{\"検索したいキーは<br/>ベースと同じ<br/>パーティションキーか?\"}:::judge\n    GSI[\"グローバルセカンダリインデックス(GSI)\"]:::best\n    DIFFKEY[\"ベースと異なるパーティションキー<br/>ソートキーで検索できる\"]:::best\n    ADD[\"テーブル作成後でも追加できる\"]:::best\n    LSI[\"ローカルセカンダリインデックス(LSI)<br/>同一パーティションキー内の別ソートキー用<br/>テーブル作成時にしか定義できない\"]:::alt\n    SCAN[\"テーブル全体をスキャンしてフィルタ<br/>全件読み取りでコストと遅延が深刻\"]:::alt\n    SPLIT[\"テーブルを分割して手動管理\"]:::alt\n    NOTE[\"顧客 ID は別のパーティションキー<br/>しかも後から追加したい\"]:::note\n\n    REQ --> Q\n    Q -->|\"違うキー\"| GSI\n    Q -->|\"同じキー\"| LSI\n    GSI --> DIFFKEY\n    GSI --> ADD\n    REQ -.->|\"避けたい案\"| SCAN\n    REQ -.->|\"手作業が増える\"| SPLIT\n    Q -.- NOTE"
+}

@@ -1,0 +1,47 @@
+{
+  "question_id": "db20",
+  "purpose": "テーブル変更の後続処理を「取りに行く(ポーリング)」か「流してもらう(イベント駆動)」かの対比に還元し、Streams + Lambda が選ばれる理由を示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、定期実行で済ませる発想からイベント駆動へ切り替えたい人。",
+  "message": "アイテムの変更をほぼリアルタイムに後続処理へつなぐなら、テーブルを取りに行くのではなく変更履歴を流す DynamoDB Streams + Lambda トリガーにする。",
+  "source_summary": "DynamoDB Streams はアイテムの変更履歴(作成・更新・削除)を時系列で保持し、Lambda をトリガーとして関連付けると変更イベント駆動の処理をサーバーレスで実現できる。テーブルスキャンによるポーリングは RCU を大量消費し、リアルタイム性も劣る。",
+  "elements": [
+    { "id": "REQ", "label": "新しい注文アイテムの書き込みをほぼリアルタイムで後続処理につなげたい", "type": "state", "priority": "primary" },
+    { "id": "WRITE", "label": "テーブルへの書き込み(作成・更新・削除)", "type": "state", "priority": "primary" },
+    { "id": "Q", "label": "変更を取りに行くか、流してもらうか", "type": "process", "priority": "primary" },
+    { "id": "STREAM", "label": "DynamoDB Streams", "type": "artifact", "priority": "primary" },
+    { "id": "LAMBDA", "label": "Lambda トリガー", "type": "artifact", "priority": "primary" },
+    { "id": "NEXT", "label": "後続処理(通知・データ連携)", "type": "process", "priority": "primary" },
+    { "id": "SCAN", "label": "1 分ごとにテーブルをスキャン", "type": "artifact", "priority": "secondary" },
+    { "id": "RDSMIG", "label": "RDS へ移行してトリガーを使う", "type": "artifact", "priority": "secondary" },
+    { "id": "CT", "label": "CloudTrail でテーブル操作を監視", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "WRITE", "verb": "起点となる出来事", "direction": "one-way", "kind": "sequence" },
+    { "from": "WRITE", "to": "Q", "verb": "変更の拾い方を問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q", "to": "STREAM", "verb": "流してもらう→Streams", "direction": "one-way", "kind": "flow" },
+    { "from": "STREAM", "to": "LAMBDA", "verb": "トリガーとして関連付ける", "direction": "one-way", "kind": "flow" },
+    { "from": "LAMBDA", "to": "NEXT", "verb": "サーバーレスで実行する", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "SCAN", "verb": "取りに行く→ポーリング", "direction": "one-way", "kind": "flow" },
+    { "from": "REQ", "to": "RDSMIG", "verb": "用途そのものが違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "CT", "verb": "用途そのものが違う", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "用途そのものが違う選択肢", "element_ids": ["RDSMIG", "CT"] }
+  ],
+  "candidate_patterns": [
+    "直列(イベントの流れ)+ 分岐: 書き込みから後続処理までを一本の線で描き、途中でポーリング案を分ける",
+    "対比(上下2段): 上段にポーリング方式、下段にイベント駆動方式を並べ、遅延とコストを比較する"
+  ],
+  "selected_pattern": "直列(イベントの流れ)+ 分岐。この問題で覚えるべきは Streams → Lambda → 後続処理という配線そのものなので、線をたどれば構成が読める直列を主役にした。対比表だと構成が2段に割れ、肝心の配線が見えにくくなる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "スキャンによるポーリングは誤答だが「取りに行く」側の代表として分岐のもう一方の枝に置いた。解説が明示している欠点(RCU の大量消費とリアルタイム性)だけをラベルに書き、それ以上の数値は足していない。",
+    "RDS への移行と CloudTrail 監視には個別の理由を書いていない。解説がこの2つに触れていないため、用途が違うという1グループに束ねている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>新しい注文アイテムの書き込みを<br/>ほぼリアルタイムで後続処理につなげたい\"]:::req\n    WRITE[\"DynamoDB テーブルへの書き込み<br/>作成・更新・削除\"]:::svc\n    Q{\"変更を取りに行くか<br/>流してもらうか\"}:::judge\n    STREAM[\"DynamoDB Streams<br/>変更履歴を時系列で保持\"]:::best\n    LAMBDA[\"Lambda トリガー<br/>変更イベント駆動でサーバーレス実行\"]:::best\n    NEXT[\"後続処理<br/>通知・データ連携\"]:::best\n    SCAN[\"1 分ごとにテーブルをスキャン<br/>RCU を大量消費・リアルタイム性も劣る\"]:::alt\n\n    subgraph OTHERS[\"用途そのものが違う選択肢\"]\n        RDSMIG[\"RDS へ移行してトリガーを使う\"]:::alt\n        CT[\"CloudTrail でテーブル操作を監視\"]:::alt\n    end\n\n    REQ --> WRITE --> Q\n    Q -->|\"流してもらう\"| STREAM\n    STREAM --> LAMBDA --> NEXT\n    Q -->|\"取りに行く\"| SCAN\n    REQ -.->|\"用途が違う\"| OTHERS"
+}

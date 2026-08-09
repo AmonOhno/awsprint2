@@ -1,0 +1,47 @@
+{
+  "question_id": "db21",
+  "purpose": "期限切れアイテムの掃除を「誰が消すか」で捉え直し、TTL に任せると追加コストが載らないことを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、定期削除を自前のバッチで書く発想から抜けたい人。",
+  "message": "期限切れのアイテムを追加コストなしで消したいなら、削除の書き込みキャパシティを消費しない TTL に任せる。",
+  "source_summary": "TTL はアイテムの属性に指定した Unix タイムスタンプを過ぎたアイテムを自動削除する機能で、削除の書き込みキャパシティは消費されない。セッション・一時トークン・イベントログの自動掃除に最適。削除は期限後数日以内に行われるベストエフォートであり、即時削除保証はない。",
+  "elements": [
+    { "id": "REQ", "label": "期限切れのセッションデータを追加コストなしで自動削除したい", "type": "state", "priority": "primary" },
+    { "id": "Q", "label": "期限切れを誰が消すか", "type": "process", "priority": "primary" },
+    { "id": "TTL", "label": "TTL(Time to Live)", "type": "artifact", "priority": "primary" },
+    { "id": "COST", "label": "削除の書き込みキャパシティを消費しない", "type": "state", "priority": "primary" },
+    { "id": "USE", "label": "セッション・一時トークン・イベントログの自動掃除", "type": "state", "priority": "primary" },
+    { "id": "BATCH", "label": "定期バッチで Delete を実行", "type": "artifact", "priority": "secondary" },
+    { "id": "LC", "label": "ライフサイクルルール", "type": "artifact", "priority": "secondary" },
+    { "id": "ST", "label": "DynamoDB Streams", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "削除は期限後数日以内のベストエフォート", "type": "other", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q", "verb": "削除の担い手を問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q", "to": "TTL", "verb": "DynamoDB に任せる→TTL", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "BATCH", "verb": "アプリ側で消す→自前の削除処理", "direction": "one-way", "kind": "flow" },
+    { "from": "TTL", "to": "COST", "verb": "追加コストなしの要件を満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "TTL", "to": "USE", "verb": "想定用途に合う", "direction": "one-way", "kind": "flow" },
+    { "from": "REQ", "to": "LC", "verb": "用途そのものが違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "ST", "verb": "用途そのものが違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "TTL", "to": "NOTE", "verb": "誤読しやすい点を補う", "direction": "none", "kind": "other" }
+  ],
+  "groups": [
+    { "label": "用途そのものが違う選択肢", "element_ids": ["LC", "ST"] }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「期限切れを誰が消すか」の1問で TTL と自前バッチに振り分ける",
+    "タイムライン: 書き込み → 期限到来 → 自動削除 の時間軸に沿ってアイテムの一生を描く"
+  ],
+  "selected_pattern": "分岐(判断フロー)。タイムラインは TTL の動作は説明できるが、なぜバッチ削除ではなく TTL なのかという決め手(追加コストの有無)が線の上に乗らない。「誰が消すか」の1問に還元する方が主メッセージに直結する。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "定期バッチのラベルには「削除を自前で書く必要がある」とだけ書き、削除分の課金には踏み込んでいない。解説は TTL 側が消費しないことしか述べていないため、裏返しの主張を足さないようにした。",
+    "ライフサイクルルールがどのサービスの機能かは解説にないため、名前だけ置いて用途が違うグループに束ねている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>期限切れのセッションデータを<br/>追加コストなしで自動削除したい\"]:::req\n    Q{\"期限切れを<br/>誰が消すか?\"}:::judge\n    TTL[\"TTL(Time to Live)<br/>属性の Unix タイムスタンプを過ぎたアイテムを自動削除\"]:::best\n    COST[\"削除に書き込みキャパシティを消費しない\"]:::best\n    USE[\"セッション・一時トークン・イベントログの自動掃除\"]:::best\n    BATCH[\"定期バッチで Delete を実行<br/>削除処理を自前で書く必要がある\"]:::alt\n    NOTE[\"削除は期限後数日以内のベストエフォート<br/>即時削除の保証はない\"]:::note\n\n    subgraph OTHERS[\"用途そのものが違う選択肢\"]\n        LC[\"ライフサイクルルール\"]:::alt\n        ST[\"DynamoDB Streams\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"DynamoDB\"| TTL\n    Q -->|\"アプリ側\"| BATCH\n    TTL --> COST\n    TTL --> USE\n    REQ -.->|\"用途が違う\"| OTHERS\n    TTL -.- NOTE"
+}

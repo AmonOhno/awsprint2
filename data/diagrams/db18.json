@@ -1,0 +1,47 @@
+{
+  "question_id": "db18",
+  "purpose": "DynamoDB の読み取り高速化で DAX と汎用キャッシュのどちらを取るかが、「アプリにキャッシュ処理を書くかどうか」で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、キャッシュといえば ElastiCache と反射的に答えてしまう人。",
+  "message": "DynamoDB の読み取りをアプリの大幅な改修なしにマイクロ秒へ縮めたいなら、API 互換でエンドポイントを差し替えるだけの DAX を選ぶ。",
+  "source_summary": "DAX は DynamoDB 専用のインメモリキャッシュで、API 互換のためエンドポイントを差し替えるだけで導入でき、読み取りをマイクロ秒に短縮する。汎用キャッシュの ElastiCache も使えるがキャッシュロジックの実装が必要。「DynamoDB + 改修最小のキャッシュ = DAX」で覚える。",
+  "elements": [
+    { "id": "REQ", "label": "同一アイテムへの読み取りが集中・アプリの大幅な改修なしにマイクロ秒応答へ", "type": "state", "priority": "primary" },
+    { "id": "Q", "label": "キャッシュ処理をアプリに書くか", "type": "process", "priority": "primary" },
+    { "id": "DAX", "label": "DynamoDB Accelerator(DAX)", "type": "artifact", "priority": "primary" },
+    { "id": "API", "label": "API 互換でエンドポイントの差し替えだけ", "type": "state", "priority": "primary" },
+    { "id": "LAT", "label": "読み取りをマイクロ秒に短縮", "type": "state", "priority": "primary" },
+    { "id": "EC", "label": "ElastiCache for Redis(汎用キャッシュ)", "type": "artifact", "priority": "secondary" },
+    { "id": "RR", "label": "リードレプリカ", "type": "artifact", "priority": "secondary" },
+    { "id": "S3C", "label": "S3 キャッシュ", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "DynamoDB + 改修最小のキャッシュ = DAX", "type": "other", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q", "verb": "改修量から問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q", "to": "DAX", "verb": "書かない→DAX", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "EC", "verb": "書いてよい→汎用キャッシュ", "direction": "one-way", "kind": "flow" },
+    { "from": "DAX", "to": "API", "verb": "改修最小の要件を満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "DAX", "to": "LAT", "verb": "性能の要件を満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "REQ", "to": "RR", "verb": "用途そのものが違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "S3C", "verb": "用途そのものが違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "DAX", "to": "NOTE", "verb": "覚え方を補う", "direction": "none", "kind": "other" }
+  ],
+  "groups": [
+    { "label": "用途そのものが違う選択肢", "element_ids": ["RR", "S3C"] }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「キャッシュ処理をアプリに書くか」の1問で DAX と ElastiCache に振り分ける",
+    "対比(左右2列): DAX と ElastiCache を並べ、対象データストア・導入時の改修量・応答時間を行で比較する"
+  ],
+  "selected_pattern": "分岐(判断フロー)。ElastiCache も「使えるが実装が必要」であって誤りではない、というのが解説の主旨なので、優劣の比較表ではなく改修を許容できるかの1問で分ける方が主メッセージと一致する。",
+  "open_questions": [
+    "ElastiCache は誤答だが解説が「使えるが実装が必要」と条件付きで認めているため、×として脇に置かず分岐のもう一方の枝に置いた。この置き方は db16 と同じ扱い。",
+    "リードレプリカと S3 キャッシュには個別の理由を書いていない。解説がこの2つに触れていないため、用途が違うという1グループに束ねている。"
+  ],
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>DynamoDB の同一アイテムへ読み取りが集中<br/>アプリの大幅な改修なしにマイクロ秒応答へ\"]:::req\n    Q{\"キャッシュ処理を<br/>アプリに書くか?\"}:::judge\n    DAX[\"DynamoDB Accelerator(DAX)<br/>DynamoDB 専用のインメモリキャッシュ\"]:::best\n    API[\"API 互換<br/>エンドポイントを差し替えるだけで導入できる\"]:::best\n    LAT[\"読み取りをマイクロ秒に短縮\"]:::best\n    EC[\"ElastiCache for Redis<br/>汎用キャッシュ・キャッシュロジックの実装が必要\"]:::alt\n    NOTE[\"DynamoDB + 改修最小のキャッシュ = DAX\"]:::note\n\n    subgraph OTHERS[\"用途そのものが違う選択肢\"]\n        RR[\"リードレプリカ\"]:::alt\n        S3C[\"S3 キャッシュ\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"書かない\"| DAX\n    Q -->|\"書いてよい\"| EC\n    DAX --> API\n    DAX --> LAT\n    REQ -.->|\"用途が違う\"| OTHERS\n    DAX -.- NOTE"
+}

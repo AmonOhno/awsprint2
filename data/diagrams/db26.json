@@ -1,0 +1,50 @@
+{
+  "question_id": "db26",
+  "purpose": "データベース選択の起点を「OLTP か OLAP か」に置き、分析用途では Redshift になる筋道を示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、データ量の大きさだけでデータベースを選ぼうとしがちな人。",
+  "message": "ペタバイト級の構造化データに複雑な集計クエリ(OLAP)をかけるなら、列指向ストレージと超並列処理で分析を高速化する Redshift を選ぶ。",
+  "source_summary": "Redshift は列指向ストレージと超並列処理(MPP)によりペタバイト級の分析クエリを高速化するデータウェアハウス。行指向の RDS は大量集計に不向きで、DynamoDB は集計クエリ自体が苦手。「OLTP(トランザクション)= RDS、OLAP(分析)= Redshift」の区別が基本。",
+  "elements": [
+    { "id": "REQ", "label": "数ペタバイト規模の構造化データに BI ツールから複雑な集計クエリ(OLAP)を高速実行", "type": "state", "priority": "primary" },
+    { "id": "Q", "label": "OLTP か OLAP か", "type": "process", "priority": "primary" },
+    { "id": "RS", "label": "Amazon Redshift(データウェアハウス)", "type": "artifact", "priority": "primary" },
+    { "id": "COL", "label": "列指向ストレージ", "type": "concept", "priority": "primary" },
+    { "id": "MPP", "label": "超並列処理(MPP)", "type": "concept", "priority": "primary" },
+    { "id": "FAST", "label": "ペタバイト級の分析クエリを高速化", "type": "state", "priority": "primary" },
+    { "id": "RDS", "label": "Amazon RDS for PostgreSQL", "type": "artifact", "priority": "secondary" },
+    { "id": "DDB", "label": "Amazon DynamoDB", "type": "artifact", "priority": "secondary" },
+    { "id": "EC", "label": "Amazon ElastiCache", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "OLTP = RDS、OLAP = Redshift", "type": "other", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q", "verb": "クエリの性格から問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q", "to": "RS", "verb": "OLAP→Redshift", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "RDS", "verb": "OLTP→リレーショナル", "direction": "one-way", "kind": "flow" },
+    { "from": "RS", "to": "COL", "verb": "仕組みで支える", "direction": "one-way", "kind": "include" },
+    { "from": "RS", "to": "MPP", "verb": "仕組みで支える", "direction": "one-way", "kind": "include" },
+    { "from": "COL", "to": "FAST", "verb": "性能要件を満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "MPP", "to": "FAST", "verb": "性能要件を満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "REQ", "to": "DDB", "verb": "集計クエリ自体が苦手", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "EC", "verb": "用途そのものが違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q", "to": "NOTE", "verb": "覚え方を補う", "direction": "none", "kind": "other" }
+  ],
+  "groups": [
+    { "label": "Redshift が速い理由", "element_ids": ["COL", "MPP", "FAST"] }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー)+ 合流: OLTP か OLAP かで分け、Redshift 側は2つの仕組みが高速化に合流する形にする",
+    "対比(左右2列): RDS(行指向・トランザクション)と Redshift(列指向・分析)を並べて特徴を突き合わせる"
+  ],
+  "selected_pattern": "分岐(判断フロー)+ 合流。解説が「OLTP = RDS、OLAP = Redshift」という1軸の対応で締めているので、その問いを頂点に置くのが素直。Redshift が速い理由は列指向と MPP の2つがそろって効く話なので、枝の先だけ合流にして高速化に集めた。左右対比では、この2つが並列の理由であることが線に出ない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "RDS は誤答だが、解説が OLTP 側の正解として対に挙げているため、×として脇に置かず分岐のもう一方の枝に置いた(db16 と同じ扱い)。",
+    "ElastiCache には理由を書いていない。解説が触れていないため「用途が違う」以上には踏み込まない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>数ペタバイト規模の構造化データ<br/>BI ツールから複雑な集計クエリ(OLAP)を高速実行\"]:::req\n    Q{\"OLTP か<br/>OLAP か?\"}:::judge\n    RS[\"Amazon Redshift<br/>データウェアハウス\"]:::best\n    RDS[\"Amazon RDS for PostgreSQL<br/>行指向・大量集計には不向き\"]:::alt\n    DDB[\"Amazon DynamoDB<br/>集計クエリ自体が苦手\"]:::alt\n    EC[\"Amazon ElastiCache\"]:::alt\n    NOTE[\"OLTP(トランザクション)= RDS<br/>OLAP(分析)= Redshift\"]:::note\n\n    subgraph WHY[\"Redshift が速い理由\"]\n        COL[\"列指向ストレージ\"]:::best\n        MPP[\"超並列処理(MPP)\"]:::best\n        FAST[\"ペタバイト級の分析クエリを高速化\"]:::best\n        COL --> FAST\n        MPP --> FAST\n    end\n\n    REQ --> Q\n    Q -->|\"OLAP\"| RS\n    Q -->|\"OLTP\"| RDS\n    RS --> COL\n    RS --> MPP\n    REQ -.->|\"集計が苦手\"| DDB\n    REQ -.->|\"用途が違う\"| EC\n    Q -.- NOTE"
+}

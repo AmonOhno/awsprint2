@@ -1,0 +1,43 @@
+{
+  "question_id": "db17",
+  "purpose": "DynamoDB のキャパシティモード選択が「トラフィックを予測できるか」の1問だけで決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、オンデマンドとプロビジョンドの名前は知っているが選び分けの基準が曖昧な人。",
+  "message": "トラフィックが突発的で予測不能なら、キャパシティ設定が要らずリクエスト分だけ課金されるオンデマンドモードを選ぶ。",
+  "source_summary": "オンデマンドモードはキャパシティ設定不要で、実際のリクエスト数に応じた従量課金。スパイクにも自動対応する。トラフィックが安定・予測可能な場合はプロビジョンドモード(+オートスケーリング)の方が安価。「予測不能 = オンデマンド、安定 = プロビジョンド」の使い分けが問われる。",
+  "elements": [
+    { "id": "REQ", "label": "トラフィックが突発的で予測不能・キャパシティ管理なし・リクエスト分だけ課金", "type": "state", "priority": "primary" },
+    { "id": "Q", "label": "トラフィックを予測できるか", "type": "process", "priority": "primary" },
+    { "id": "ONDEMAND", "label": "オンデマンドキャパシティモード", "type": "artifact", "priority": "primary" },
+    { "id": "SPIKE", "label": "スパイクにも自動対応する", "type": "state", "priority": "primary" },
+    { "id": "PROV", "label": "プロビジョンドモード(+オートスケーリング)", "type": "artifact", "priority": "secondary" },
+    { "id": "RC", "label": "リザーブドキャパシティ", "type": "artifact", "priority": "secondary" },
+    { "id": "DAX", "label": "DAX を追加", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "予測不能 = オンデマンド、安定 = プロビジョンド", "type": "other", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q", "verb": "予測できるかを問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q", "to": "ONDEMAND", "verb": "予測できない→オンデマンド", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "PROV", "verb": "予測できる→プロビジョンド", "direction": "one-way", "kind": "flow" },
+    { "from": "ONDEMAND", "to": "SPIKE", "verb": "スパイク要件を満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "PROV", "to": "RC", "verb": "確保済み容量にさらに割引", "direction": "one-way", "kind": "other" },
+    { "from": "REQ", "to": "DAX", "verb": "論点そのものが違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q", "to": "NOTE", "verb": "覚え方を補う", "direction": "none", "kind": "other" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「予測できるか」の1問でオンデマンドとプロビジョンドに振り分ける",
+    "対比(左右2列): オンデマンドとプロビジョンドを並べ、課金方式・キャパシティ設定・向くトラフィックを行で比較する"
+  ],
+  "selected_pattern": "分岐(判断フロー)。解説が使い分けを「予測不能 = オンデマンド、安定 = プロビジョンド」という1軸に還元しているので、比較表より1問の分岐で描く方が判断の順序をそのままなぞれる。対比表にすると比較項目が増え、決め手がどれか読み取る手間が生じる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "リザーブドキャパシティはプロビジョンドを前提とした割引なので、独立した誤答として並べず、プロビジョンド枝の先にぶら下げた。誤答同士の関係まで描くと線が増えるが、この2つは並列ではないため区別しないと誤読を招く。",
+    "DAX はキャパシティモードの選択肢ではなく読み取り高速化の手段だが、解説が触れていないため「論点が違う」以上の説明は付けていない。DAX 自体は db18 で扱う。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>トラフィックが突発的で予測不能<br/>キャパシティ管理なしでリクエスト分だけ課金したい\"]:::req\n    Q{\"トラフィックを<br/>予測できるか?\"}:::judge\n    ONDEMAND[\"オンデマンドキャパシティモード<br/>キャパシティ設定は不要<br/>実際のリクエスト数に応じた従量課金\"]:::best\n    SPIKE[\"スパイクにも自動で対応する\"]:::best\n    PROV[\"プロビジョンドモード<br/>+ オートスケーリング<br/>安定・予測可能ならこちらが安価\"]:::alt\n    RC[\"リザーブドキャパシティ<br/>プロビジョンドを前提にした割引\"]:::alt\n    DAX[\"DAX を追加<br/>読み取りの高速化でキャパシティ設計とは別の話\"]:::alt\n    NOTE[\"予測不能 = オンデマンド<br/>安定 = プロビジョンド\"]:::note\n\n    REQ --> Q\n    Q -->|\"予測できない\"| ONDEMAND\n    Q -->|\"予測できる\"| PROV\n    ONDEMAND --> SPIKE\n    PROV -.->|\"さらに割引\"| RC\n    REQ -.->|\"論点が違う\"| DAX\n    Q -.- NOTE"
+}

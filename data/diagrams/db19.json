@@ -1,0 +1,48 @@
+{
+  "question_id": "db19",
+  "purpose": "マルチリージョンの DynamoDB 構成が「各リージョンで書き込みも要るか」の1問で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、マルチリージョン化をレプリカとレプリケーションの語感で選んでしまう人。",
+  "message": "各リージョンで読みだけでなく書き込みも必要なら、マルチアクティブに複製される DynamoDB グローバルテーブルを選ぶ。",
+  "source_summary": "グローバルテーブルは複数リージョンにテーブルを複製し、どのリージョンでも読み書き可能(マルチアクティブ)なマルチリージョン構成。レプリケーションは通常 1 秒以内で、リージョン障害時も他リージョンで継続稼働できる。「マルチリージョンで書き込みも必要 = グローバルテーブル」。",
+  "elements": [
+    { "id": "REQ", "label": "世界 3 リージョンで展開・各リージョンで低レイテンシーな読み書きが必要", "type": "state", "priority": "primary" },
+    { "id": "Q", "label": "各リージョンで書き込みも要るか", "type": "process", "priority": "primary" },
+    { "id": "GT", "label": "DynamoDB グローバルテーブル", "type": "artifact", "priority": "primary" },
+    { "id": "MA", "label": "どのリージョンでも読み書き可能(マルチアクティブ)", "type": "state", "priority": "primary" },
+    { "id": "REP", "label": "レプリケーションは通常 1 秒以内", "type": "state", "priority": "primary" },
+    { "id": "FO", "label": "リージョン障害時も他リージョンで継続稼働", "type": "state", "priority": "primary" },
+    { "id": "RR", "label": "クロスリージョンリードレプリカ", "type": "artifact", "priority": "secondary" },
+    { "id": "ST", "label": "DynamoDB Streams", "type": "artifact", "priority": "secondary" },
+    { "id": "S3R", "label": "S3 レプリケーション", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q", "verb": "書き込みの要否から問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q", "to": "GT", "verb": "書き込みも要る→グローバルテーブル", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "RR", "verb": "読み取りだけ→複製で足りる", "direction": "one-way", "kind": "flow" },
+    { "from": "GT", "to": "MA", "verb": "読み書きの要件を満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "GT", "to": "REP", "verb": "低レイテンシーの要件を満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "GT", "to": "FO", "verb": "可用性の要件も満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "REQ", "to": "ST", "verb": "用途そのものが違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "S3R", "verb": "用途そのものが違う", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "グローバルテーブルが満たすもの", "element_ids": ["MA", "REP", "FO"] },
+    { "label": "用途そのものが違う選択肢", "element_ids": ["ST", "S3R"] }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「各リージョンで書き込みも要るか」の1問で振り分ける",
+    "配置図: 3リージョンのテーブルを三角に並べ、双方向のレプリケーション線でマルチアクティブを表す"
+  ],
+  "selected_pattern": "分岐(判断フロー)。配置図はマルチアクティブの様子は伝わるが、なぜ他の選択肢では駄目かが描けない。解説の決め手は「書き込みも必要かどうか」の1点なので、その問いを先頭に置く分岐の方が主メッセージに直結する。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "クロスリージョンリードレプリカを「読み取りだけなら」の枝に置いたのは、名前が示す読み取り用途に沿った配置。解説はこの選択肢の中身に触れていないため、それ以上の説明は付けていない。",
+    "リージョン数を 3 と具体的に描くか迷ったが、問題文の設定なのでそのまま要件ノードに残した。図の構造(分岐)はリージョン数に依存しない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>世界 3 リージョンで展開<br/>各リージョンで低レイテンシーな読み書きが必要\"]:::req\n    Q{\"各リージョンで<br/>書き込みも要るか?\"}:::judge\n    GT[\"DynamoDB グローバルテーブル<br/>複数リージョンにテーブルを複製\"]:::best\n    RR[\"クロスリージョンリードレプリカ<br/>読み取りの複製\"]:::alt\n\n    subgraph FIT[\"グローバルテーブルが満たすもの\"]\n        MA[\"どのリージョンでも読み書き可能<br/>マルチアクティブ\"]:::best\n        REP[\"レプリケーションは通常 1 秒以内\"]:::best\n        FO[\"リージョン障害時も他リージョンで継続稼働\"]:::best\n    end\n\n    subgraph OTHERS[\"用途そのものが違う選択肢\"]\n        ST[\"DynamoDB Streams\"]:::alt\n        S3R[\"S3 レプリケーション\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"書き込みも\"| GT\n    Q -->|\"読み取りだけ\"| RR\n    GT --> MA\n    GT --> REP\n    GT --> FO\n    REQ -.->|\"用途が違う\"| OTHERS"
+}

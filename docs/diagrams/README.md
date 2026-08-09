@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 83 問 / 全 400 問
+収録: 93 問 / 全 400 問
 
 ---
 
@@ -4288,3 +4288,519 @@ flowchart TD
 **解説**: DynamoDB はフルマネージドの NoSQL(キーバリュー/ドキュメント)データベースで、規模によらず 1 桁ミリ秒の性能を発揮し、サーバー管理は不要です。テーブルスキーマの柔軟性と無制限のスケーラビリティが特徴です。複雑な JOIN や集計が必要なリレーショナル要件には RDS/Aurora を選びます。
 
 **確認事項**: RDS は選択肢の1つ(誤答)だが、解説が「リレーショナル要件ならこちら」と積極的な行き先として挙げているため、分岐のもう一方の枝に置いてグレーで示した。単なる×として脇に置くと、解説の対の構図が図から落ちる。 / Redshift と Neptune には個別の説明を付けていない。解説がこの2つに触れていないため、用途が違うという1グループに束ねている。
+
+---
+
+## db17 — データベース / level 2
+
+**問題**: DynamoDB のテーブルで、トラフィックが突発的で予測不能なため、キャパシティ管理なしでリクエスト分だけ課金されるようにしたい。どのモードを選ぶか?
+
+**正解**: オンデマンドキャパシティモード
+
+**他の選択肢**: プロビジョンドモード / リザーブドキャパシティ / DAX を追加
+
+**図解の主メッセージ**: トラフィックが突発的で予測不能なら、キャパシティ設定が要らずリクエスト分だけ課金されるオンデマンドモードを選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。解説が使い分けを「予測不能 = オンデマンド、安定 = プロビジョンド」という1軸に還元しているので、比較表より1問の分岐で描く方が判断の順序をそのままなぞれる。対比表にすると比較項目が増え、決め手がどれか読み取る手間が生じる。(候補: 分岐(判断フロー): 「予測できるか」の1問でオンデマンドとプロビジョンドに振り分ける / 対比(左右2列): オンデマンドとプロビジョンドを並べ、課金方式・キャパシティ設定・向くトラフィックを行で比較する)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>トラフィックが突発的で予測不能<br/>キャパシティ管理なしでリクエスト分だけ課金したい"]:::req
+    Q{"トラフィックを<br/>予測できるか?"}:::judge
+    ONDEMAND["オンデマンドキャパシティモード<br/>キャパシティ設定は不要<br/>実際のリクエスト数に応じた従量課金"]:::best
+    SPIKE["スパイクにも自動で対応する"]:::best
+    PROV["プロビジョンドモード<br/>+ オートスケーリング<br/>安定・予測可能ならこちらが安価"]:::alt
+    RC["リザーブドキャパシティ<br/>プロビジョンドを前提にした割引"]:::alt
+    DAX["DAX を追加<br/>読み取りの高速化でキャパシティ設計とは別の話"]:::alt
+    NOTE["予測不能 = オンデマンド<br/>安定 = プロビジョンド"]:::note
+
+    REQ --> Q
+    Q -->|"予測できない"| ONDEMAND
+    Q -->|"予測できる"| PROV
+    ONDEMAND --> SPIKE
+    PROV -.->|"さらに割引"| RC
+    REQ -.->|"論点が違う"| DAX
+    Q -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db17.svg`](../../web/diagrams/db17.svg)
+
+**解説**: オンデマンドモードはキャパシティ設定不要で、実際のリクエスト数に応じた従量課金です。スパイクにも自動対応します。トラフィックが安定・予測可能な場合はプロビジョンドモード(+オートスケーリング)の方が安価です。「予測不能 = オンデマンド、安定 = プロビジョンド」の使い分けが問われます。
+
+**確認事項**: リザーブドキャパシティはプロビジョンドを前提とした割引なので、独立した誤答として並べず、プロビジョンド枝の先にぶら下げた。誤答同士の関係まで描くと線が増えるが、この2つは並列ではないため区別しないと誤読を招く。 / DAX はキャパシティモードの選択肢ではなく読み取り高速化の手段だが、解説が触れていないため「論点が違う」以上の説明は付けていない。DAX 自体は db18 で扱う。
+
+---
+
+## db18 — データベース / level 2
+
+**問題**: DynamoDB を使う人気商品ページで、同一アイテムへの読み取りが集中している。アプリの大幅な改修なしにマイクロ秒レベルの応答へ高速化したい。どれを使うか?
+
+**正解**: DynamoDB Accelerator(DAX)
+
+**他の選択肢**: ElastiCache for Redis / リードレプリカ / S3 キャッシュ
+
+**図解の主メッセージ**: DynamoDB の読み取りをアプリの大幅な改修なしにマイクロ秒へ縮めたいなら、API 互換でエンドポイントを差し替えるだけの DAX を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。ElastiCache も「使えるが実装が必要」であって誤りではない、というのが解説の主旨なので、優劣の比較表ではなく改修を許容できるかの1問で分ける方が主メッセージと一致する。(候補: 分岐(判断フロー): 「キャッシュ処理をアプリに書くか」の1問で DAX と ElastiCache に振り分ける / 対比(左右2列): DAX と ElastiCache を並べ、対象データストア・導入時の改修量・応答時間を行で比較する)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>DynamoDB の同一アイテムへ読み取りが集中<br/>アプリの大幅な改修なしにマイクロ秒応答へ"]:::req
+    Q{"キャッシュ処理を<br/>アプリに書くか?"}:::judge
+    DAX["DynamoDB Accelerator(DAX)<br/>DynamoDB 専用のインメモリキャッシュ"]:::best
+    API["API 互換<br/>エンドポイントを差し替えるだけで導入できる"]:::best
+    LAT["読み取りをマイクロ秒に短縮"]:::best
+    EC["ElastiCache for Redis<br/>汎用キャッシュ・キャッシュロジックの実装が必要"]:::alt
+    NOTE["DynamoDB + 改修最小のキャッシュ = DAX"]:::note
+
+    subgraph OTHERS["用途そのものが違う選択肢"]
+        RR["リードレプリカ"]:::alt
+        S3C["S3 キャッシュ"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"書かない"| DAX
+    Q -->|"書いてよい"| EC
+    DAX --> API
+    DAX --> LAT
+    REQ -.->|"用途が違う"| OTHERS
+    DAX -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db18.svg`](../../web/diagrams/db18.svg)
+
+**解説**: DAX は DynamoDB 専用のインメモリキャッシュで、API 互換のためエンドポイントを差し替えるだけで導入でき、読み取りをマイクロ秒に短縮します。汎用キャッシュの ElastiCache も使えますがキャッシュロジックの実装が必要です。「DynamoDB + 改修最小のキャッシュ = DAX」で覚えます。
+
+**確認事項**: ElastiCache は誤答だが解説が「使えるが実装が必要」と条件付きで認めているため、×として脇に置かず分岐のもう一方の枝に置いた。この置き方は db16 と同じ扱い。 / リードレプリカと S3 キャッシュには個別の理由を書いていない。解説がこの2つに触れていないため、用途が違うという1グループに束ねている。
+
+---
+
+## db19 — データベース / level 2
+
+**問題**: 世界 3 リージョンで展開するアプリが、各リージョンで DynamoDB への低レイテンシーな読み書きを必要としている。どの機能を使うか?
+
+**正解**: DynamoDB グローバルテーブル
+
+**他の選択肢**: クロスリージョンリードレプリカ / DynamoDB Streams / S3 レプリケーション
+
+**図解の主メッセージ**: 各リージョンで読みだけでなく書き込みも必要なら、マルチアクティブに複製される DynamoDB グローバルテーブルを選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。配置図はマルチアクティブの様子は伝わるが、なぜ他の選択肢では駄目かが描けない。解説の決め手は「書き込みも必要かどうか」の1点なので、その問いを先頭に置く分岐の方が主メッセージに直結する。(候補: 分岐(判断フロー): 「各リージョンで書き込みも要るか」の1問で振り分ける / 配置図: 3リージョンのテーブルを三角に並べ、双方向のレプリケーション線でマルチアクティブを表す)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>世界 3 リージョンで展開<br/>各リージョンで低レイテンシーな読み書きが必要"]:::req
+    Q{"各リージョンで<br/>書き込みも要るか?"}:::judge
+    GT["DynamoDB グローバルテーブル<br/>複数リージョンにテーブルを複製"]:::best
+    RR["クロスリージョンリードレプリカ<br/>読み取りの複製"]:::alt
+
+    subgraph FIT["グローバルテーブルが満たすもの"]
+        MA["どのリージョンでも読み書き可能<br/>マルチアクティブ"]:::best
+        REP["レプリケーションは通常 1 秒以内"]:::best
+        FO["リージョン障害時も他リージョンで継続稼働"]:::best
+    end
+
+    subgraph OTHERS["用途そのものが違う選択肢"]
+        ST["DynamoDB Streams"]:::alt
+        S3R["S3 レプリケーション"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"書き込みも"| GT
+    Q -->|"読み取りだけ"| RR
+    GT --> MA
+    GT --> REP
+    GT --> FO
+    REQ -.->|"用途が違う"| OTHERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db19.svg`](../../web/diagrams/db19.svg)
+
+**解説**: グローバルテーブルは複数リージョンにテーブルを複製し、どのリージョンでも読み書き可能(マルチアクティブ)なマルチリージョン構成です。レプリケーションは通常 1 秒以内で、リージョン障害時も他リージョンで継続稼働できます。「マルチリージョンで書き込みも必要 = グローバルテーブル」です。
+
+**確認事項**: クロスリージョンリードレプリカを「読み取りだけなら」の枝に置いたのは、名前が示す読み取り用途に沿った配置。解説はこの選択肢の中身に触れていないため、それ以上の説明は付けていない。 / リージョン数を 3 と具体的に描くか迷ったが、問題文の設定なのでそのまま要件ノードに残した。図の構造(分岐)はリージョン数に依存しない。
+
+---
+
+## db20 — データベース / level 2
+
+**問題**: DynamoDB のテーブルに新しい注文アイテムが書き込まれたら、ほぼリアルタイムで後続処理(通知やデータ連携)を実行したい。どの構成が適切か?
+
+**正解**: DynamoDB Streams + Lambda トリガー
+
+**他の選択肢**: 1 分ごとにテーブルをスキャン / RDS へ移行してトリガーを使う / CloudTrail でテーブル操作を監視
+
+**図解の主メッセージ**: アイテムの変更をほぼリアルタイムに後続処理へつなぐなら、テーブルを取りに行くのではなく変更履歴を流す DynamoDB Streams + Lambda トリガーにする。
+
+**採用パターン**: 直列(イベントの流れ)+ 分岐。この問題で覚えるべきは Streams → Lambda → 後続処理という配線そのものなので、線をたどれば構成が読める直列を主役にした。対比表だと構成が2段に割れ、肝心の配線が見えにくくなる。(候補: 直列(イベントの流れ)+ 分岐: 書き込みから後続処理までを一本の線で描き、途中でポーリング案を分ける / 対比(上下2段): 上段にポーリング方式、下段にイベント駆動方式を並べ、遅延とコストを比較する)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>新しい注文アイテムの書き込みを<br/>ほぼリアルタイムで後続処理につなげたい"]:::req
+    WRITE["DynamoDB テーブルへの書き込み<br/>作成・更新・削除"]:::svc
+    Q{"変更を取りに行くか<br/>流してもらうか"}:::judge
+    STREAM["DynamoDB Streams<br/>変更履歴を時系列で保持"]:::best
+    LAMBDA["Lambda トリガー<br/>変更イベント駆動でサーバーレス実行"]:::best
+    NEXT["後続処理<br/>通知・データ連携"]:::best
+    SCAN["1 分ごとにテーブルをスキャン<br/>RCU を大量消費・リアルタイム性も劣る"]:::alt
+
+    subgraph OTHERS["用途そのものが違う選択肢"]
+        RDSMIG["RDS へ移行してトリガーを使う"]:::alt
+        CT["CloudTrail でテーブル操作を監視"]:::alt
+    end
+
+    REQ --> WRITE --> Q
+    Q -->|"流してもらう"| STREAM
+    STREAM --> LAMBDA --> NEXT
+    Q -->|"取りに行く"| SCAN
+    REQ -.->|"用途が違う"| OTHERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db20.svg`](../../web/diagrams/db20.svg)
+
+**解説**: DynamoDB Streams はアイテムの変更履歴(作成・更新・削除)を時系列で保持し、Lambda をトリガーとして関連付けると変更イベント駆動の処理をサーバーレスで実現できます。テーブルスキャンによるポーリングは RCU を大量消費し、リアルタイム性も劣ります。
+
+**確認事項**: スキャンによるポーリングは誤答だが「取りに行く」側の代表として分岐のもう一方の枝に置いた。解説が明示している欠点(RCU の大量消費とリアルタイム性)だけをラベルに書き、それ以上の数値は足していない。 / RDS への移行と CloudTrail 監視には個別の理由を書いていない。解説がこの2つに触れていないため、用途が違うという1グループに束ねている。
+
+---
+
+## db21 — データベース / level 1
+
+**問題**: DynamoDB に保存するセッションデータを、有効期限が過ぎたら追加コストなしで自動削除したい。どの機能を使うか?
+
+**正解**: TTL(Time to Live)
+
+**他の選択肢**: ライフサイクルルール / DynamoDB Streams / 定期バッチで Delete を実行
+
+**図解の主メッセージ**: 期限切れのアイテムを追加コストなしで消したいなら、削除の書き込みキャパシティを消費しない TTL に任せる。
+
+**採用パターン**: 分岐(判断フロー)。タイムラインは TTL の動作は説明できるが、なぜバッチ削除ではなく TTL なのかという決め手(追加コストの有無)が線の上に乗らない。「誰が消すか」の1問に還元する方が主メッセージに直結する。(候補: 分岐(判断フロー): 「期限切れを誰が消すか」の1問で TTL と自前バッチに振り分ける / タイムライン: 書き込み → 期限到来 → 自動削除 の時間軸に沿ってアイテムの一生を描く)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>期限切れのセッションデータを<br/>追加コストなしで自動削除したい"]:::req
+    Q{"期限切れを<br/>誰が消すか?"}:::judge
+    TTL["TTL(Time to Live)<br/>属性の Unix タイムスタンプを過ぎたアイテムを自動削除"]:::best
+    COST["削除に書き込みキャパシティを消費しない"]:::best
+    USE["セッション・一時トークン・イベントログの自動掃除"]:::best
+    BATCH["定期バッチで Delete を実行<br/>削除処理を自前で書く必要がある"]:::alt
+    NOTE["削除は期限後数日以内のベストエフォート<br/>即時削除の保証はない"]:::note
+
+    subgraph OTHERS["用途そのものが違う選択肢"]
+        LC["ライフサイクルルール"]:::alt
+        ST["DynamoDB Streams"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"DynamoDB"| TTL
+    Q -->|"アプリ側"| BATCH
+    TTL --> COST
+    TTL --> USE
+    REQ -.->|"用途が違う"| OTHERS
+    TTL -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db21.svg`](../../web/diagrams/db21.svg)
+
+**解説**: TTL はアイテムの属性に指定した Unix タイムスタンプを過ぎたアイテムを自動削除する機能で、削除の書き込みキャパシティは消費されません。セッション・一時トークン・イベントログの自動掃除に最適です。削除は期限後数日以内に行われるベストエフォートであり、即時削除保証はない点に注意します。
+
+**確認事項**: 定期バッチのラベルには「削除を自前で書く必要がある」とだけ書き、削除分の課金には踏み込んでいない。解説は TTL 側が消費しないことしか述べていないため、裏返しの主張を足さないようにした。 / ライフサイクルルールがどのサービスの機能かは解説にないため、名前だけ置いて用途が違うグループに束ねている。
+
+---
+
+## db22 — データベース / level 2
+
+**問題**: DynamoDB テーブルの一部パーティションにアクセスが集中しスロットリングが発生している。設計上の根本的な対策はどれか?
+
+**正解**: カーディナリティの高いパーティションキーを選び、アクセスを分散させる
+
+**他の選択肢**: テーブルを毎日作り直す / スキャン操作を増やす / すべての属性にインデックスを張る
+
+**図解の主メッセージ**: DynamoDB はパーティションキーのハッシュで負荷を分散するので、ホットパーティションの根本対策はカーディナリティの高いキーを選んでアクセスを均すことにある。
+
+**採用パターン**: 原因 → 対策(直列 + 分岐)。Before / After はパーティションごとの負荷を絵で見せる必要があり、解説にない負荷量の描写を足しがちになる。分散の仕組みを1ノードで置き、そこからキーの良し悪しを分ける方が、解説の範囲内で「なぜキー設計が根本策か」を言い切れる。(候補: 原因 → 対策(直列 + 分岐): 分散の仕組みを起点に、偏るキーと散るキーを分けて対策へ導く / 対比(Before / After): 偏ったキーでのアクセス集中と、分散したキーでのアクセス分布を左右に並べる)
+
+```mermaid
+flowchart TD
+    REQ["現状<br/>一部パーティションにアクセスが集中し<br/>スロットリングが発生している"]:::req
+    MECH["DynamoDB はパーティションキーのハッシュで<br/>データと負荷を分散する"]:::svc
+    Q{"パーティションキーの<br/>値の種類は多いか?"}:::judge
+    LOW["値の種類が少ないキー(例: 日付だけ)<br/>ホットパーティションを生む"]:::alt
+    HIGH["カーディナリティの高いキー<br/>例: ユーザー ID"]:::best
+    SHARD["書き込みシャーディング<br/>キーへの接尾辞付与"]:::best
+    EVEN["アクセスが均される"]:::best
+
+    subgraph OTHERS["キーの偏りに触れない選択肢"]
+        OTHER1["テーブルを毎日作り直す"]:::alt
+        OTHER2["スキャン操作を増やす"]:::alt
+        OTHER3["すべての属性にインデックスを張る"]:::alt
+    end
+
+    REQ --> MECH --> Q
+    Q -->|"少ない"| LOW
+    Q -->|"多い"| HIGH
+    LOW -->|"キーを見直す"| HIGH
+    LOW -->|"接尾辞を足す"| SHARD
+    HIGH --> EVEN
+    SHARD --> EVEN
+    REQ -.->|"偏りは直らない"| OTHERS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db22.svg`](../../web/diagrams/db22.svg)
+
+**解説**: DynamoDB はパーティションキーのハッシュでデータと負荷を分散するため、値の種類が少ない(例: 日付だけ)キーはホットパーティションを生みます。ユーザー ID のようなカーディナリティの高いキーや、書き込みシャーディング(キーへの接尾辞付与)でアクセスを均すのが設計の基本です。
+
+**確認事項**: 書き込みシャーディングは正解選択肢の文言には含まれないが、解説が「設計の基本」として並記しているため、カーディナリティの高いキーと並ぶ緑ノードとして残した。 / 偏ったキーからの対策を「キーを見直す」と「接尾辞を足す」の2本に分けて実線で描いた。どちらも問題が求める根本対策そのものなので、片方だけを主たる流れにはしていない。
+
+---
+
+## db23 — データベース / level 2
+
+**問題**: 注文テーブル(パーティションキー: 注文 ID)に対し、「顧客 ID で注文一覧を検索」という新しいクエリ要件が発生した。スキャンを避けて効率的に検索するには?
+
+**正解**: 顧客 ID をキーにしたグローバルセカンダリインデックス(GSI)を作成する
+
+**他の選択肢**: 毎回テーブル全体をスキャンしてフィルタする / ローカルセカンダリインデックス(LSI)を後から追加する / テーブルを分割して手動管理する
+
+**図解の主メッセージ**: ベースと違うパーティションキー(顧客 ID)で検索したいので、テーブル作成後でも追加できる GSI を作る。
+
+**採用パターン**: 分岐(判断フロー)。比較表は覚え直しには向くが、この問題の答えは「顧客 ID = 別のパーティションキー」という当てはめ1回で出る。その1回を図の中心に置く分岐の方が、解答時の思考をそのまま再現できる。LSI の作成時期の制約は枝の先のラベルとして残せるので、表にしなくても情報は落ちない。(候補: 分岐(判断フロー): 「ベースと同じパーティションキーか」の1問で GSI と LSI に振り分ける / テーブル(比較表): GSI と LSI について、キーの自由度・追加できる時期・用途を行で比べる)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>注文テーブル(パーティションキー: 注文 ID)に<br/>「顧客 ID で注文一覧」の新しいクエリ<br/>スキャンは避けたい"]:::req
+    Q{"検索したいキーは<br/>ベースと同じ<br/>パーティションキーか?"}:::judge
+    GSI["グローバルセカンダリインデックス(GSI)"]:::best
+    DIFFKEY["ベースと異なるパーティションキー<br/>ソートキーで検索できる"]:::best
+    ADD["テーブル作成後でも追加できる"]:::best
+    LSI["ローカルセカンダリインデックス(LSI)<br/>同一パーティションキー内の別ソートキー用<br/>テーブル作成時にしか定義できない"]:::alt
+    SCAN["テーブル全体をスキャンしてフィルタ<br/>全件読み取りでコストと遅延が深刻"]:::alt
+    SPLIT["テーブルを分割して手動管理"]:::alt
+    NOTE["顧客 ID は別のパーティションキー<br/>しかも後から追加したい"]:::note
+
+    REQ --> Q
+    Q -->|"違うキー"| GSI
+    Q -->|"同じキー"| LSI
+    GSI --> DIFFKEY
+    GSI --> ADD
+    REQ -.->|"避けたい案"| SCAN
+    REQ -.->|"手作業が増える"| SPLIT
+    Q -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db23.svg`](../../web/diagrams/db23.svg)
+
+**解説**: GSI はベーステーブルと異なるパーティションキー/ソートキーで検索できるインデックスで、テーブル作成後でも追加できます。LSI は同一パーティションキー内の別ソートキー用で、テーブル作成時にしか定義できません。スキャン+フィルタは全件読み取りのため大規模テーブルではコストと遅延が深刻です。
+
+**確認事項**: LSI は「同じパーティションキーで別ソートキー」という別要件の行き先なので、単なる×ではなく分岐のもう一方の枝に置いた。ただし今回の要件では作成時期の制約からも外れるため、その点はラベルに明記している。 / スキャン+フィルタとテーブル分割は判断の枝ではなく、要件から直接外れる案として破線でぶら下げている。
+
+---
+
+## db24 — データベース / level 1
+
+**問題**: Web アプリのセッションストアとして、レプリケーションによる高可用性やデータ永続化もサポートするインメモリデータストアはどれか?
+
+**正解**: ElastiCache for Redis
+
+**他の選択肢**: ElastiCache for Memcached / DynamoDB DAX / RDS for MySQL
+
+**図解の主メッセージ**: セッションストアのようにレプリケーションによる高可用性とデータ永続化まで要るインメモリなら、ElastiCache for Redis を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。この問題は「要件が並べられ、それを満たす方を選ぶ」形なので、要件 → 問い → Redis → 満たす機能、という一方向の流れが解答時の思考と重なる。対比表は db25(裏返しの出題)と絵が近くなるため、そちらとの描き分けの意味でも分岐を採った。(候補: 分岐(判断フロー): 「永続化とレプリケーションが要るか」の1問で Redis と Memcached に振り分ける / 対比(左右2列): Redis と Memcached の機能を横並びにして、有無を1行ずつ突き合わせる)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>Web アプリのセッションストア<br/>レプリケーションによる高可用性とデータ永続化も必要"]:::req
+    Q{"永続化と<br/>レプリケーションが<br/>要るか?"}:::judge
+    REDIS["ElastiCache for Redis"]:::best
+    MC["ElastiCache for Memcached<br/>シンプルなマルチスレッドキャッシュ<br/>永続化やレプリケーションはない"]:::alt
+    NOTE["セッションストアと<br/>ランキングの定番は Redis"]:::note
+
+    subgraph FIT["Redis が満たすもの"]
+        F1["レプリケーション<br/>自動フェイルオーバー"]:::best
+        F2["スナップショットによる永続化"]:::best
+        F3["ソート済みセットなど<br/>豊富なデータ構造"]:::best
+    end
+
+    subgraph OTHERS["用途そのものが違う選択肢"]
+        DAX["DynamoDB DAX"]:::alt
+        RDSM["RDS for MySQL"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"要る"| REDIS
+    Q -->|"要らない"| MC
+    REDIS --> F1
+    REDIS --> F2
+    REDIS --> F3
+    REQ -.->|"用途が違う"| OTHERS
+    REDIS -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db24.svg`](../../web/diagrams/db24.svg)
+
+**解説**: Redis はレプリケーション・自動フェイルオーバー・スナップショットによる永続化・ソート済みセットなどの豊富なデータ構造をサポートし、セッションストアやランキング(リーダーボード)の定番です。Memcached はシンプルなマルチスレッドキャッシュで、永続化やレプリケーションはありません。この対比は頻出です。
+
+**確認事項**: db25 が同じ Redis / Memcached の軸を裏側から問う問題なので、判断軸は同じでも図の型を変えた(こちらは分岐、db25 は要件の合流)。復習時に同じ絵が2枚並ぶのを避けるための措置。 / DAX と RDS for MySQL には個別の理由を書いていない。解説がこの2つに触れていないため、用途が違うという1グループに束ねている。
+
+---
+
+## db25 — データベース / level 2
+
+**問題**: DB クエリ結果の単純なキャッシュ用途で、永続化やフェイルオーバーは不要、マルチスレッドでシンプルに水平分割したい。どのエンジンを選ぶか?
+
+**正解**: ElastiCache for Memcached
+
+**他の選択肢**: ElastiCache for Redis / DynamoDB / Aurora
+
+**図解の主メッセージ**: 永続化もレプリケーションも高度なデータ型も要らない純粋なキャッシュなら、マルチスレッドで水平分割しやすい Memcached が最小構成になる。
+
+**採用パターン**: 合流(要件の収束)。この問題の要点は「要らないものが多いから最小構成でよい」という引き算の判断で、落とせる条件を並べて1つのサービスに集める合流がその形をそのまま写せる。分岐は裏返しの出題である db24 で採用済みで、こちらで繰り返すと復習時に同じ絵になる。(候補: 合流(要件の収束): 要る条件と落とせる条件をすべて Memcached に集める / 分岐(判断フロー): 「永続化とレプリケーションが要るか」の1問で Redis と Memcached に振り分ける)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>DB クエリ結果の単純なキャッシュ用途"]:::req
+    MC["ElastiCache for Memcached<br/>シンプルな分散キャッシュ<br/>純粋なキャッシュならこれが最小構成"]:::best
+    REDIS["ElastiCache for Redis"]:::alt
+    NOTE["可用性や永続化が必要になったら<br/>Redis を選び直す"]:::note
+
+    subgraph NEED["要る条件"]
+        Y1["マルチスレッドで動く"]:::req
+        Y2["ノード追加でシンプルに水平分割"]:::req
+    end
+
+    subgraph DROP["落とせる条件"]
+        N1["永続化は不要"]:::req
+        N2["フェイルオーバーは不要"]:::req
+        N3["高度なデータ型は不要"]:::req
+    end
+
+    subgraph OTHERS["用途そのものが違う選択肢"]
+        DDB["DynamoDB"]:::alt
+        AUR["Aurora"]:::alt
+    end
+
+    REQ --> MC
+    Y1 --> MC
+    Y2 --> MC
+    N1 --> MC
+    N2 --> MC
+    N3 --> MC
+    MC -.->|"要件が増えたら"| REDIS
+    REQ -.->|"用途が違う"| OTHERS
+    MC -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db25.svg`](../../web/diagrams/db25.svg)
+
+**解説**: Memcached はマルチスレッドで動作するシンプルな分散キャッシュで、ノード追加による水平分割が容易です。永続化・レプリケーション・高度なデータ型が不要な「純粋なキャッシュ」ならば Memcached が最小構成になります。可用性や永続化が必要になったら Redis を選び直します。
+
+**確認事項**: 「落とせる条件」を要件と同じ青の矩形で描いている。要件の一部(不要と明記された条件)なので色は分けていないが、枠のラベルだけで要否の反転が読めるかは、ギャラリーで見て違和感があれば見直したい。 / Redis を誤答のグレーで置きつつ「要件が増えたら選び直す」線を伸ばしている。この問題では誤りだが将来の行き先でもある、という解説の含みを1本の破線で表している。
+
+---
+
+## db26 — データベース / level 2
+
+**問題**: 数ペタバイト規模の構造化データに対し、BI ツールから複雑な集計クエリ(OLAP)を高速実行するデータウェアハウスが必要。どのサービスが適切か?
+
+**正解**: Amazon Redshift
+
+**他の選択肢**: Amazon RDS for PostgreSQL / Amazon DynamoDB / Amazon ElastiCache
+
+**図解の主メッセージ**: ペタバイト級の構造化データに複雑な集計クエリ(OLAP)をかけるなら、列指向ストレージと超並列処理で分析を高速化する Redshift を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)+ 合流。解説が「OLTP = RDS、OLAP = Redshift」という1軸の対応で締めているので、その問いを頂点に置くのが素直。Redshift が速い理由は列指向と MPP の2つがそろって効く話なので、枝の先だけ合流にして高速化に集めた。左右対比では、この2つが並列の理由であることが線に出ない。(候補: 分岐(判断フロー)+ 合流: OLTP か OLAP かで分け、Redshift 側は2つの仕組みが高速化に合流する形にする / 対比(左右2列): RDS(行指向・トランザクション)と Redshift(列指向・分析)を並べて特徴を突き合わせる)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>数ペタバイト規模の構造化データ<br/>BI ツールから複雑な集計クエリ(OLAP)を高速実行"]:::req
+    Q{"OLTP か<br/>OLAP か?"}:::judge
+    RS["Amazon Redshift<br/>データウェアハウス"]:::best
+    RDS["Amazon RDS for PostgreSQL<br/>行指向・大量集計には不向き"]:::alt
+    DDB["Amazon DynamoDB<br/>集計クエリ自体が苦手"]:::alt
+    EC["Amazon ElastiCache"]:::alt
+    NOTE["OLTP(トランザクション)= RDS<br/>OLAP(分析)= Redshift"]:::note
+
+    subgraph WHY["Redshift が速い理由"]
+        COL["列指向ストレージ"]:::best
+        MPP["超並列処理(MPP)"]:::best
+        FAST["ペタバイト級の分析クエリを高速化"]:::best
+        COL --> FAST
+        MPP --> FAST
+    end
+
+    REQ --> Q
+    Q -->|"OLAP"| RS
+    Q -->|"OLTP"| RDS
+    RS --> COL
+    RS --> MPP
+    REQ -.->|"集計が苦手"| DDB
+    REQ -.->|"用途が違う"| EC
+    Q -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db26.svg`](../../web/diagrams/db26.svg)
+
+**解説**: Redshift は列指向ストレージと超並列処理(MPP)によりペタバイト級の分析クエリを高速化するデータウェアハウスです。行指向の RDS は大量集計に不向きで、DynamoDB は集計クエリ自体が苦手です。「OLTP(トランザクション)= RDS、OLAP(分析)= Redshift」の区別が基本です。
+
+**確認事項**: RDS は誤答だが、解説が OLTP 側の正解として対に挙げているため、×として脇に置かず分岐のもう一方の枝に置いた(db16 と同じ扱い)。 / ElastiCache には理由を書いていない。解説が触れていないため「用途が違う」以上には踏み込まない。

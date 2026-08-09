@@ -1,0 +1,51 @@
+{
+  "question_id": "db22",
+  "purpose": "スロットリングの原因をパーティションキーの偏りに帰着させ、キー設計こそが根本対策だと示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、スロットリングを容量不足の問題だと捉えがちな人。",
+  "message": "DynamoDB はパーティションキーのハッシュで負荷を分散するので、ホットパーティションの根本対策はカーディナリティの高いキーを選んでアクセスを均すことにある。",
+  "source_summary": "DynamoDB はパーティションキーのハッシュでデータと負荷を分散するため、値の種類が少ない(例: 日付だけ)キーはホットパーティションを生む。ユーザー ID のようなカーディナリティの高いキーや、書き込みシャーディング(キーへの接尾辞付与)でアクセスを均すのが設計の基本。",
+  "elements": [
+    { "id": "REQ", "label": "一部パーティションにアクセスが集中しスロットリングが発生している", "type": "state", "priority": "primary" },
+    { "id": "MECH", "label": "パーティションキーのハッシュでデータと負荷を分散する仕組み", "type": "concept", "priority": "primary" },
+    { "id": "Q", "label": "パーティションキーの値の種類は多いか", "type": "process", "priority": "primary" },
+    { "id": "LOW", "label": "値の種類が少ないキー(例: 日付だけ)→ ホットパーティション", "type": "state", "priority": "primary" },
+    { "id": "HIGH", "label": "カーディナリティの高いキー(例: ユーザー ID)", "type": "artifact", "priority": "primary" },
+    { "id": "SHARD", "label": "書き込みシャーディング(キーへの接尾辞付与)", "type": "artifact", "priority": "primary" },
+    { "id": "EVEN", "label": "アクセスが均される", "type": "state", "priority": "primary" },
+    { "id": "OTHER1", "label": "テーブルを毎日作り直す", "type": "artifact", "priority": "secondary" },
+    { "id": "OTHER2", "label": "スキャン操作を増やす", "type": "artifact", "priority": "secondary" },
+    { "id": "OTHER3", "label": "すべての属性にインデックスを張る", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "MECH", "verb": "原因の仕組みに戻る", "direction": "one-way", "kind": "sequence" },
+    { "from": "MECH", "to": "Q", "verb": "キーの値の種類を問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q", "to": "LOW", "verb": "少ない→偏る", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "HIGH", "verb": "多い→散る", "direction": "one-way", "kind": "flow" },
+    { "from": "LOW", "to": "HIGH", "verb": "キーを設計し直す", "direction": "one-way", "kind": "flow" },
+    { "from": "LOW", "to": "SHARD", "verb": "接尾辞を足す", "direction": "one-way", "kind": "flow" },
+    { "from": "HIGH", "to": "EVEN", "verb": "負荷が均される", "direction": "one-way", "kind": "flow" },
+    { "from": "SHARD", "to": "EVEN", "verb": "さらに均す", "direction": "one-way", "kind": "flow" },
+    { "from": "REQ", "to": "OTHER1", "verb": "キーの偏りに触れない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "OTHER2", "verb": "キーの偏りに触れない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "OTHER3", "verb": "キーの偏りに触れない", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "label": "キーの偏りに触れない選択肢", "element_ids": ["OTHER1", "OTHER2", "OTHER3"] }
+  ],
+  "candidate_patterns": [
+    "原因 → 対策(直列 + 分岐): 分散の仕組みを起点に、偏るキーと散るキーを分けて対策へ導く",
+    "対比(Before / After): 偏ったキーでのアクセス集中と、分散したキーでのアクセス分布を左右に並べる"
+  ],
+  "selected_pattern": "原因 → 対策(直列 + 分岐)。Before / After はパーティションごとの負荷を絵で見せる必要があり、解説にない負荷量の描写を足しがちになる。分散の仕組みを1ノードで置き、そこからキーの良し悪しを分ける方が、解説の範囲内で「なぜキー設計が根本策か」を言い切れる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "書き込みシャーディングは正解選択肢の文言には含まれないが、解説が「設計の基本」として並記しているため、カーディナリティの高いキーと並ぶ緑ノードとして残した。",
+    "偏ったキーからの対策を「キーを見直す」と「接尾辞を足す」の2本に分けて実線で描いた。どちらも問題が求める根本対策そのものなので、片方だけを主たる流れにはしていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"現状<br/>一部パーティションにアクセスが集中し<br/>スロットリングが発生している\"]:::req\n    MECH[\"DynamoDB はパーティションキーのハッシュで<br/>データと負荷を分散する\"]:::svc\n    Q{\"パーティションキーの<br/>値の種類は多いか?\"}:::judge\n    LOW[\"値の種類が少ないキー(例: 日付だけ)<br/>ホットパーティションを生む\"]:::alt\n    HIGH[\"カーディナリティの高いキー<br/>例: ユーザー ID\"]:::best\n    SHARD[\"書き込みシャーディング<br/>キーへの接尾辞付与\"]:::best\n    EVEN[\"アクセスが均される\"]:::best\n\n    subgraph OTHERS[\"キーの偏りに触れない選択肢\"]\n        OTHER1[\"テーブルを毎日作り直す\"]:::alt\n        OTHER2[\"スキャン操作を増やす\"]:::alt\n        OTHER3[\"すべての属性にインデックスを張る\"]:::alt\n    end\n\n    REQ --> MECH --> Q\n    Q -->|\"少ない\"| LOW\n    Q -->|\"多い\"| HIGH\n    LOW -->|\"キーを見直す\"| HIGH\n    LOW -->|\"接尾辞を足す\"| SHARD\n    HIGH --> EVEN\n    SHARD --> EVEN\n    REQ -.->|\"偏りは直らない\"| OTHERS"
+}

@@ -1,0 +1,50 @@
+{
+  "question_id": "db24",
+  "purpose": "ElastiCache のエンジン選択が「永続化とレプリケーションが要るか」の1問で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Redis と Memcached の違いを機能名の羅列で覚えようとしている人。",
+  "message": "セッションストアのようにレプリケーションによる高可用性とデータ永続化まで要るインメモリなら、ElastiCache for Redis を選ぶ。",
+  "source_summary": "Redis はレプリケーション・自動フェイルオーバー・スナップショットによる永続化・ソート済みセットなどの豊富なデータ構造をサポートし、セッションストアやランキング(リーダーボード)の定番。Memcached はシンプルなマルチスレッドキャッシュで、永続化やレプリケーションはない。",
+  "elements": [
+    { "id": "REQ", "label": "Web アプリのセッションストア・レプリケーションによる高可用性とデータ永続化も必要", "type": "state", "priority": "primary" },
+    { "id": "Q", "label": "永続化とレプリケーションが要るか", "type": "process", "priority": "primary" },
+    { "id": "REDIS", "label": "ElastiCache for Redis", "type": "artifact", "priority": "primary" },
+    { "id": "F1", "label": "レプリケーション / 自動フェイルオーバー", "type": "state", "priority": "primary" },
+    { "id": "F2", "label": "スナップショットによる永続化", "type": "state", "priority": "primary" },
+    { "id": "F3", "label": "ソート済みセットなど豊富なデータ構造", "type": "state", "priority": "primary" },
+    { "id": "MC", "label": "ElastiCache for Memcached", "type": "artifact", "priority": "secondary" },
+    { "id": "DAX", "label": "DynamoDB DAX", "type": "artifact", "priority": "secondary" },
+    { "id": "RDSM", "label": "RDS for MySQL", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "セッションストアとランキングの定番は Redis", "type": "other", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q", "verb": "可用性と永続化から問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q", "to": "REDIS", "verb": "要る→Redis", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "MC", "verb": "要らない→Memcached", "direction": "one-way", "kind": "flow" },
+    { "from": "REDIS", "to": "F1", "verb": "高可用性の要件を満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "REDIS", "to": "F2", "verb": "永続化の要件を満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "REDIS", "to": "F3", "verb": "用途の幅を広げる", "direction": "one-way", "kind": "flow" },
+    { "from": "REQ", "to": "DAX", "verb": "用途そのものが違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "RDSM", "verb": "用途そのものが違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "REDIS", "to": "NOTE", "verb": "覚え方を補う", "direction": "none", "kind": "other" }
+  ],
+  "groups": [
+    { "label": "Redis が満たすもの", "element_ids": ["F1", "F2", "F3"] },
+    { "label": "用途そのものが違う選択肢", "element_ids": ["DAX", "RDSM"] }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「永続化とレプリケーションが要るか」の1問で Redis と Memcached に振り分ける",
+    "対比(左右2列): Redis と Memcached の機能を横並びにして、有無を1行ずつ突き合わせる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。この問題は「要件が並べられ、それを満たす方を選ぶ」形なので、要件 → 問い → Redis → 満たす機能、という一方向の流れが解答時の思考と重なる。対比表は db25(裏返しの出題)と絵が近くなるため、そちらとの描き分けの意味でも分岐を採った。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "db25 が同じ Redis / Memcached の軸を裏側から問う問題なので、判断軸は同じでも図の型を変えた(こちらは分岐、db25 は要件の合流)。復習時に同じ絵が2枚並ぶのを避けるための措置。",
+    "DAX と RDS for MySQL には個別の理由を書いていない。解説がこの2つに触れていないため、用途が違うという1グループに束ねている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>Web アプリのセッションストア<br/>レプリケーションによる高可用性とデータ永続化も必要\"]:::req\n    Q{\"永続化と<br/>レプリケーションが<br/>要るか?\"}:::judge\n    REDIS[\"ElastiCache for Redis\"]:::best\n    MC[\"ElastiCache for Memcached<br/>シンプルなマルチスレッドキャッシュ<br/>永続化やレプリケーションはない\"]:::alt\n    NOTE[\"セッションストアと<br/>ランキングの定番は Redis\"]:::note\n\n    subgraph FIT[\"Redis が満たすもの\"]\n        F1[\"レプリケーション<br/>自動フェイルオーバー\"]:::best\n        F2[\"スナップショットによる永続化\"]:::best\n        F3[\"ソート済みセットなど<br/>豊富なデータ構造\"]:::best\n    end\n\n    subgraph OTHERS[\"用途そのものが違う選択肢\"]\n        DAX[\"DynamoDB DAX\"]:::alt\n        RDSM[\"RDS for MySQL\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"要る\"| REDIS\n    Q -->|\"要らない\"| MC\n    REDIS --> F1\n    REDIS --> F2\n    REDIS --> F3\n    REQ -.->|\"用途が違う\"| OTHERS\n    REDIS -.- NOTE"
+}

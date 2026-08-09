@@ -1,0 +1,53 @@
+{
+  "question_id": "db25",
+  "purpose": "「要る条件」と「要らない条件」を並べ、両方が Memcached という最小構成に収束することを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、迷ったら機能の多い Redis を選んでしまう人。",
+  "message": "永続化もレプリケーションも高度なデータ型も要らない純粋なキャッシュなら、マルチスレッドで水平分割しやすい Memcached が最小構成になる。",
+  "source_summary": "Memcached はマルチスレッドで動作するシンプルな分散キャッシュで、ノード追加による水平分割が容易。永続化・レプリケーション・高度なデータ型が不要な「純粋なキャッシュ」ならば Memcached が最小構成になる。可用性や永続化が必要になったら Redis を選び直す。",
+  "elements": [
+    { "id": "REQ", "label": "DB クエリ結果の単純なキャッシュ用途", "type": "state", "priority": "primary" },
+    { "id": "Y1", "label": "マルチスレッドで動く", "type": "state", "priority": "primary" },
+    { "id": "Y2", "label": "ノード追加でシンプルに水平分割", "type": "state", "priority": "primary" },
+    { "id": "N1", "label": "永続化は不要", "type": "state", "priority": "primary" },
+    { "id": "N2", "label": "フェイルオーバーは不要", "type": "state", "priority": "primary" },
+    { "id": "N3", "label": "高度なデータ型は不要", "type": "state", "priority": "primary" },
+    { "id": "MC", "label": "ElastiCache for Memcached(純粋なキャッシュの最小構成)", "type": "artifact", "priority": "primary" },
+    { "id": "REDIS", "label": "ElastiCache for Redis", "type": "artifact", "priority": "secondary" },
+    { "id": "DDB", "label": "DynamoDB", "type": "artifact", "priority": "secondary" },
+    { "id": "AUR", "label": "Aurora", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "可用性や永続化が必要になったら Redis に選び直す", "type": "other", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "MC", "verb": "用途が一致する", "direction": "one-way", "kind": "flow" },
+    { "from": "Y1", "to": "MC", "verb": "要る条件を満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "Y2", "to": "MC", "verb": "要る条件を満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "N1", "to": "MC", "verb": "落とせる条件", "direction": "one-way", "kind": "flow" },
+    { "from": "N2", "to": "MC", "verb": "落とせる条件", "direction": "one-way", "kind": "flow" },
+    { "from": "N3", "to": "MC", "verb": "落とせる条件", "direction": "one-way", "kind": "flow" },
+    { "from": "MC", "to": "REDIS", "verb": "要件が増えたら選び直す", "direction": "one-way", "kind": "other" },
+    { "from": "REQ", "to": "DDB", "verb": "用途そのものが違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "AUR", "verb": "用途そのものが違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "MC", "to": "NOTE", "verb": "選び直しの条件を補う", "direction": "none", "kind": "other" }
+  ],
+  "groups": [
+    { "label": "要る条件", "element_ids": ["Y1", "Y2"] },
+    { "label": "落とせる条件", "element_ids": ["N1", "N2", "N3"] },
+    { "label": "用途そのものが違う選択肢", "element_ids": ["DDB", "AUR"] }
+  ],
+  "candidate_patterns": [
+    "合流(要件の収束): 要る条件と落とせる条件をすべて Memcached に集める",
+    "分岐(判断フロー): 「永続化とレプリケーションが要るか」の1問で Redis と Memcached に振り分ける"
+  ],
+  "selected_pattern": "合流(要件の収束)。この問題の要点は「要らないものが多いから最小構成でよい」という引き算の判断で、落とせる条件を並べて1つのサービスに集める合流がその形をそのまま写せる。分岐は裏返しの出題である db24 で採用済みで、こちらで繰り返すと復習時に同じ絵になる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「落とせる条件」を要件と同じ青の矩形で描いている。要件の一部(不要と明記された条件)なので色は分けていないが、枠のラベルだけで要否の反転が読めるかは、ギャラリーで見て違和感があれば見直したい。",
+    "Redis を誤答のグレーで置きつつ「要件が増えたら選び直す」線を伸ばしている。この問題では誤りだが将来の行き先でもある、という解説の含みを1本の破線で表している。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>DB クエリ結果の単純なキャッシュ用途\"]:::req\n    MC[\"ElastiCache for Memcached<br/>シンプルな分散キャッシュ<br/>純粋なキャッシュならこれが最小構成\"]:::best\n    REDIS[\"ElastiCache for Redis\"]:::alt\n    NOTE[\"可用性や永続化が必要になったら<br/>Redis を選び直す\"]:::note\n\n    subgraph NEED[\"要る条件\"]\n        Y1[\"マルチスレッドで動く\"]:::req\n        Y2[\"ノード追加でシンプルに水平分割\"]:::req\n    end\n\n    subgraph DROP[\"落とせる条件\"]\n        N1[\"永続化は不要\"]:::req\n        N2[\"フェイルオーバーは不要\"]:::req\n        N3[\"高度なデータ型は不要\"]:::req\n    end\n\n    subgraph OTHERS[\"用途そのものが違う選択肢\"]\n        DDB[\"DynamoDB\"]:::alt\n        AUR[\"Aurora\"]:::alt\n    end\n\n    REQ --> MC\n    Y1 --> MC\n    Y2 --> MC\n    N1 --> MC\n    N2 --> MC\n    N3 --> MC\n    MC -.->|\"要件が増えたら\"| REDIS\n    REQ -.->|\"用途が違う\"| OTHERS\n    MC -.- NOTE"
+}
