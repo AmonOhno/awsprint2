@@ -1,0 +1,160 @@
+{
+  "question_id": "db28",
+  "purpose": "異種 DB 間の移行が「スキーマ変換」と「継続複製」の2工程で成り立ち、それがダウンタイム最小化の理由であることを追えるようにする。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、DMS の名前は知っているが SCT との役割分担と CDC の意味が曖昧な人。",
+  "message": "異種 DB 間の移行は、SCT でスキーマを変換してから DMS の CDC で稼働中のデータを継続複製し、同期が追いついた時点で切り替えることでダウンタイムを数分レベルに抑える。",
+  "source_summary": "異種 DB 間の移行では、まず SCT でスキーマやストアドプロシージャを変換し、DMS の CDC(変更データキャプチャ)で稼働中のデータを継続複製する。同期が追いついた時点で切り替えればダウンタイムは数分レベル。同種 DB 間なら SCT は不要。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "オンプレの Oracle を Aurora PostgreSQL へ、ダウンタイムを最小限にして移行したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "スキーマ変換と継続複製の両方が要るか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "SCT",
+      "label": "AWS SCT でスキーマ・ストアドプロシージャを変換",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "DMS",
+      "label": "AWS DMS の CDC で稼働中のデータを継続複製",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CUT",
+      "label": "同期が追いついた時点で切り替え",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "RESULT",
+      "label": "ダウンタイムを数分レベルに抑えられる",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "DS",
+      "label": "AWS DataSync のみ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SNAP",
+      "label": "スナップショットの手動コピー",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CSV",
+      "label": "S3 経由の CSV エクスポート / インポート",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "同種 DB 間の移行なら SCT は不要",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "移行元と移行先の異種性から問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "SCT",
+      "verb": "異種 DB→まずスキーマ変換",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "SCT",
+      "to": "DMS",
+      "verb": "変換後にデータを移す",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "DMS",
+      "to": "CUT",
+      "verb": "追いついたら切り替える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "CUT",
+      "to": "RESULT",
+      "verb": "停止時間を最小化する",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "REQ",
+      "to": "DS",
+      "verb": "一括コピーのみで追従しない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "SNAP",
+      "verb": "一括コピーのみで追従しない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "CSV",
+      "verb": "一括コピーのみで追従しない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "SCT",
+      "to": "NOTE",
+      "verb": "適用条件を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "ダウンタイムを最小化する手順",
+      "element_ids": [
+        "SCT",
+        "DMS",
+        "CUT",
+        "RESULT"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "直列(手順): SCT → DMS(CDC)→ 切り替え → ダウンタイム最小、という時間順に並べる",
+    "分岐(判断フロー): 「異種 DB か」「稼働したまま移すか」の2問で SCT の要否と DMS の要否を決める"
+  ],
+  "selected_pattern": "直列(手順)。解説が「まず SCT で変換 → DMS の CDC で複製 → 追いついた時点で切り替え」と時間順に書かれており、順序そのものが答えの根拠になっているため、手順を1本の線で見せるのが最も解読が少ない。分岐案は SCT と DMS が独立の選択に見えてしまい、両方を順に使うという要点がぼやける。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "誤答3つはいずれも「一括コピーのみで稼働中の変更に追従しない」という同じ理由でまとめた。解説が CDC との対比しか述べていないため、個別の理由には踏み込んでいない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>オンプレの Oracle → Aurora PostgreSQL(異種 DB 間)<br/>ダウンタイムを最小限にしたい\"]:::req\n    Q{\"スキーマ変換と<br/>継続複製の両方が要るか?\"}:::judge\n    DS[\"AWS DataSync のみ\"]:::alt\n    SNAP[\"スナップショットの手動コピー\"]:::alt\n    CSV[\"S3 経由の CSV エクスポート / インポート\"]:::alt\n    NOTE[\"同種 DB 間の移行なら SCT は不要\"]:::note\n\n    subgraph STEPS[\"ダウンタイムを最小化する手順\"]\n        SCT[\"1. AWS SCT<br/>スキーマ・ストアドプロシージャを変換\"]:::best\n        DMS[\"2. AWS DMS の CDC(変更データキャプチャ)<br/>稼働中のデータを継続複製\"]:::best\n        CUT[\"3. 同期が追いついた時点で切り替え\"]:::best\n        RESULT[\"ダウンタイムを数分レベルに抑えられる\"]:::best\n        SCT --> DMS\n        DMS --> CUT\n        CUT --> RESULT\n    end\n\n    REQ --> Q\n    Q -->|\"異種 DB\"| SCT\n    REQ -.->|\"一括のみ\"| DS\n    REQ -.->|\"一括のみ\"| SNAP\n    REQ -.->|\"一括のみ\"| CSV\n    SCT -.- NOTE"
+}

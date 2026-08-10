@@ -1,0 +1,151 @@
+{
+  "question_id": "db34",
+  "purpose": "重い分析クエリの干渉対策が「容量を足す」ではなく「ワークロードを別インスタンスへ分離する」ことだと示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、性能問題をまずスケールアップで解こうとしがちな人。",
+  "message": "数秒の遅れが許される重い分析は、リーダーを追加してカスタムエンドポイントで振り向け、トランザクション処理と別インスタンスに分離する。",
+  "source_summary": "Aurora は共有ストレージのため、リーダーインスタンスを追加してもストレージ層の負荷は増えず、通常は数十〜数百ミリ秒のレプリカラグで読み取りをオフロードできる。カスタムエンドポイントを作れば分析用を特定のリーダーだけに振り分け、通常の読み取り用リーダーエンドポイントと分離できる。ライターのスケールアップは干渉を根本的に解消せず、Serverless v2 は容量の自動調整であってワークロード分離ではない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "重い分析クエリが本番トランザクションのレイテンシーに影響。分析は数秒遅れでよく、ライターは増やさない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "容量を足すのか、ワークロードを分離するのか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "READER",
+      "label": "リーダーインスタンスを追加",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "CEP",
+      "label": "カスタムエンドポイントを作成し分析クエリ専用に振り向ける",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "SEP",
+      "label": "通常の読み取り用リーダーエンドポイントと分離できる",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "SHARED",
+      "label": "Aurora は共有ストレージ。リーダーを足してもストレージ層の負荷は増えない",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "LAG",
+      "label": "レプリカラグは通常 数十〜数百ミリ秒",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "UP",
+      "label": "ライターインスタンスのサイズを 2 倍にする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CACHE",
+      "label": "リードレプリカを作らずクエリキャッシュを有効にする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SLS",
+      "label": "Aurora Serverless v2 に切り替えて自動スケールに任せる",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "干渉の解き方を問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "READER",
+      "verb": "分離する→リーダー追加",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "READER",
+      "to": "CEP",
+      "verb": "分析だけを振り向ける",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CEP",
+      "to": "SEP",
+      "verb": "通常の読み取りとも分ける",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "READER",
+      "to": "SHARED",
+      "verb": "追加できる根拠を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "READER",
+      "to": "LAG",
+      "verb": "数秒遅れでよい要件と対応",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "Q",
+      "to": "UP",
+      "verb": "容量を足すだけでは干渉が残る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "CACHE",
+      "verb": "容量を足すだけでは干渉が残る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SLS",
+      "verb": "容量の自動調整であって分離ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「容量を足すのか、ワークロードを分離するのか」で正解と3つの誤答を分ける",
+    "対比(左右2列): 分離前(ライター1台に分析とトランザクションが同居)と分離後(分析は専用リーダー)を並べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。誤答3つはいずれも「容量側をいじる」案であり、正解だけが「ワークロードを分ける」案なので、この1軸で全選択肢が説明できる。前後対比案は分離の効果は直感的だが、Serverless v2 や クエリキャッシュ を退ける理由を同じ図に置けない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "レプリカラグの値は解説にある「数十〜数百ミリ秒」をそのまま注釈に置いた。問題文の「数秒遅れでよい」との対応は線ではなく注釈の接続で表している。",
+    "クエリキャッシュには「容量側の対策」以上の理由を書いていない。解説が個別に触れていないため踏み込まない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>月次レポートの重い分析クエリが本番トランザクションのレイテンシーに影響<br/>分析は数秒遅れのデータでよい / 追加のライターは増やさない\"]:::req\n    Q{\"容量を足すのか<br/>ワークロードを分離するのか?\"}:::judge\n    READER[\"リーダーインスタンスを追加\"]:::best\n    CEP[\"カスタムエンドポイントを作成<br/>分析クエリ専用に振り向ける\"]:::best\n    SEP[\"通常の読み取り用リーダーエンドポイントと分離できる\"]:::best\n    SHARED[\"Aurora は共有ストレージ<br/>リーダーを足してもストレージ層の負荷は増えない\"]:::note\n    LAG[\"レプリカラグは通常 数十〜数百ミリ秒\"]:::note\n    UP[\"ライターインスタンスのサイズを 2 倍<br/>干渉を根本的に解消しない\"]:::alt\n    CACHE[\"リードレプリカを作らずクエリキャッシュを有効化\"]:::alt\n    SLS[\"Aurora Serverless v2 の自動スケール<br/>容量の自動調整でありワークロード分離ではない\"]:::alt\n\n    REQ --> Q\n    Q -->|\"分離する\"| READER\n    READER --> CEP\n    CEP --> SEP\n    READER -.- SHARED\n    READER -.- LAG\n    Q -.->|\"容量を足す\"| UP\n    Q -.->|\"容量を足す\"| CACHE\n    Q -.->|\"容量を足す\"| SLS"
+}

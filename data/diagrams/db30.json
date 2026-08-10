@@ -1,0 +1,137 @@
+{
+  "question_id": "db30",
+  "purpose": "データベース選択の起点を「クエリの主役が関係性の探索かどうか」に置き、グラフ DB になる筋道を示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、リレーショナル DB の JOIN で何でも表せると考えがちな人。",
+  "message": "「友人の友人」のようにデータ間のつながりをたどるクエリが中心なら、ノードとエッジを直接探索するグラフデータベース Neptune を選ぶ。",
+  "source_summary": "Neptune はグラフデータベースで、ノードとエッジで表現された関係性の探索(友人関係、レコメンデーション、不正検知のつながり分析)を高速に処理する。リレーショナル DB で多段 JOIN を繰り返すより遥かに効率的。「関係性・つながりの探索 = Neptune」で判断する。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "「友人の友人」をたどる推薦機能。複雑な関係性を高速に探索するクエリが中心",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "クエリの主役は関係性の探索か",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "NEP",
+      "label": "Amazon Neptune(グラフデータベース)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "GRAPH",
+      "label": "ノードとエッジで表現された関係性を探索する",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "USE",
+      "label": "友人関係・レコメンデーション・不正検知のつながり分析",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "RDS",
+      "label": "Amazon RDS",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "TS",
+      "label": "Amazon Timestream",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "RS",
+      "label": "Amazon Redshift",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "関係性・つながりの探索 = Neptune",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "クエリの性格から問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "NEP",
+      "verb": "関係性の探索→Neptune",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "NEP",
+      "to": "GRAPH",
+      "verb": "仕組みで支える",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "GRAPH",
+      "to": "USE",
+      "verb": "高速に処理できる用途",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "Q",
+      "to": "RDS",
+      "verb": "多段 JOIN の繰り返しになる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "TS",
+      "verb": "扱うデータの性格が違う",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "RS",
+      "verb": "扱うデータの性格が違う",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「関係性の探索が主役か」で Neptune とリレーショナル DB に分ける",
+    "対比(左右2列): グラフ探索(ノードとエッジをたどる)と多段 JOIN の繰り返しを並べて効率差を見せる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。解説が「関係性・つながりの探索 = Neptune」という1軸の判断で締めているため、その問いを頂点に置き、RDS を「多段 JOIN になる」枝として並べれば対比の要点も同じ1枚に収まる。左右対比だけにすると Timestream・Redshift の置き場所がなくなる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Timestream・Redshift には理由を書いていない。解説が触れていないため「扱うデータの性格が違う」以上には踏み込まない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>SNS の「友人の友人」をたどる推薦機能<br/>データ間の複雑な関係性を高速に探索するクエリが中心\"]:::req\n    Q{\"クエリの主役は<br/>関係性の探索か?\"}:::judge\n    NEP[\"Amazon Neptune<br/>グラフデータベース\"]:::best\n    GRAPH[\"ノードとエッジで表現された<br/>関係性の探索を高速に処理\"]:::best\n    USE[\"友人関係・レコメンデーション<br/>不正検知のつながり分析\"]:::best\n    RDS[\"Amazon RDS<br/>多段 JOIN の繰り返しになる\"]:::alt\n    TS[\"Amazon Timestream\"]:::alt\n    RS[\"Amazon Redshift\"]:::alt\n    NOTE[\"関係性・つながりの探索 = Neptune\"]:::note\n\n    REQ --> Q\n    Q -->|\"はい\"| NEP\n    NEP --> GRAPH\n    GRAPH --> USE\n    Q -->|\"JOIN で表す\"| RDS\n    REQ -.->|\"データが違う\"| TS\n    REQ -.->|\"データが違う\"| RS\n    Q -.- NOTE"
+}

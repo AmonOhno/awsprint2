@@ -1,0 +1,137 @@
+{
+  "question_id": "db35",
+  "purpose": "時間帯限定の負荷への対策が「手で合わせる」ではなく「指標に追従して自動増減させる」ことだと示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Aurora のスケールをインスタンスクラス変更でしか考えていない人。",
+  "message": "日中だけ跳ねる読み取り負荷には、平均 CPU または平均接続数のターゲット追跡でリードレプリカを自動増減する Aurora Auto Scaling を使う。",
+  "source_summary": "Aurora レプリカの Auto Scaling は、平均 CPU 使用率または平均接続数のターゲット追跡ポリシーで Aurora レプリカを自動的に増減し、リーダーエンドポイントに自動で組み込む。クラスターの停止は最大 7 日で自動再開され日次運用には不向き、インスタンスクラスの手動変更は運用負荷と再起動を伴い、別リージョンのレプリカはレイテンシーとコストの面で目的に合わない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "読み取り負荷が日中の 3 時間だけ 10 倍。常時多配置はコストが見合わず、ダウンタイムなしで自動追従したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "負荷に自動で追従できるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "AS",
+      "label": "Aurora Auto Scaling をリーダーに設定",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "TT",
+      "label": "ターゲット追跡ポリシー(平均 CPU 使用率 または 平均接続数)",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "ADD",
+      "label": "Aurora レプリカを自動的に増減",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "EP",
+      "label": "リーダーエンドポイントに自動で組み込まれる",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "STOP",
+      "label": "スケジュールで毎日クラスターを停止・起動する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "MAN",
+      "label": "リーダーのインスタンスクラスを毎日手動で変更する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "XR",
+      "label": "リードレプリカを別リージョンに作成して負荷を分散する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "追従の自動化を問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "AS",
+      "verb": "自動追従→Auto Scaling",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "AS",
+      "to": "TT",
+      "verb": "指標で判断する",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "TT",
+      "to": "ADD",
+      "verb": "レプリカを増減する",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "ADD",
+      "to": "EP",
+      "verb": "ダウンタイムなしで組み込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "STOP",
+      "verb": "最大 7 日で自動再開する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "MAN",
+      "verb": "運用負荷と再起動を伴う",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "XR",
+      "verb": "レイテンシーとコストが合わない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「負荷に自動で追従できるか」で Auto Scaling と手動・スケジュール運用に分ける",
+    "タイムライン: 1日の負荷曲線に沿って、日中だけレプリカが増えて夜間に戻る様子を描く"
+  ],
+  "selected_pattern": "分岐(判断フロー)。誤答3つはいずれも「人手やスケジュールで合わせにいく」案で、正解だけが「指標に追従して自動で増減する」案なので、この1軸で4択すべてを説明できる。タイムライン案は挙動の直感は得られるが、時刻や倍率の目盛りを描くと問題文に無い数値を足しかねず、誤答を退ける理由も載らない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "ターゲット値の具体的な数値は書いていない(解説が指標の種類までしか述べていないため)。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>読み取り負荷が日中の 3 時間だけ 10 倍<br/>リーダーの常時多配置はコストが見合わない / ダウンタイムなしで自動追従\"]:::req\n    Q{\"負荷に自動で<br/>追従できるか?\"}:::judge\n    AS[\"Aurora Auto Scaling をリーダーに設定\"]:::best\n    TT[\"ターゲット追跡ポリシー<br/>平均 CPU 使用率 または 平均接続数\"]:::best\n    ADD[\"Aurora レプリカを自動的に増減\"]:::best\n    EP[\"リーダーエンドポイントに自動で組み込まれる\"]:::best\n    STOP[\"スケジュールで毎日クラスターを停止・起動<br/>最大 7 日で自動再開され日次運用に不向き\"]:::alt\n    MAN[\"インスタンスクラスを毎日手動で変更<br/>運用負荷と再起動を伴う\"]:::alt\n    XR[\"別リージョンにリードレプリカを作成<br/>レイテンシーとコストの面で目的に合わない\"]:::alt\n\n    REQ --> Q\n    Q -->|\"自動\"| AS\n    AS --> TT\n    TT --> ADD\n    ADD --> EP\n    Q -.->|\"手動・定時\"| STOP\n    Q -.->|\"手動・定時\"| MAN\n    Q -.->|\"配置替え\"| XR"
+}

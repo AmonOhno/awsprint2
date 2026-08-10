@@ -1,0 +1,151 @@
+{
+  "question_id": "db33",
+  "purpose": "認証方式の選択が「パスワードを持たずに認証するか / 持ったまま安全に回すか」で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、DB の資格情報管理として Secrets Manager しか思い浮かばない人。",
+  "message": "DB パスワードの保管・ローテーションそのものをやめたいなら、IAM が発行する 15 分間有効なトークンで接続する IAM データベース認証を使う。",
+  "source_summary": "IAM データベース認証を有効にすると、IAM で発行される 15 分間有効な認証トークンで DB へ接続でき、パスワードの保管・ローテーションが不要になる。MySQL・PostgreSQL 系でサポートされ、通信は TLS 必須。パスワードを使い続ける場合は Secrets Manager の自動ローテーションが代替策。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "RDS for MySQL への接続で DB パスワードの管理をやめ、IAM の一時的な認証トークンでログインさせたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "パスワードを持たずに認証するか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "IAMAUTH",
+      "label": "IAM データベース認証",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "TOKEN",
+      "label": "IAM が発行する 15 分間有効な認証トークンで接続",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "NOPW",
+      "label": "パスワードの保管・ローテーションが不要になる",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "SM",
+      "label": "Secrets Manager の自動ローテーション(パスワードを使い続ける場合の代替策)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SG",
+      "label": "セキュリティグループ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "KMS",
+      "label": "KMS 暗号化",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "PG",
+      "label": "パラメータグループ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "MySQL・PostgreSQL 系でサポート。通信は TLS 必須",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "資格情報の持ち方から問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "IAMAUTH",
+      "verb": "持たない→IAM 認証",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "IAMAUTH",
+      "to": "TOKEN",
+      "verb": "仕組みで支える",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "TOKEN",
+      "to": "NOPW",
+      "verb": "管理の手間を無くす",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "Q",
+      "to": "SM",
+      "verb": "持ち続けるなら自動ローテーション",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "SG",
+      "verb": "認証の仕組みではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "KMS",
+      "verb": "認証の仕組みではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "PG",
+      "verb": "認証の仕組みではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "IAMAUTH",
+      "to": "NOTE",
+      "verb": "利用条件を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「パスワードを持たずに認証するか」で IAM 認証と Secrets Manager に分ける",
+    "直列(手順): IAM 認証を有効化 → トークン発行 → TLS で接続、という接続の流れを描く"
+  ],
+  "selected_pattern": "分岐(判断フロー)。問われているのは機能の選択であり、迷いどころは「パスワードを無くす(IAM 認証)」か「パスワードを安全に回す(Secrets Manager)」かなので、その分岐を頂点に置くと解説の代替策までそのまま収まる。直列案は接続の流れは示せるが、他の選択肢を退ける理由が図に出ない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Secrets Manager は選択肢に無いが、解説が代替策として挙げているため分岐のもう一方に置いた(サービスとして svc で表現し、誤答の alt とは見た目を分けている)。",
+    "セキュリティグループ・KMS・パラメータグループには理由を書いていない。解説が触れていないため「認証の仕組みではない」以上には踏み込まない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>RDS for MySQL への接続で DB パスワードの管理をやめたい<br/>IAM の一時的な認証トークンでログインさせたい\"]:::req\n    Q{\"パスワードを持たずに<br/>認証するか?\"}:::judge\n    IAMAUTH[\"IAM データベース認証\"]:::best\n    TOKEN[\"IAM が発行する 15 分間有効な<br/>認証トークンで接続\"]:::best\n    NOPW[\"パスワードの保管・ローテーションが不要になる\"]:::best\n    SM[\"Secrets Manager の自動ローテーション<br/>パスワードを使い続ける場合の代替策\"]:::svc\n    SG[\"セキュリティグループ\"]:::alt\n    KMS[\"KMS 暗号化\"]:::alt\n    PG[\"パラメータグループ\"]:::alt\n    NOTE[\"MySQL・PostgreSQL 系でサポート<br/>通信は TLS 必須\"]:::note\n\n    REQ --> Q\n    Q -->|\"持たない\"| IAMAUTH\n    IAMAUTH --> TOKEN\n    TOKEN --> NOPW\n    Q -.->|\"持ち続ける\"| SM\n    REQ -.->|\"用途が違う\"| SG\n    REQ -.->|\"用途が違う\"| KMS\n    REQ -.->|\"用途が違う\"| PG\n    IAMAUTH -.- NOTE"
+}

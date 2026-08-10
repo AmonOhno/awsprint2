@@ -1,0 +1,173 @@
+{
+  "question_id": "db32",
+  "purpose": "「暗号化は作成時にしか指定できない」という一点から、スナップショット経由で作り直す手順が導かれることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、設定変更で後から暗号化できると思い込みがちな人。",
+  "message": "稼働中の RDS は直接暗号化できないため、スナップショット取得 → 暗号化コピー → 復元 → 接続先切り替え、という作り直しの手順を踏む。",
+  "source_summary": "稼働中の RDS を直接暗号化することはできない。スナップショット取得 → KMS キーを指定して暗号化コピー → そのスナップショットから新インスタンスを復元、という手順を踏み、アプリの接続先を切り替える。「暗号化は作成時のみ、後からはスナップショット経由」は RDS / EBS 共通の頻出パターン。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "暗号化されていない既存の RDS インスタンスを暗号化したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "稼働中のまま後から暗号化できるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "NO",
+      "label": "できない(暗号化の指定はインスタンス作成時のみ)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "S1",
+      "label": "スナップショットを取得",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "S2",
+      "label": "KMS キーを指定して暗号化コピー",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "S3",
+      "label": "そのスナップショットから新インスタンスを復元",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "S4",
+      "label": "アプリの接続先を切り替え",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "A1",
+      "label": "設定画面で暗号化を有効にするだけでよい",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "A2",
+      "label": "マルチ AZ を有効にすると自動で暗号化される",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "A3",
+      "label": "リードレプリカを作ると暗号化される",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "暗号化は作成時のみ、後からはスナップショット経由(RDS / EBS 共通)",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "変更可否から問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "NO",
+      "verb": "できない",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "NO",
+      "to": "S1",
+      "verb": "作り直しの手順に入る",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "S1",
+      "to": "S2",
+      "verb": "コピー時に暗号化する",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "S2",
+      "to": "S3",
+      "verb": "暗号化済みから復元する",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "S3",
+      "to": "S4",
+      "verb": "新インスタンスへ向ける",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "A1",
+      "verb": "既存インスタンスは暗号化されない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "A2",
+      "verb": "既存インスタンスは暗号化されない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "A3",
+      "verb": "既存インスタンスは暗号化されない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "NO",
+      "to": "NOTE",
+      "verb": "頻出パターンを補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "スナップショット経由で作り直す手順",
+      "element_ids": [
+        "S1",
+        "S2",
+        "S3",
+        "S4"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "直列(手順): 「後から暗号化できない」を起点に、スナップショット経由の4ステップを時間順に並べる",
+    "対比(左右2列): 「設定変更でできること」と「できないこと」を並べ、暗号化を後者に置く"
+  ],
+  "selected_pattern": "直列(手順)。この問題の答えは操作の順序そのものなので、順序を1本の線で見せるのが最短。対比案は「できない」ことは伝わるが、正解が求めている具体的な手順が図に出ないため、判断軸として弱い。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "誤答3つはいずれも「既存インスタンスは暗号化されない」という同じ理由でまとめた。解説がこの1点しか述べていないため個別の理由には踏み込まない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>暗号化されていない既存の RDS インスタンスを暗号化したい\"]:::req\n    Q{\"稼働中のまま<br/>後から暗号化できるか?\"}:::judge\n    NO[\"できない<br/>暗号化の指定はインスタンス作成時のみ\"]:::req\n    A1[\"設定画面で暗号化を有効にするだけでよい\"]:::alt\n    A2[\"マルチ AZ を有効にすると自動で暗号化される\"]:::alt\n    A3[\"リードレプリカを作ると暗号化される\"]:::alt\n    NOTE[\"暗号化は作成時のみ、後からはスナップショット経由<br/>RDS / EBS 共通の頻出パターン\"]:::note\n\n    subgraph STEPS[\"スナップショット経由で作り直す手順\"]\n        S1[\"1. スナップショットを取得\"]:::best\n        S2[\"2. KMS キーを指定して暗号化コピー\"]:::best\n        S3[\"3. そのスナップショットから新インスタンスを復元\"]:::best\n        S4[\"4. アプリの接続先を切り替え\"]:::best\n        S1 --> S2\n        S2 --> S3\n        S3 --> S4\n    end\n\n    REQ --> Q\n    Q -->|\"できない\"| NO\n    NO --> S1\n    Q -.->|\"暗号化されない\"| A1\n    Q -.->|\"暗号化されない\"| A2\n    Q -.->|\"暗号化されない\"| A3\n    NO -.- NOTE"
+}

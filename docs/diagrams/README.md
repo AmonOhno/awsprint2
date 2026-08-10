@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 93 問 / 全 400 問
+収録: 103 問 / 全 400 問
 
 ---
 
@@ -4804,3 +4804,512 @@ flowchart TD
 **解説**: Redshift は列指向ストレージと超並列処理(MPP)によりペタバイト級の分析クエリを高速化するデータウェアハウスです。行指向の RDS は大量集計に不向きで、DynamoDB は集計クエリ自体が苦手です。「OLTP(トランザクション)= RDS、OLAP(分析)= Redshift」の区別が基本です。
 
 **確認事項**: RDS は誤答だが、解説が OLTP 側の正解として対に挙げているため、×として脇に置かず分岐のもう一方の枝に置いた(db16 と同じ扱い)。 / ElastiCache には理由を書いていない。解説が触れていないため「用途が違う」以上には踏み込まない。
+
+---
+
+## db27 — データベース / level 2
+
+**問題**: S3 に保存された CSV/Parquet ファイルに対し、サーバーを立てずに標準 SQL でアドホックな分析クエリを実行し、スキャン量に応じた課金で済ませたい。どのサービスを使うか?
+
+**正解**: Amazon Athena
+
+**他の選択肢**: Amazon Redshift クラスターを常設 / RDS にインポートしてクエリ / EMR クラスターを構築
+
+**図解の主メッセージ**: たまのアドホック分析でインフラを構築したくないなら、S3 のデータへ直接 SQL を実行しスキャン量だけ課金される Athena を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)+ 合流。解説が「常時大量なら Redshift、たまのアドホックなら Athena」という1つの問いで締めているため、その問いを頂点に置くのが素直。Athena が選ばれる理由は「構築不要」と「スキャン量課金」の2つが揃って効く話なので、枝の先だけ合流させた。左右対比にすると、RDS / EMR の2つの誤答を置く場所が余る。(候補: 分岐(判断フロー)+ 合流: 常設基盤の要否で分け、Athena 側は2つの特徴が適合に合流する形にする / 対比(左右2列): Athena(サーバーレス・スキャン量課金)と Redshift(常設クラスター)を並べて突き合わせる)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>S3 上の CSV / Parquet に標準 SQL でアドホック分析<br/>サーバーを立てず、スキャン量に応じた課金で済ませたい"]:::req
+    Q{"常設の分析基盤を<br/>持つ必要があるか?"}:::judge
+    ATH["Amazon Athena<br/>S3 のデータへ直接 SQL を実行するサーバーレスのクエリサービス"]:::best
+    RS["Amazon Redshift クラスターを常設<br/>常時大量の分析を行うならこちら"]:::alt
+    RDS["RDS にインポートしてクエリ"]:::alt
+    EMR["EMR クラスターを構築"]:::alt
+    NOTE["Parquet などの列指向形式 + パーティション分割で<br/>スキャン量=コストを大幅に削減できる"]:::note
+
+    subgraph WHY["Athena が要件に合う理由"]
+        NOINF["インフラ構築が不要"]:::best
+        PAY["スキャンしたデータ量に応じた課金"]:::best
+        FIT["たまのアドホック分析に適する"]:::best
+        NOINF --> FIT
+        PAY --> FIT
+    end
+
+    REQ --> Q
+    Q -->|"不要"| ATH
+    Q -->|"常時大量"| RS
+    ATH --> NOINF
+    ATH --> PAY
+    REQ -.->|"取り込みが要る"| RDS
+    REQ -.->|"構築が要る"| EMR
+    ATH -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db27.svg`](../../web/diagrams/db27.svg)
+
+**解説**: Athena は S3 上のデータへ直接 SQL を実行できるサーバーレスのクエリサービスで、インフラ構築不要・スキャンしたデータ量に応じた課金です。Parquet などの列指向形式+パーティション分割でコストを大幅に削減できます。常時大量の分析を行うなら Redshift、たまのアドホック分析なら Athena が適します。
+
+**確認事項**: RDS・EMR には「取り込みや構築が要る」以上の理由を書いていない。解説がこの2つに触れていないため踏み込まない。
+
+---
+
+## db28 — データベース / level 2
+
+**問題**: オンプレミスの Oracle データベースを、ダウンタイムを最小限にして Aurora PostgreSQL へ移行したい。使用すべきサービスの組み合わせはどれか?
+
+**正解**: AWS SCT でスキーマ変換 + AWS DMS で継続レプリケーション移行
+
+**他の選択肢**: AWS DataSync のみ / スナップショットの手動コピー / S3 経由の CSV エクスポート/インポート
+
+**図解の主メッセージ**: 異種 DB 間の移行は、SCT でスキーマを変換してから DMS の CDC で稼働中のデータを継続複製し、同期が追いついた時点で切り替えることでダウンタイムを数分レベルに抑える。
+
+**採用パターン**: 直列(手順)。解説が「まず SCT で変換 → DMS の CDC で複製 → 追いついた時点で切り替え」と時間順に書かれており、順序そのものが答えの根拠になっているため、手順を1本の線で見せるのが最も解読が少ない。分岐案は SCT と DMS が独立の選択に見えてしまい、両方を順に使うという要点がぼやける。(候補: 直列(手順): SCT → DMS(CDC)→ 切り替え → ダウンタイム最小、という時間順に並べる / 分岐(判断フロー): 「異種 DB か」「稼働したまま移すか」の2問で SCT の要否と DMS の要否を決める)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>オンプレの Oracle → Aurora PostgreSQL(異種 DB 間)<br/>ダウンタイムを最小限にしたい"]:::req
+    Q{"スキーマ変換と<br/>継続複製の両方が要るか?"}:::judge
+    DS["AWS DataSync のみ"]:::alt
+    SNAP["スナップショットの手動コピー"]:::alt
+    CSV["S3 経由の CSV エクスポート / インポート"]:::alt
+    NOTE["同種 DB 間の移行なら SCT は不要"]:::note
+
+    subgraph STEPS["ダウンタイムを最小化する手順"]
+        SCT["1. AWS SCT<br/>スキーマ・ストアドプロシージャを変換"]:::best
+        DMS["2. AWS DMS の CDC(変更データキャプチャ)<br/>稼働中のデータを継続複製"]:::best
+        CUT["3. 同期が追いついた時点で切り替え"]:::best
+        RESULT["ダウンタイムを数分レベルに抑えられる"]:::best
+        SCT --> DMS
+        DMS --> CUT
+        CUT --> RESULT
+    end
+
+    REQ --> Q
+    Q -->|"異種 DB"| SCT
+    REQ -.->|"一括のみ"| DS
+    REQ -.->|"一括のみ"| SNAP
+    REQ -.->|"一括のみ"| CSV
+    SCT -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db28.svg`](../../web/diagrams/db28.svg)
+
+**解説**: 異種 DB 間の移行では、まず SCT(Schema Conversion Tool)でスキーマやストアドプロシージャを変換し、DMS(Database Migration Service)の CDC(変更データキャプチャ)で稼働中のデータを継続複製します。同期が追いついた時点で切り替えれば、ダウンタイムを数分レベルに抑えられます。同種 DB 間なら SCT は不要です。
+
+**確認事項**: 誤答3つはいずれも「一括コピーのみで稼働中の変更に追従しない」という同じ理由でまとめた。解説が CDC との対比しか述べていないため、個別の理由には踏み込んでいない。
+
+---
+
+## db29 — データベース / level 2
+
+**問題**: MongoDB 互換の API を必要とする既存アプリケーションを、フルマネージドなデータベースへ移行したい。どのサービスが適切か?
+
+**正解**: Amazon DocumentDB
+
+**他の選択肢**: Amazon DynamoDB / Amazon Aurora / Amazon Keyspaces
+
+**図解の主メッセージ**: 既存の MongoDB ドライバー・ツールをアプリ改修なしで使い続けたいなら、MongoDB 互換 API を持つ DocumentDB を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。この問題で迷うのは DocumentDB と DynamoDB の間であり、そこを分ける軸(API 互換をそのまま使えるか / アプリ改修が要るか)を線で見せるのが直接的。対応表案は覚え方としては有効だが、DynamoDB が誤答である理由が表に載らないため、対応表の要素は注釈に落として1枚に収めた。(候補: 分岐(判断フロー): 「既存ドライバーをそのまま使えるか」で DocumentDB と DynamoDB に分ける / 対応表(隣接): 「MongoDB 互換 = DocumentDB」「Cassandra 互換 = Keyspaces」の対応を並べて覚えさせる)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>既存アプリが MongoDB 互換 API を必要とする<br/>フルマネージドなデータベースへ移行したい"]:::req
+    Q{"既存のドライバー・ツールを<br/>そのまま使えるか?"}:::judge
+    DOC["Amazon DocumentDB<br/>MongoDB 互換のフルマネージドなドキュメント DB"]:::best
+    KEEP["既存の MongoDB ドライバー・ツールを<br/>ほぼそのまま使える"]:::best
+    DDB["Amazon DynamoDB<br/>ドキュメントは扱えるが API が独自"]:::alt
+    AUR["Amazon Aurora"]:::alt
+    KS["Amazon Keyspaces"]:::alt
+    NOTE["互換で覚える<br/>MongoDB 互換 = DocumentDB / Cassandra 互換 = Keyspaces"]:::note
+
+    REQ --> Q
+    Q -->|"使える"| DOC
+    DOC --> KEEP
+    Q -->|"改修が要る"| DDB
+    REQ -.->|"互換が違う"| AUR
+    REQ -.->|"互換が違う"| KS
+    Q -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db29.svg`](../../web/diagrams/db29.svg)
+
+**解説**: DocumentDB は MongoDB 互換のフルマネージドなドキュメントデータベースで、既存の MongoDB ドライバー・ツールをほぼそのまま使えます。DynamoDB もドキュメントを扱えますが API が独自のためアプリ改修が必要です。同様に「Cassandra 互換 = Keyspaces」という対応も覚えておきます。
+
+**確認事項**: Keyspaces は誤答だが、解説が「Cassandra 互換 = Keyspaces」を覚え方として挙げているため、注釈にも名前を残している。 / Aurora には理由を書いていない。解説が触れていないため「求められている互換が違う」以上には踏み込まない。
+
+---
+
+## db30 — データベース / level 2
+
+**問題**: SNS アプリで「友人の友人」をたどる推薦機能のように、データ間の複雑な関係性を高速に探索するクエリが中心となる。どのデータベースが適切か?
+
+**正解**: Amazon Neptune
+
+**他の選択肢**: Amazon RDS / Amazon Timestream / Amazon Redshift
+
+**図解の主メッセージ**: 「友人の友人」のようにデータ間のつながりをたどるクエリが中心なら、ノードとエッジを直接探索するグラフデータベース Neptune を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。解説が「関係性・つながりの探索 = Neptune」という1軸の判断で締めているため、その問いを頂点に置き、RDS を「多段 JOIN になる」枝として並べれば対比の要点も同じ1枚に収まる。左右対比だけにすると Timestream・Redshift の置き場所がなくなる。(候補: 分岐(判断フロー): 「関係性の探索が主役か」で Neptune とリレーショナル DB に分ける / 対比(左右2列): グラフ探索(ノードとエッジをたどる)と多段 JOIN の繰り返しを並べて効率差を見せる)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>SNS の「友人の友人」をたどる推薦機能<br/>データ間の複雑な関係性を高速に探索するクエリが中心"]:::req
+    Q{"クエリの主役は<br/>関係性の探索か?"}:::judge
+    NEP["Amazon Neptune<br/>グラフデータベース"]:::best
+    GRAPH["ノードとエッジで表現された<br/>関係性の探索を高速に処理"]:::best
+    USE["友人関係・レコメンデーション<br/>不正検知のつながり分析"]:::best
+    RDS["Amazon RDS<br/>多段 JOIN の繰り返しになる"]:::alt
+    TS["Amazon Timestream"]:::alt
+    RS["Amazon Redshift"]:::alt
+    NOTE["関係性・つながりの探索 = Neptune"]:::note
+
+    REQ --> Q
+    Q -->|"はい"| NEP
+    NEP --> GRAPH
+    GRAPH --> USE
+    Q -->|"JOIN で表す"| RDS
+    REQ -.->|"データが違う"| TS
+    REQ -.->|"データが違う"| RS
+    Q -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db30.svg`](../../web/diagrams/db30.svg)
+
+**解説**: Neptune はグラフデータベースで、ノードとエッジで表現された関係性の探索(友人関係、レコメンデーション、不正検知のつながり分析)を高速に処理します。リレーショナル DB で多段 JOIN を繰り返すより遥かに効率的です。「関係性・つながりの探索 = Neptune」で判断します。
+
+**確認事項**: Timestream・Redshift には理由を書いていない。解説が触れていないため「扱うデータの性格が違う」以上には踏み込まない。
+
+---
+
+## db31 — データベース / level 2
+
+**問題**: 数百万台の IoT デバイスから送られる計測値を時刻順に保存し、直近データの高速参照と古いデータの自動階層化を行いたい。どのデータベースが適切か?
+
+**正解**: Amazon Timestream
+
+**他の選択肢**: Amazon RDS / Amazon Neptune / Amazon DocumentDB
+
+**図解の主メッセージ**: 時刻順の計測値を大量に書き込み、直近は速く・古いデータは自動で安い階層へ落としたいなら、その階層化を内蔵する時系列専用の Timestream を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)+ 包含。問われているのは「どのデータベースか」であり、階層化はその選択理由なので、まず選択の問いを立て、階層化は Timestream の内側に囲んで従属させた。タイムライン案だけでは RDS を選ばない理由(スケールとコスト)が図に載らない。(候補: 分岐(判断フロー)+ 包含: 時系列専用の要否で分け、Timestream の中に自動階層化の仕組みを入れる / タイムライン(左から右): データの新しさに沿ってメモリ階層 → 磁気ストレージ階層の移動だけを描く)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>数百万台の IoT デバイスの計測値を時刻順に保存<br/>直近データの高速参照と古いデータの自動階層化"]:::req
+    Q{"時系列データ専用の<br/>仕組みが要るか?"}:::judge
+    TS["Amazon Timestream<br/>時系列データ専用のサーバーレスデータベース"]:::best
+    RDS["Amazon RDS<br/>時系列の大量書き込みはスケールとコストで不利"]:::alt
+    NEP["Amazon Neptune"]:::alt
+    DOC["Amazon DocumentDB"]:::alt
+    NOTE["IoT テレメトリ・DevOps メトリクスの<br/>保存/分析の第一候補"]:::note
+
+    subgraph TIER["Timestream が要件を満たす仕組み"]
+        MEM["メモリ階層<br/>直近データを高速参照"]:::best
+        MAG["磁気ストレージ階層<br/>古いデータを保持"]:::best
+        FN["時系列分析関数を組み込みで提供"]:::best
+        MEM -->|"自動移動"| MAG
+    end
+
+    REQ --> Q
+    Q -->|"要る"| TS
+    Q -->|"汎用 RDB"| RDS
+    TS --> MEM
+    TS --> FN
+    REQ -.->|"データが違う"| NEP
+    REQ -.->|"データが違う"| DOC
+    TS -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db31.svg`](../../web/diagrams/db31.svg)
+
+**解説**: Timestream は時系列データ専用のサーバーレスデータベースで、直近データをメモリ階層、古いデータを磁気ストレージ階層へ自動移動し、時系列分析関数も組み込みで提供します。IoT テレメトリや DevOps メトリクスの保存・分析の第一候補です。汎用 RDB での時系列大量書き込みはスケールとコストで不利です。
+
+**確認事項**: 階層間の移動は解説どおり「自動移動」とのみ書き、保持期間や移行条件は書いていない(解説に無いため)。 / Neptune・DocumentDB には理由を書いていない。解説が触れていないため踏み込まない。
+
+---
+
+## db32 — データベース / level 2
+
+**問題**: 暗号化されていない既存の RDS インスタンスを暗号化したい。正しい手順はどれか?
+
+**正解**: スナップショットを取得し、暗号化オプション付きでコピーしてから復元する
+
+**他の選択肢**: 設定画面で暗号化を有効にするだけでよい / マルチ AZ を有効にすると自動で暗号化される / リードレプリカを作ると暗号化される
+
+**図解の主メッセージ**: 稼働中の RDS は直接暗号化できないため、スナップショット取得 → 暗号化コピー → 復元 → 接続先切り替え、という作り直しの手順を踏む。
+
+**採用パターン**: 直列(手順)。この問題の答えは操作の順序そのものなので、順序を1本の線で見せるのが最短。対比案は「できない」ことは伝わるが、正解が求めている具体的な手順が図に出ないため、判断軸として弱い。(候補: 直列(手順): 「後から暗号化できない」を起点に、スナップショット経由の4ステップを時間順に並べる / 対比(左右2列): 「設定変更でできること」と「できないこと」を並べ、暗号化を後者に置く)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>暗号化されていない既存の RDS インスタンスを暗号化したい"]:::req
+    Q{"稼働中のまま<br/>後から暗号化できるか?"}:::judge
+    NO["できない<br/>暗号化の指定はインスタンス作成時のみ"]:::req
+    A1["設定画面で暗号化を有効にするだけでよい"]:::alt
+    A2["マルチ AZ を有効にすると自動で暗号化される"]:::alt
+    A3["リードレプリカを作ると暗号化される"]:::alt
+    NOTE["暗号化は作成時のみ、後からはスナップショット経由<br/>RDS / EBS 共通の頻出パターン"]:::note
+
+    subgraph STEPS["スナップショット経由で作り直す手順"]
+        S1["1. スナップショットを取得"]:::best
+        S2["2. KMS キーを指定して暗号化コピー"]:::best
+        S3["3. そのスナップショットから新インスタンスを復元"]:::best
+        S4["4. アプリの接続先を切り替え"]:::best
+        S1 --> S2
+        S2 --> S3
+        S3 --> S4
+    end
+
+    REQ --> Q
+    Q -->|"できない"| NO
+    NO --> S1
+    Q -.->|"暗号化されない"| A1
+    Q -.->|"暗号化されない"| A2
+    Q -.->|"暗号化されない"| A3
+    NO -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db32.svg`](../../web/diagrams/db32.svg)
+
+**解説**: 稼働中の RDS を直接暗号化することはできません。スナップショット取得 → KMS キーを指定して暗号化コピー → そのスナップショットから新インスタンスを復元、という手順を踏み、アプリの接続先を切り替えます。「暗号化は作成時のみ、後からはスナップショット経由」は RDS/EBS 共通の頻出パターンです。
+
+**確認事項**: 誤答3つはいずれも「既存インスタンスは暗号化されない」という同じ理由でまとめた。解説がこの1点しか述べていないため個別の理由には踏み込まない。
+
+---
+
+## db33 — データベース / level 2
+
+**問題**: RDS for MySQL への接続で、DB パスワードの管理をやめ、IAM の一時的な認証トークンでログインさせたい。どの機能を使うか?
+
+**正解**: IAM データベース認証
+
+**他の選択肢**: セキュリティグループ / KMS 暗号化 / パラメータグループ
+
+**図解の主メッセージ**: DB パスワードの保管・ローテーションそのものをやめたいなら、IAM が発行する 15 分間有効なトークンで接続する IAM データベース認証を使う。
+
+**採用パターン**: 分岐(判断フロー)。問われているのは機能の選択であり、迷いどころは「パスワードを無くす(IAM 認証)」か「パスワードを安全に回す(Secrets Manager)」かなので、その分岐を頂点に置くと解説の代替策までそのまま収まる。直列案は接続の流れは示せるが、他の選択肢を退ける理由が図に出ない。(候補: 分岐(判断フロー): 「パスワードを持たずに認証するか」で IAM 認証と Secrets Manager に分ける / 直列(手順): IAM 認証を有効化 → トークン発行 → TLS で接続、という接続の流れを描く)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>RDS for MySQL への接続で DB パスワードの管理をやめたい<br/>IAM の一時的な認証トークンでログインさせたい"]:::req
+    Q{"パスワードを持たずに<br/>認証するか?"}:::judge
+    IAMAUTH["IAM データベース認証"]:::best
+    TOKEN["IAM が発行する 15 分間有効な<br/>認証トークンで接続"]:::best
+    NOPW["パスワードの保管・ローテーションが不要になる"]:::best
+    SM["Secrets Manager の自動ローテーション<br/>パスワードを使い続ける場合の代替策"]:::svc
+    SG["セキュリティグループ"]:::alt
+    KMS["KMS 暗号化"]:::alt
+    PG["パラメータグループ"]:::alt
+    NOTE["MySQL・PostgreSQL 系でサポート<br/>通信は TLS 必須"]:::note
+
+    REQ --> Q
+    Q -->|"持たない"| IAMAUTH
+    IAMAUTH --> TOKEN
+    TOKEN --> NOPW
+    Q -.->|"持ち続ける"| SM
+    REQ -.->|"用途が違う"| SG
+    REQ -.->|"用途が違う"| KMS
+    REQ -.->|"用途が違う"| PG
+    IAMAUTH -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db33.svg`](../../web/diagrams/db33.svg)
+
+**解説**: IAM データベース認証を有効にすると、IAM で発行される 15 分間有効な認証トークンで DB へ接続でき、パスワードの保管・ローテーションが不要になります。MySQL・PostgreSQL 系でサポートされ、通信は TLS 必須です。パスワードを使い続ける場合は Secrets Manager の自動ローテーションが代替策です。
+
+**確認事項**: Secrets Manager は選択肢に無いが、解説が代替策として挙げているため分岐のもう一方に置いた(サービスとして svc で表現し、誤答の alt とは見た目を分けている)。 / セキュリティグループ・KMS・パラメータグループには理由を書いていない。解説が触れていないため「認証の仕組みではない」以上には踏み込まない。
+
+---
+
+## db34 — データベース / level 3
+
+**問題**: Aurora MySQL クラスターで、月次レポートの重い分析クエリが本番トランザクションのレイテンシーに影響している。分析クエリは最新から数秒遅れたデータでよい。追加のライターを増やさず、分析側の負荷でトランザクション処理が劣化しない構成にしたい。最適な方法はどれか?
+
+**正解**: リーダーインスタンスを追加し、カスタムエンドポイントを作成して分析クエリ専用に振り向ける
+
+**他の選択肢**: ライターインスタンスのサイズを 2 倍にする / リードレプリカを作らず、クエリキャッシュを有効にする / Aurora Serverless v2 に切り替えて自動スケールに任せる
+
+**図解の主メッセージ**: 数秒の遅れが許される重い分析は、リーダーを追加してカスタムエンドポイントで振り向け、トランザクション処理と別インスタンスに分離する。
+
+**採用パターン**: 分岐(判断フロー)。誤答3つはいずれも「容量側をいじる」案であり、正解だけが「ワークロードを分ける」案なので、この1軸で全選択肢が説明できる。前後対比案は分離の効果は直感的だが、Serverless v2 や クエリキャッシュ を退ける理由を同じ図に置けない。(候補: 分岐(判断フロー): 「容量を足すのか、ワークロードを分離するのか」で正解と3つの誤答を分ける / 対比(左右2列): 分離前(ライター1台に分析とトランザクションが同居)と分離後(分析は専用リーダー)を並べる)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>月次レポートの重い分析クエリが本番トランザクションのレイテンシーに影響<br/>分析は数秒遅れのデータでよい / 追加のライターは増やさない"]:::req
+    Q{"容量を足すのか<br/>ワークロードを分離するのか?"}:::judge
+    READER["リーダーインスタンスを追加"]:::best
+    CEP["カスタムエンドポイントを作成<br/>分析クエリ専用に振り向ける"]:::best
+    SEP["通常の読み取り用リーダーエンドポイントと分離できる"]:::best
+    SHARED["Aurora は共有ストレージ<br/>リーダーを足してもストレージ層の負荷は増えない"]:::note
+    LAG["レプリカラグは通常 数十〜数百ミリ秒"]:::note
+    UP["ライターインスタンスのサイズを 2 倍<br/>干渉を根本的に解消しない"]:::alt
+    CACHE["リードレプリカを作らずクエリキャッシュを有効化"]:::alt
+    SLS["Aurora Serverless v2 の自動スケール<br/>容量の自動調整でありワークロード分離ではない"]:::alt
+
+    REQ --> Q
+    Q -->|"分離する"| READER
+    READER --> CEP
+    CEP --> SEP
+    READER -.- SHARED
+    READER -.- LAG
+    Q -.->|"容量を足す"| UP
+    Q -.->|"容量を足す"| CACHE
+    Q -.->|"容量を足す"| SLS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db34.svg`](../../web/diagrams/db34.svg)
+
+**解説**: Aurora は共有ストレージのため、リーダーインスタンスを追加してもストレージ層の負荷は増えず、通常は数十〜数百ミリ秒のレプリカラグで読み取りをオフロードできます。カスタムエンドポイントを作れば「分析用は特定のリーダーのみ」といった振り分けができ、通常の読み取り用リーダーエンドポイントと分離できます。ライターのスケールアップは干渉を根本的に解消せず、Serverless v2 は容量の自動調整であってワークロード分離ではありません。
+
+**確認事項**: レプリカラグの値は解説にある「数十〜数百ミリ秒」をそのまま注釈に置いた。問題文の「数秒遅れでよい」との対応は線ではなく注釈の接続で表している。 / クエリキャッシュには「容量側の対策」以上の理由を書いていない。解説が個別に触れていないため踏み込まない。
+
+---
+
+## db35 — データベース / level 3
+
+**問題**: Aurora PostgreSQL クラスターの読み取り負荷が日中の 3 時間だけ 10 倍になる。リーダーを常時多く配置するのはコストが見合わない。ダウンタイムなしで自動追従させたい。最適な構成はどれか?
+
+**正解**: Aurora Auto Scaling をリーダーに設定し、平均 CPU または平均接続数のターゲット値に基づいてリードレプリカを自動増減させる
+
+**他の選択肢**: スケジュールで毎日クラスターを停止・起動する / リーダーインスタンスのインスタンスクラスを毎日手動で変更する / リードレプリカを別リージョンに作成して負荷を分散する
+
+**図解の主メッセージ**: 日中だけ跳ねる読み取り負荷には、平均 CPU または平均接続数のターゲット追跡でリードレプリカを自動増減する Aurora Auto Scaling を使う。
+
+**採用パターン**: 分岐(判断フロー)。誤答3つはいずれも「人手やスケジュールで合わせにいく」案で、正解だけが「指標に追従して自動で増減する」案なので、この1軸で4択すべてを説明できる。タイムライン案は挙動の直感は得られるが、時刻や倍率の目盛りを描くと問題文に無い数値を足しかねず、誤答を退ける理由も載らない。(候補: 分岐(判断フロー): 「負荷に自動で追従できるか」で Auto Scaling と手動・スケジュール運用に分ける / タイムライン: 1日の負荷曲線に沿って、日中だけレプリカが増えて夜間に戻る様子を描く)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>読み取り負荷が日中の 3 時間だけ 10 倍<br/>リーダーの常時多配置はコストが見合わない / ダウンタイムなしで自動追従"]:::req
+    Q{"負荷に自動で<br/>追従できるか?"}:::judge
+    AS["Aurora Auto Scaling をリーダーに設定"]:::best
+    TT["ターゲット追跡ポリシー<br/>平均 CPU 使用率 または 平均接続数"]:::best
+    ADD["Aurora レプリカを自動的に増減"]:::best
+    EP["リーダーエンドポイントに自動で組み込まれる"]:::best
+    STOP["スケジュールで毎日クラスターを停止・起動<br/>最大 7 日で自動再開され日次運用に不向き"]:::alt
+    MAN["インスタンスクラスを毎日手動で変更<br/>運用負荷と再起動を伴う"]:::alt
+    XR["別リージョンにリードレプリカを作成<br/>レイテンシーとコストの面で目的に合わない"]:::alt
+
+    REQ --> Q
+    Q -->|"自動"| AS
+    AS --> TT
+    TT --> ADD
+    ADD --> EP
+    Q -.->|"手動・定時"| STOP
+    Q -.->|"手動・定時"| MAN
+    Q -.->|"配置替え"| XR
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db35.svg`](../../web/diagrams/db35.svg)
+
+**解説**: Aurora レプリカの Auto Scaling は、平均 CPU 使用率または平均接続数のターゲット追跡ポリシーで Aurora レプリカを自動的に増減し、リーダーエンドポイントに自動で組み込みます。クラスターの停止は最大 7 日で自動再開され日次運用には不向き、インスタンスクラスの手動変更は運用負荷と再起動を伴い、別リージョンのレプリカはレイテンシーとコストの面で目的に合いません。
+
+**確認事項**: ターゲット値の具体的な数値は書いていない(解説が指標の種類までしか述べていないため)。
+
+---
+
+## db36 — データベース / level 3
+
+**問題**: Aurora クラスターのライター障害時のフェイルオーバー時間を短縮し、アプリ側の再接続を確実にしたい。アプリは接続文字列にクラスターエンドポイントを使用している。最も効果的な対策はどれか?
+
+**正解**: 各 AZ に Aurora レプリカを配置してフェイルオーバー優先度(ティア)を設定し、アプリ側は AWS が提供する JDBC/ドライバのフェイルオーバー機能や短い DNS TTL を前提とした再接続ロジックを実装する
+
+**他の選択肢**: クラスターエンドポイントの代わりにライターインスタンスのインスタンスエンドポイントを直接指定する / Multi-AZ 配置を無効化してシングル AZ にし、復旧を単純化する / アプリ側の接続プールを無効化して毎回新規接続する
+
+**図解の主メッセージ**: フェイルオーバーを速く確実にするには、昇格先のレプリカを各 AZ に用意する DB 側と、DNS 更新を待たずに再接続するアプリ側の両方が要る。
+
+**採用パターン**: 合流(2要素 → 1成果)。正解の選択肢が「レプリカ配置+優先度」と「ドライバ/再接続ロジック」の2点セットになっており、片方だけでは要件を満たさないことが要点なので、2本の線が1つの成果に集まる形が最も素直。タイムライン案は各対策の効き所まで描けるが、秒数の目盛りを引くと解説にない時間配分を暗示してしまう。(候補: 合流(2要素 → 1成果): DB 側の備えとアプリ側の備えが揃って初めて短縮が成立することを線で見せる / タイムライン: 障害発生 → 昇格 → DNS 更新 → 再接続 の時間軸に、各対策がどこを短くするかを重ねる)
+
+```mermaid
+flowchart TD
+    REQ["要件<br/>Aurora ライター障害時のフェイルオーバー時間を短縮し、再接続を確実にしたい<br/>アプリは接続文字列にクラスターエンドポイントを使用"]:::req
+    Q{"昇格先と再接続の<br/>両方が用意されているか?"}:::judge
+    NOTE["レプリカがない場合は<br/>新インスタンスの作成が必要で長時間化する"]:::note
+    IEP["ライターのインスタンスエンドポイントを直接指定<br/>フェイルオーバーに追従できない"]:::alt
+    SAZ["Multi-AZ 配置を無効化してシングル AZ にする"]:::alt
+    POOL["接続プールを無効化して毎回新規接続する"]:::alt
+
+    subgraph READY["短縮に必要な2つの備え"]
+        DBSIDE["DB 側<br/>各 AZ に Aurora レプリカを配置<br/>フェイルオーバー優先度(ティア)で昇格順を制御"]:::best
+        APPSIDE["アプリ側<br/>クラスター認識ドライバのフェイルオーバー機能<br/>短い DNS TTL を前提とした再接続ロジック"]:::best
+        FAST["レプリカがあれば通常 30 秒程度で完了し<br/>確実に再接続できる"]:::best
+        DBSIDE --> FAST
+        APPSIDE --> FAST
+    end
+
+    REQ --> Q
+    Q -->|"DB 側"| DBSIDE
+    Q -->|"アプリ側"| APPSIDE
+    DBSIDE -.- NOTE
+    Q -.->|"追従しない"| IEP
+    Q -.->|"昇格先が減る"| SAZ
+    Q -.->|"速くならない"| POOL
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db36.svg`](../../web/diagrams/db36.svg)
+
+**解説**: Aurora のフェイルオーバーはレプリカが存在すれば通常 30 秒程度で完了し、レプリカがない場合は新インスタンスの作成が必要で長時間化します。フェイルオーバー優先度で昇格順を制御し、AWS Advanced JDBC Wrapper などのクラスター認識ドライバを使うとエンドポイントの DNS 更新を待たずに切り替えられます。インスタンスエンドポイント直指定はフェイルオーバーに追従できません。
+
+**確認事項**: 「通常 30 秒程度」は解説の記述をそのまま置いた。フェイルオーバー優先度の具体的なティア番号は解説に無いため書いていない。 / シングル AZ 化と接続プール無効化には、解説が個別に触れていないため短い理由のみを付けている。

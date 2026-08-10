@@ -1,0 +1,154 @@
+{
+  "question_id": "db36",
+  "purpose": "フェイルオーバー時間の短縮が DB 側とアプリ側の両方の備えで成り立つことを、1枚の合流として示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、フェイルオーバーは AWS 側だけの話だと考えがちな人。",
+  "message": "フェイルオーバーを速く確実にするには、昇格先のレプリカを各 AZ に用意する DB 側と、DNS 更新を待たずに再接続するアプリ側の両方が要る。",
+  "source_summary": "Aurora のフェイルオーバーはレプリカが存在すれば通常 30 秒程度で完了し、レプリカがない場合は新インスタンスの作成が必要で長時間化する。フェイルオーバー優先度(ティア)で昇格順を制御し、AWS Advanced JDBC Wrapper などのクラスター認識ドライバを使うとエンドポイントの DNS 更新を待たずに切り替えられる。インスタンスエンドポイントの直指定はフェイルオーバーに追従できない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "ライター障害時のフェイルオーバー時間を短縮し、アプリの再接続を確実にしたい(接続はクラスターエンドポイント)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "昇格先と再接続の両方が用意されているか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "DBSIDE",
+      "label": "各 AZ に Aurora レプリカを配置し、フェイルオーバー優先度(ティア)で昇格順を制御",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "APPSIDE",
+      "label": "クラスター認識ドライバのフェイルオーバー機能と、短い DNS TTL を前提とした再接続ロジック",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "FAST",
+      "label": "レプリカがあれば通常 30 秒程度で完了し、確実に再接続できる",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "レプリカがない場合は新インスタンスの作成が必要で長時間化する",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "IEP",
+      "label": "ライターのインスタンスエンドポイントを直接指定する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SAZ",
+      "label": "Multi-AZ 配置を無効化してシングル AZ にする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "POOL",
+      "label": "アプリ側の接続プールを無効化して毎回新規接続する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "備えの有無を問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "DBSIDE",
+      "verb": "DB 側の備え",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "APPSIDE",
+      "verb": "アプリ側の備え",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "DBSIDE",
+      "to": "FAST",
+      "verb": "昇格を速くする",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "APPSIDE",
+      "to": "FAST",
+      "verb": "切り替えに追従する",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "DBSIDE",
+      "to": "NOTE",
+      "verb": "レプリカが無い場合を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "Q",
+      "to": "IEP",
+      "verb": "フェイルオーバーに追従できない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SAZ",
+      "verb": "昇格先を減らしてしまう",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "POOL",
+      "verb": "接続の作り方であって昇格を速くしない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "短縮に必要な2つの備え",
+      "element_ids": [
+        "DBSIDE",
+        "APPSIDE",
+        "FAST"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "合流(2要素 → 1成果): DB 側の備えとアプリ側の備えが揃って初めて短縮が成立することを線で見せる",
+    "タイムライン: 障害発生 → 昇格 → DNS 更新 → 再接続 の時間軸に、各対策がどこを短くするかを重ねる"
+  ],
+  "selected_pattern": "合流(2要素 → 1成果)。正解の選択肢が「レプリカ配置+優先度」と「ドライバ/再接続ロジック」の2点セットになっており、片方だけでは要件を満たさないことが要点なので、2本の線が1つの成果に集まる形が最も素直。タイムライン案は各対策の効き所まで描けるが、秒数の目盛りを引くと解説にない時間配分を暗示してしまう。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「通常 30 秒程度」は解説の記述をそのまま置いた。フェイルオーバー優先度の具体的なティア番号は解説に無いため書いていない。",
+    "シングル AZ 化と接続プール無効化には、解説が個別に触れていないため短い理由のみを付けている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>Aurora ライター障害時のフェイルオーバー時間を短縮し、再接続を確実にしたい<br/>アプリは接続文字列にクラスターエンドポイントを使用\"]:::req\n    Q{\"昇格先と再接続の<br/>両方が用意されているか?\"}:::judge\n    NOTE[\"レプリカがない場合は<br/>新インスタンスの作成が必要で長時間化する\"]:::note\n    IEP[\"ライターのインスタンスエンドポイントを直接指定<br/>フェイルオーバーに追従できない\"]:::alt\n    SAZ[\"Multi-AZ 配置を無効化してシングル AZ にする\"]:::alt\n    POOL[\"接続プールを無効化して毎回新規接続する\"]:::alt\n\n    subgraph READY[\"短縮に必要な2つの備え\"]\n        DBSIDE[\"DB 側<br/>各 AZ に Aurora レプリカを配置<br/>フェイルオーバー優先度(ティア)で昇格順を制御\"]:::best\n        APPSIDE[\"アプリ側<br/>クラスター認識ドライバのフェイルオーバー機能<br/>短い DNS TTL を前提とした再接続ロジック\"]:::best\n        FAST[\"レプリカがあれば通常 30 秒程度で完了し<br/>確実に再接続できる\"]:::best\n        DBSIDE --> FAST\n        APPSIDE --> FAST\n    end\n\n    REQ --> Q\n    Q -->|\"DB 側\"| DBSIDE\n    Q -->|\"アプリ側\"| APPSIDE\n    DBSIDE -.- NOTE\n    Q -.->|\"追従しない\"| IEP\n    Q -.->|\"昇格先が減る\"| SAZ\n    Q -.->|\"速くならない\"| POOL"
+}

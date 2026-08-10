@@ -1,0 +1,160 @@
+{
+  "question_id": "db31",
+  "purpose": "時系列データの保存先の選択が「時系列専用の仕組みが要るか」で決まり、階層化がその仕組みに含まれることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、IoT の計測値も汎用 RDB に入れればよいと考えがちな人。",
+  "message": "時刻順の計測値を大量に書き込み、直近は速く・古いデータは自動で安い階層へ落としたいなら、その階層化を内蔵する時系列専用の Timestream を選ぶ。",
+  "source_summary": "Timestream は時系列データ専用のサーバーレスデータベースで、直近データをメモリ階層、古いデータを磁気ストレージ階層へ自動移動し、時系列分析関数も組み込みで提供する。IoT テレメトリや DevOps メトリクスの保存・分析の第一候補。汎用 RDB での時系列大量書き込みはスケールとコストで不利。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "数百万台の IoT デバイスの計測値を時刻順に保存し、直近の高速参照と古いデータの自動階層化を行いたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "時系列データ専用の仕組みが要るか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "TS",
+      "label": "Amazon Timestream(時系列データ専用のサーバーレス DB)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "MEM",
+      "label": "メモリ階層(直近データを高速参照)",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "MAG",
+      "label": "磁気ストレージ階層(古いデータを保持)",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "FN",
+      "label": "時系列分析関数を組み込みで提供",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "RDS",
+      "label": "Amazon RDS",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NEP",
+      "label": "Amazon Neptune",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DOC",
+      "label": "Amazon DocumentDB",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "IoT テレメトリ・DevOps メトリクスの保存/分析の第一候補",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "データの性格から問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "TS",
+      "verb": "時系列専用→Timestream",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "TS",
+      "to": "MEM",
+      "verb": "階層で支える",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "MEM",
+      "to": "MAG",
+      "verb": "古いデータを自動移動する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "TS",
+      "to": "FN",
+      "verb": "分析機能を備える",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "Q",
+      "to": "RDS",
+      "verb": "スケールとコストで不利",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "NEP",
+      "verb": "扱うデータの性格が違う",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "DOC",
+      "verb": "扱うデータの性格が違う",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "TS",
+      "to": "NOTE",
+      "verb": "典型的な用途を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "Timestream が要件を満たす仕組み",
+      "element_ids": [
+        "MEM",
+        "MAG",
+        "FN"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー)+ 包含: 時系列専用の要否で分け、Timestream の中に自動階層化の仕組みを入れる",
+    "タイムライン(左から右): データの新しさに沿ってメモリ階層 → 磁気ストレージ階層の移動だけを描く"
+  ],
+  "selected_pattern": "分岐(判断フロー)+ 包含。問われているのは「どのデータベースか」であり、階層化はその選択理由なので、まず選択の問いを立て、階層化は Timestream の内側に囲んで従属させた。タイムライン案だけでは RDS を選ばない理由(スケールとコスト)が図に載らない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "階層間の移動は解説どおり「自動移動」とのみ書き、保持期間や移行条件は書いていない(解説に無いため)。",
+    "Neptune・DocumentDB には理由を書いていない。解説が触れていないため踏み込まない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>数百万台の IoT デバイスの計測値を時刻順に保存<br/>直近データの高速参照と古いデータの自動階層化\"]:::req\n    Q{\"時系列データ専用の<br/>仕組みが要るか?\"}:::judge\n    TS[\"Amazon Timestream<br/>時系列データ専用のサーバーレスデータベース\"]:::best\n    RDS[\"Amazon RDS<br/>時系列の大量書き込みはスケールとコストで不利\"]:::alt\n    NEP[\"Amazon Neptune\"]:::alt\n    DOC[\"Amazon DocumentDB\"]:::alt\n    NOTE[\"IoT テレメトリ・DevOps メトリクスの<br/>保存/分析の第一候補\"]:::note\n\n    subgraph TIER[\"Timestream が要件を満たす仕組み\"]\n        MEM[\"メモリ階層<br/>直近データを高速参照\"]:::best\n        MAG[\"磁気ストレージ階層<br/>古いデータを保持\"]:::best\n        FN[\"時系列分析関数を組み込みで提供\"]:::best\n        MEM -->|\"自動移動\"| MAG\n    end\n\n    REQ --> Q\n    Q -->|\"要る\"| TS\n    Q -->|\"汎用 RDB\"| RDS\n    TS --> MEM\n    TS --> FN\n    REQ -.->|\"データが違う\"| NEP\n    REQ -.->|\"データが違う\"| DOC\n    TS -.- NOTE"
+}

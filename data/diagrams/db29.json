@@ -1,0 +1,125 @@
+{
+  "question_id": "db29",
+  "purpose": "既存アプリを載せ替える先の選択が「API 互換をそのまま使えるか」で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、DynamoDB もドキュメントを扱えるため DocumentDB との違いが曖昧な人。",
+  "message": "既存の MongoDB ドライバー・ツールをアプリ改修なしで使い続けたいなら、MongoDB 互換 API を持つ DocumentDB を選ぶ。",
+  "source_summary": "DocumentDB は MongoDB 互換のフルマネージドなドキュメントデータベースで、既存の MongoDB ドライバー・ツールをほぼそのまま使える。DynamoDB もドキュメントを扱えるが API が独自のためアプリ改修が必要。「Cassandra 互換 = Keyspaces」も同じ対応で覚える。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "MongoDB 互換 API を必要とする既存アプリをフルマネージドな DB へ移行したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "既存のドライバー・ツールをそのまま使えるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "DOC",
+      "label": "Amazon DocumentDB(MongoDB 互換のドキュメント DB)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "KEEP",
+      "label": "既存の MongoDB ドライバー・ツールをほぼそのまま使える",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "DDB",
+      "label": "Amazon DynamoDB",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "AUR",
+      "label": "Amazon Aurora",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "KS",
+      "label": "Amazon Keyspaces",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "MongoDB 互換 = DocumentDB / Cassandra 互換 = Keyspaces",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "API 互換の観点から問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "DOC",
+      "verb": "そのまま使える→DocumentDB",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "DOC",
+      "to": "KEEP",
+      "verb": "移行コストを下げる",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "Q",
+      "to": "DDB",
+      "verb": "API が独自→アプリ改修が必要",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "AUR",
+      "verb": "求められている互換が違う",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "KS",
+      "verb": "求められている互換が違う",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「既存ドライバーをそのまま使えるか」で DocumentDB と DynamoDB に分ける",
+    "対応表(隣接): 「MongoDB 互換 = DocumentDB」「Cassandra 互換 = Keyspaces」の対応を並べて覚えさせる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。この問題で迷うのは DocumentDB と DynamoDB の間であり、そこを分ける軸(API 互換をそのまま使えるか / アプリ改修が要るか)を線で見せるのが直接的。対応表案は覚え方としては有効だが、DynamoDB が誤答である理由が表に載らないため、対応表の要素は注釈に落として1枚に収めた。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Keyspaces は誤答だが、解説が「Cassandra 互換 = Keyspaces」を覚え方として挙げているため、注釈にも名前を残している。",
+    "Aurora には理由を書いていない。解説が触れていないため「求められている互換が違う」以上には踏み込まない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>既存アプリが MongoDB 互換 API を必要とする<br/>フルマネージドなデータベースへ移行したい\"]:::req\n    Q{\"既存のドライバー・ツールを<br/>そのまま使えるか?\"}:::judge\n    DOC[\"Amazon DocumentDB<br/>MongoDB 互換のフルマネージドなドキュメント DB\"]:::best\n    KEEP[\"既存の MongoDB ドライバー・ツールを<br/>ほぼそのまま使える\"]:::best\n    DDB[\"Amazon DynamoDB<br/>ドキュメントは扱えるが API が独自\"]:::alt\n    AUR[\"Amazon Aurora\"]:::alt\n    KS[\"Amazon Keyspaces\"]:::alt\n    NOTE[\"互換で覚える<br/>MongoDB 互換 = DocumentDB / Cassandra 互換 = Keyspaces\"]:::note\n\n    REQ --> Q\n    Q -->|\"使える\"| DOC\n    DOC --> KEEP\n    Q -->|\"改修が要る\"| DDB\n    REQ -.->|\"互換が違う\"| AUR\n    REQ -.->|\"互換が違う\"| KS\n    Q -.- NOTE"
+}

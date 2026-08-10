@@ -1,0 +1,166 @@
+{
+  "question_id": "db27",
+  "purpose": "S3 上のファイルを分析する手段の選択が「常設の分析基盤を持つ必要があるか」で決まることを一目で追えるようにする。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、分析といえば Redshift や EMR を思い浮かべ、Athena の立ち位置が曖昧な人。",
+  "message": "たまのアドホック分析でインフラを構築したくないなら、S3 のデータへ直接 SQL を実行しスキャン量だけ課金される Athena を選ぶ。",
+  "source_summary": "Athena は S3 上のデータへ直接 SQL を実行できるサーバーレスのクエリサービスで、インフラ構築不要・スキャンしたデータ量に応じた課金。Parquet などの列指向形式とパーティション分割でコストを大幅に削減できる。常時大量の分析を行うなら Redshift、たまのアドホック分析なら Athena。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "S3 上の CSV / Parquet にサーバーを立てず標準 SQL でアドホック分析し、スキャン量に応じた課金で済ませたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "常設の分析基盤を持つ必要があるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ATH",
+      "label": "Amazon Athena(サーバーレスのクエリサービス)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NOINF",
+      "label": "インフラ構築が不要",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "PAY",
+      "label": "スキャンしたデータ量に応じた課金",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "FIT",
+      "label": "たまのアドホック分析に適する",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "RS",
+      "label": "Amazon Redshift クラスターを常設",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "RDS",
+      "label": "RDS にインポートしてクエリ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "EMR",
+      "label": "EMR クラスターを構築",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "列指向形式 + パーティション分割でスキャン量=コストを削減",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "分析基盤の要否から問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "ATH",
+      "verb": "不要→Athena",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "RS",
+      "verb": "常時大量の分析なら常設",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ATH",
+      "to": "NOINF",
+      "verb": "特徴で支える",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "ATH",
+      "to": "PAY",
+      "verb": "特徴で支える",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "NOINF",
+      "to": "FIT",
+      "verb": "要件を満たす",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "PAY",
+      "to": "FIT",
+      "verb": "要件を満たす",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "REQ",
+      "to": "RDS",
+      "verb": "取り込みと構築が要る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "EMR",
+      "verb": "取り込みと構築が要る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "ATH",
+      "to": "NOTE",
+      "verb": "コスト削減の勘所を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "Athena が要件に合う理由",
+      "element_ids": [
+        "NOINF",
+        "PAY",
+        "FIT"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー)+ 合流: 常設基盤の要否で分け、Athena 側は2つの特徴が適合に合流する形にする",
+    "対比(左右2列): Athena(サーバーレス・スキャン量課金)と Redshift(常設クラスター)を並べて突き合わせる"
+  ],
+  "selected_pattern": "分岐(判断フロー)+ 合流。解説が「常時大量なら Redshift、たまのアドホックなら Athena」という1つの問いで締めているため、その問いを頂点に置くのが素直。Athena が選ばれる理由は「構築不要」と「スキャン量課金」の2つが揃って効く話なので、枝の先だけ合流させた。左右対比にすると、RDS / EMR の2つの誤答を置く場所が余る。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "RDS・EMR には「取り込みや構築が要る」以上の理由を書いていない。解説がこの2つに触れていないため踏み込まない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>S3 上の CSV / Parquet に標準 SQL でアドホック分析<br/>サーバーを立てず、スキャン量に応じた課金で済ませたい\"]:::req\n    Q{\"常設の分析基盤を<br/>持つ必要があるか?\"}:::judge\n    ATH[\"Amazon Athena<br/>S3 のデータへ直接 SQL を実行するサーバーレスのクエリサービス\"]:::best\n    RS[\"Amazon Redshift クラスターを常設<br/>常時大量の分析を行うならこちら\"]:::alt\n    RDS[\"RDS にインポートしてクエリ\"]:::alt\n    EMR[\"EMR クラスターを構築\"]:::alt\n    NOTE[\"Parquet などの列指向形式 + パーティション分割で<br/>スキャン量=コストを大幅に削減できる\"]:::note\n\n    subgraph WHY[\"Athena が要件に合う理由\"]\n        NOINF[\"インフラ構築が不要\"]:::best\n        PAY[\"スキャンしたデータ量に応じた課金\"]:::best\n        FIT[\"たまのアドホック分析に適する\"]:::best\n        NOINF --> FIT\n        PAY --> FIT\n    end\n\n    REQ --> Q\n    Q -->|\"不要\"| ATH\n    Q -->|\"常時大量\"| RS\n    ATH --> NOINF\n    ATH --> PAY\n    REQ -.->|\"取り込みが要る\"| RDS\n    REQ -.->|\"構築が要る\"| EMR\n    ATH -.- NOTE"
+}
