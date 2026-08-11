@@ -1,0 +1,134 @@
+{
+  "question_id": "db46",
+  "purpose": "GSI のキャパシティ不足がベーステーブルの書き込みスロットリングを引き起こすという因果の向きを1枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、GSI はテーブルとは別物なので本体には影響しないと考えがちな人。",
+  "message": "GSI への書き込みが追いつかないとベーステーブルの書き込みがスロットリングされるので、GSI 側のキャパシティを確保するのが対処になる。",
+  "source_summary": "GSI への書き込みが追いつかない場合、DynamoDB はベーステーブルへの書き込みをスロットリングする。GSI のキャパシティを十分に確保する(またはテーブルとインデックスをオンデマンドにする)ことが対処。射影を ALL にすると GSI の書き込み量とストレージが増えむしろ悪化する場合がある。GSI は結果整合の読み取りのみという性質はあるが、書き込みスロットリングの原因ではない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "GSI を追加したところ本番の書き込みがスロットリングされ始めた(GSI はプロビジョンドキャパシティモードでベーステーブルとは別に容量設定)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "CAUSE",
+      "label": "GSI の書き込みキャパシティが不足する",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "EFFECT",
+      "label": "GSI への反映が追いつかず、ベーステーブルへの書き込み自体がスロットリングされる",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "FIX",
+      "label": "GSI の WCU を引き上げる(またはテーブルとインデックスをオンデマンドにする)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "射影を ALL にすると GSI の書き込み量とストレージが増え、むしろ悪化する場合がある",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "CONSIST",
+      "label": "GSI は結果整合のみなので強い整合性の読み取りが原因、とする説明",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "PROJ",
+      "label": "射影が KEYS_ONLY なのが原因、とする説明(射影を ALL に変更)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SORT",
+      "label": "GSI にはパーティションキーしか指定できないのが原因、とする説明(ソートキーを追加)",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "CAUSE",
+      "verb": "原因をたどる",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "CAUSE",
+      "to": "EFFECT",
+      "verb": "本体の書き込みに波及する",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "EFFECT",
+      "to": "FIX",
+      "verb": "GSI 側の容量で解く",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "FIX",
+      "to": "NOTE",
+      "verb": "逆効果になる変更を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "REQ",
+      "to": "CONSIST",
+      "verb": "読み取りの性質で書き込みは詰まらない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "PROJ",
+      "verb": "ALL にすると書き込み量が増える",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "SORT",
+      "verb": "キー構成はスロットリングの原因ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "起きている因果と対処",
+      "element_ids": [
+        "CAUSE",
+        "EFFECT",
+        "FIX"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "直列(因果の連鎖 → 対処): GSI の容量不足 → ベーステーブルのスロットリング → GSI の WCU を上げる、と一直線に並べる",
+    "包含(テーブルと GSI の関係図): 書き込みがテーブルと GSI の両方へ反映される構造を描き、詰まる場所を指す"
+  ],
+  "selected_pattern": "直列(因果の連鎖 → 対処)。この問題の要は「原因と結果の向き」であり、誤答は原因の取り違えなので、正しい因果を1本の線で示し、誤った原因説を横に並べるのが最も読み違えにくい。構造図案は波及の仕組みを説明できるが、原因の候補を比べる形にならず4択の判断に直結しない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "誤答は「別の対処」ではなく「別の原因説」なので、alt ノードには対処ではなく説明の中身を置いた。この書き方は他問の alt(構成の選択肢)と役割が少し違う。",
+    "GSI が結果整合の読み取りのみである点は解説にある事実なので残したが、スロットリングとは無関係であることを線のラベルで示している。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"現状<br/>GSI を追加したところ本番の書き込みがスロットリングされ始めた<br/>GSI はプロビジョンドキャパシティモードでベーステーブルとは別に容量設定\"]:::req\n    NOTE[\"射影を ALL に変更すると<br/>GSI の書き込み量とストレージが増え、むしろ悪化する場合がある\"]:::note\n    CONSIST[\"「GSI は結果整合のみだから<br/>強い整合性の読み取りが原因」<br/>読み取りの性質であり書き込みは詰まらない\"]:::alt\n    PROJ[\"「射影が KEYS_ONLY だから」<br/>ALL にすると書き込み量が増える\"]:::alt\n    SORT[\"「ソートキーが無いから」<br/>キー構成はスロットリングの原因ではない\"]:::alt\n\n    subgraph CHAIN[\"起きている因果と対処\"]\n        CAUSE[\"GSI の書き込みキャパシティが不足する\"]:::best\n        EFFECT[\"GSI への反映が追いつかず<br/>ベーステーブルへの書き込み自体がスロットリングされる\"]:::best\n        FIX[\"GSI の WCU を引き上げる<br/>またはテーブルとインデックスをオンデマンドにする\"]:::best\n        CAUSE -->|\"本体へ波及\"| EFFECT\n        EFFECT -->|\"容量で解く\"| FIX\n    end\n\n    REQ --> CAUSE\n    FIX -.- NOTE\n    REQ -.->|\"読み取りの話\"| CONSIST\n    REQ -.->|\"逆効果\"| PROJ\n    REQ -.->|\"無関係\"| SORT"
+}

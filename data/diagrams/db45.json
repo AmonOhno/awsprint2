@@ -1,0 +1,133 @@
+{
+  "question_id": "db45",
+  "purpose": "「全か無か」を誰が保証するか(API 自身か、自前の後始末か)で実装が決まることを1枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、BatchWriteItem をトランザクションだと誤解しがちな人。",
+  "message": "片方だけ成功する状態が許されないなら、原子性を API 自体が保証する TransactWriteItems を使う。",
+  "source_summary": "DynamoDB の TransactWriteItems は最大 100 アイテム・複数テーブルにわたる ACID なオールオアナッシングの書き込みを提供し、ConditionExpression と組み合わせて在庫チェックも同一トランザクションで行える(消費キャパシティは通常の 2 倍)。BatchWriteItem は原子性を保証せず一部失敗し得る。Streams 経由の更新は結果整合であり、瞬間的な不整合が発生する。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "注文テーブルへの書き込みと在庫テーブルの減算を全か無かで実行したい(片方だけ成功する状態は許容できない)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "原子性を API 自体が保証するか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "TX",
+      "label": "TransactWriteItems で複数テーブルへの書き込みを1つのトランザクションにする",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "COND",
+      "label": "ConditionExpression(在庫が十分あること)を同一トランザクションで評価する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "最大 100 アイテム・複数テーブルにわたる ACID な書き込み。消費キャパシティは通常の 2 倍",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "BATCH",
+      "label": "BatchWriteItem で 2 つの書き込みをまとめて送信する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "COMP",
+      "label": "書き込み後に検証用の読み取りを行い、失敗時に補償処理を実装する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "STREAM",
+      "label": "DynamoDB Streams をトリガーに Lambda で在庫を更新する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "誰が原子性を担うかを問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "TX",
+      "verb": "API が保証する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "TX",
+      "to": "COND",
+      "verb": "在庫チェックも同じ枠内で行う",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "TX",
+      "to": "NOTE",
+      "verb": "制限とコストを補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "Q",
+      "to": "BATCH",
+      "verb": "原子性を保証せず一部失敗し得る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "COMP",
+      "verb": "後始末を自前で実装することになる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "STREAM",
+      "verb": "結果整合で瞬間的な不整合が出る",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "1つのトランザクションに収める",
+      "element_ids": [
+        "TX",
+        "COND"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「原子性を API 自体が保証するか」の1問で4案をふるい分ける",
+    "対比(成功/失敗の2ケース): 各実装で片方だけ成功したときに何が残るかを並べて見せる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。誤答はいずれも「原子性を自前で(あるいは事後に)埋め合わせる」形で共通して外れるため、その1点を問う軸を置けば3つの落ちる理由が同じ高さに並ぶ。失敗ケースの対比は不整合の怖さを伝えられるが、4案分の失敗シナリオを描くと図が問題文より長くなる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "トランザクションの競合時の再試行やスループットへの影響は解説に無いため書いていない。消費キャパシティ 2 倍だけを注釈に置いた。",
+    "補償処理は「実装として成立はする」が、解説が優劣の理由を明示していないため「後始末を自前で実装する」という短い理由に留めた。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>注文テーブルへの書き込みと在庫テーブルの減算を全か無かで実行したい<br/>片方だけ成功する状態は許容できない\"]:::req\n    Q{\"原子性を<br/>API 自体が保証するか?\"}:::judge\n    NOTE[\"最大 100 アイテム・複数テーブルにわたる ACID な書き込み<br/>消費キャパシティは通常の 2 倍\"]:::note\n    BATCH[\"BatchWriteItem で 2 つの書き込みをまとめて送信<br/>原子性を保証せず一部失敗し得る\"]:::alt\n    COMP[\"書き込み後に検証用の読み取りを行い失敗時に補償処理<br/>後始末を自前で実装することになる\"]:::alt\n    STREAM[\"Streams をトリガーに Lambda で在庫を更新<br/>結果整合で瞬間的な不整合が発生する\"]:::alt\n\n    subgraph TXBOX[\"1つのトランザクションに収める\"]\n        TX[\"TransactWriteItems<br/>複数テーブルへの書き込みを 1 トランザクションで実行\"]:::best\n        COND[\"ConditionExpression<br/>在庫が十分あることを同一トランザクションで評価\"]:::best\n        TX -->|\"条件も同枠\"| COND\n    end\n\n    REQ --> Q\n    Q -->|\"保証する\"| TX\n    TX -.- NOTE\n    Q -.->|\"一部失敗あり\"| BATCH\n    Q -.->|\"自前で後始末\"| COMP\n    Q -.->|\"結果整合\"| STREAM"
+}

@@ -1,0 +1,148 @@
+{
+  "question_id": "db43",
+  "purpose": "「キャパシティを使わない自動削除」と「削除したアイテムの S3 保管」が1本のパイプラインでつながることを1枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、古いデータの整理をつい定期スキャン+削除で組もうとする人。",
+  "message": "TTL の削除は書き込みキャパシティを使わず Streams に REMOVE として現れるので、その1本の流れで自動削除と S3 アーカイブを同時に満たす。",
+  "source_summary": "DynamoDB の TTL は指定した属性のエポック秒を過ぎたアイテムをバックグラウンドで削除し、削除に対する書き込みキャパシティを消費しない。TTL 削除は Streams に REMOVE(userIdentity が dynamodb.amazonaws.com)として現れるため、Lambda や Firehose で S3 へアーカイブできる。定期スキャン&削除は RCU/WCU を大量に消費する。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "直近 24 時間のアイテムだけを参照し、古いデータは監査用に S3 へ移して削除したい(書き込みキャパシティを消費せずに自動削除し、削除されたアイテムを S3 へ流す)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "TTL",
+      "label": "TTL 属性(エポック秒)を設定し、期限切れをバックグラウンドで自動削除",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "STREAM",
+      "label": "DynamoDB Streams(または Kinesis Data Streams for DynamoDB)で REMOVE イベントを捕捉",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "FH",
+      "label": "Firehose 経由で S3 へ書き出す",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "S3",
+      "label": "S3(監査用アーカイブ)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "TTL 削除は書き込みキャパシティを消費せず、REMOVE の userIdentity は dynamodb.amazonaws.com",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "SCAN",
+      "label": "Lambda を定期実行して古いアイテムをスキャンし BatchWriteItem で削除する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "BK",
+      "label": "オンデマンドバックアップを毎日取得し、古いテーブルを削除する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "GSI",
+      "label": "GSI を作成して古いデータを別テーブルへ移す",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "TTL",
+      "verb": "キャパシティを使わず削除する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "TTL",
+      "to": "STREAM",
+      "verb": "REMOVE として現れる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "STREAM",
+      "to": "FH",
+      "verb": "削除イベントを渡す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "FH",
+      "to": "S3",
+      "verb": "監査用に書き出す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "STREAM",
+      "to": "NOTE",
+      "verb": "仕組みの前提を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "REQ",
+      "to": "SCAN",
+      "verb": "RCU/WCU を大量に消費する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "BK",
+      "verb": "アイテム単位の自動削除にならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "GSI",
+      "verb": "自動削除もアーカイブもできない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "自動削除からアーカイブまでの1本の流れ",
+      "element_ids": [
+        "TTL",
+        "STREAM",
+        "FH",
+        "S3"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "直列(パイプライン): TTL 削除 → Streams の REMOVE → Firehose → S3 と、削除がそのままアーカイブの入力になる流れを見せる",
+    "分岐(判断フロー): 「キャパシティを使わずに削除できるか」→「削除イベントを取り出せるか」の2問で4案をふるい落とす"
+  ],
+  "selected_pattern": "直列(パイプライン)。正解は単一の設定ではなく「削除の副産物をそのまま次段へ渡す」構成であり、要件2つ(キャパシティを使わない削除 / S3 への搬出)が1本の線の上に順番に現れる。判断フロー案でも解けるが、つながりが見えないぶん「なぜこの組み合わせなのか」が伝わりにくい。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "TTL 削除が実際に反映されるまでの遅延(数分〜数日)は解説に無いため書いていない。「バックグラウンドで削除」という記述に留めた。",
+    "解説にある Lambda 経由のアーカイブは、選択肢本文が Firehose を挙げているため図では Firehose の経路だけを描いた。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>アプリが参照するのは直近 24 時間のアイテムだけ<br/>書き込みキャパシティを消費せずに自動削除し、削除されたアイテムを監査用に S3 へ流したい\"]:::req\n    NOTE[\"TTL 削除は書き込みキャパシティを消費しない<br/>REMOVE の userIdentity は dynamodb.amazonaws.com\"]:::note\n    SCAN[\"Lambda を定期実行しスキャン+BatchWriteItem で削除<br/>RCU/WCU を大量に消費する\"]:::alt\n    BK[\"オンデマンドバックアップを毎日取得し古いテーブルを削除\"]:::alt\n    GSI[\"GSI を作成して古いデータを別テーブルへ移す\"]:::alt\n\n    subgraph PIPE[\"自動削除からアーカイブまでの1本の流れ\"]\n        TTL[\"TTL 属性(エポック秒)を設定<br/>期限切れをバックグラウンドで自動削除\"]:::best\n        STREAM[\"DynamoDB Streams<br/>(または Kinesis Data Streams for DynamoDB)<br/>REMOVE イベントを捕捉\"]:::best\n        FH[\"Firehose\"]:::best\n        S3[\"S3(監査用アーカイブ)\"]:::best\n        TTL -->|\"REMOVE\"| STREAM\n        STREAM -->|\"削除を渡す\"| FH\n        FH -->|\"書き出す\"| S3\n    end\n\n    REQ -->|\"キャパ不要\"| TTL\n    STREAM -.- NOTE\n    REQ -.->|\"キャパ消費大\"| SCAN\n    REQ -.->|\"アイテム単位でない\"| BK\n    REQ -.->|\"削除できない\"| GSI"
+}

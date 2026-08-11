@@ -1,0 +1,132 @@
+{
+  "question_id": "db38",
+  "purpose": "「フェイルオーバー時間の短縮」と「読み取りキャパシティ」という2つの要件を1つの構成で同時に満たせるのはどれか、を1枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Multi-AZ インスタンス配置・Multi-AZ DB クラスター配置・リードレプリカの役割が混ざりやすい人。",
+  "message": "スタンバイを読み取りにも使える Multi-AZ DB クラスター配置だけが、フェイルオーバーの高速化と読み取りスケールの2つを同時に満たす。",
+  "source_summary": "RDS の Multi-AZ DB クラスター配置は 3 つの AZ に 1 ライターと 2 つの読み取り可能なスタンバイを配置し、通常 35 秒未満(多くは 1 桁秒)のフェイルオーバーと読み取りスケールを同時に提供する。従来の Multi-AZ インスタンス配置のスタンバイは読み取りに使えない。リードレプリカの追加は読み取りスケールにはなるが自動フェイルオーバー時間の短縮にはならない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "RDS for PostgreSQL(Multi-AZ インスタンス配置)でフェイルオーバーを 35 秒程度から 1 桁秒にし、同時に読み取りキャパシティも得たい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "R1",
+      "label": "要件1: フェイルオーバー時間を 1 桁秒に短縮する",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "R2",
+      "label": "要件2: 読み取りキャパシティを増やす",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CLUSTER",
+      "label": "Multi-AZ DB クラスター配置(3 AZ に 1 ライター + 2 リーダー)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "従来の Multi-AZ インスタンス配置のスタンバイは読み取りに使えない",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "RR",
+      "label": "リードレプリカを 2 台追加し、Multi-AZ インスタンス配置は維持する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "BIG",
+      "label": "スタンバイのインスタンスクラスを大きくする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "BK",
+      "label": "自動バックアップの保持期間を延ばす",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "R1",
+      "verb": "満たすべき要件",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "REQ",
+      "to": "R2",
+      "verb": "満たすべき要件",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "R1",
+      "to": "CLUSTER",
+      "verb": "1 桁秒のフェイルオーバー",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "R2",
+      "to": "CLUSTER",
+      "verb": "読み取り可能なスタンバイ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "R2",
+      "to": "RR",
+      "verb": "読み取りだけは満たす",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "R1",
+      "to": "BIG",
+      "verb": "短縮にならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "R1",
+      "to": "BK",
+      "verb": "復旧の話で短縮にならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "CLUSTER",
+      "to": "NOTE",
+      "verb": "現構成との違いを補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "合流(2要件 → 1構成): 2つの要件から線を引き、両方が集まる構成が正解であることを見せる",
+    "テーブル(4案 × 2要件の○×表): 各案がどちらの要件を満たすかを一覧にする"
+  ],
+  "selected_pattern": "合流(2要件 → 1構成)。要点は「片方しか満たさない案が並ぶ中で、両方が集まる先が1つだけある」ことなので、線が1点に集まる形がそのまま結論になる。○×表は同じ情報を持てるが、正解を見つけるのに全セルを読ませることになる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「通常 35 秒未満(多くは 1 桁秒)」は解説の記述をそのまま置いた。リードレプリカ昇格の所要時間は解説に無いため書いていない。",
+    "自動バックアップの保持期間延長は解説が直接触れていないため、「復旧の話」という短い理由だけを付けている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"現状と要件<br/>RDS for PostgreSQL / Multi-AZ インスタンス配置<br/>フェイルオーバーを 35 秒程度から 1 桁秒へ、かつ読み取りキャパシティも得たい\"]:::req\n    R1{\"要件1<br/>フェイルオーバーを<br/>1 桁秒に短縮できるか?\"}:::judge\n    R2{\"要件2<br/>読み取りキャパシティを<br/>増やせるか?\"}:::judge\n    CLUSTER[\"Multi-AZ DB クラスター配置<br/>3 AZ に 1 ライター + 2 つの読み取り可能なスタンバイ<br/>通常 35 秒未満(多くは 1 桁秒)のフェイルオーバーと読み取りスケール\"]:::best\n    NOTE[\"従来の Multi-AZ インスタンス配置では<br/>スタンバイを読み取りに使えない\"]:::note\n    RR[\"リードレプリカを 2 台追加(現構成は維持)<br/>読み取りは増えるがフェイルオーバー時間は変わらない\"]:::alt\n    BIG[\"スタンバイのインスタンスクラスを大きくする\"]:::alt\n    BK[\"自動バックアップの保持期間を延ばす\"]:::alt\n\n    REQ --> R1\n    REQ --> R2\n    R1 -->|\"満たす\"| CLUSTER\n    R2 -->|\"満たす\"| CLUSTER\n    R2 -.->|\"読み取りのみ\"| RR\n    R1 -.->|\"短縮しない\"| BIG\n    R1 -.->|\"復旧の話\"| BK\n    CLUSTER -.- NOTE"
+}

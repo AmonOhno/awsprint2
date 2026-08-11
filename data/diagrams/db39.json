@@ -1,0 +1,160 @@
+{
+  "question_id": "db39",
+  "purpose": "レプリケーション遅延の対策が「ラグの原因に効くか」で決まることを、原因から対策への対応として1枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、遅延対策としてつい「レプリカを増やす」を選びがちな人。",
+  "message": "ラグの原因はレプリカ側の適用が詰まることなので、適用を軽くする対策と、整合性が要る読み取りをライターへ向ける設計判断で対処する。",
+  "source_summary": "MySQL のレプリカ適用は単一スレッド(または並列度制限)になりがちで、ライター側の大きなトランザクションはラグの主因になる。バッチの分割、レプリカのスペックをライター同等以上にする、並列レプリケーションの設定見直しが有効。レプリカを増やしても各レプリカのラグは減らず、整合性が必須の読み取りはライターに向けるという設計判断が必要。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "RDS for MySQL のリードレプリカでラグが数十分に達している(ライターで大量の一括更新バッチが動作中・アプリは最新データの読み取りをレプリカに依存)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "CAUSE",
+      "label": "レプリカの適用は単一スレッド(または並列度制限)になりがちで、ライター側の大きなトランザクションが詰まる",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "この原因に効くか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "FIX1",
+      "label": "バッチをより小さなトランザクションに分割する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "FIX2",
+      "label": "レプリカのインスタンスクラス/ストレージ性能をライター以上に確保する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "FIX3",
+      "label": "整合性が必要な読み取りはライターへ向ける",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "並列レプリケーションの設定見直しも有効",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "ADD",
+      "label": "レプリカを追加してラグを分散する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOBK",
+      "label": "レプリカの自動バックアップを無効化する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "MAZ",
+      "label": "レプリカをマルチ AZ 化する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "CAUSE",
+      "verb": "ラグの原因をたどる",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "CAUSE",
+      "to": "Q",
+      "verb": "対策の当たり所を問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "FIX1",
+      "verb": "詰まりの元を小さくする",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "FIX2",
+      "verb": "適用側の処理能力を上げる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "FIX3",
+      "verb": "ラグを前提に読み先を分ける",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "FIX2",
+      "to": "NOTE",
+      "verb": "設定面の補足",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "Q",
+      "to": "ADD",
+      "verb": "各レプリカのラグは減らない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NOBK",
+      "verb": "原因に効かず復旧性を損なう",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "MAZ",
+      "verb": "可用性の話でラグは解消しない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "原因に効く対策の組み合わせ",
+      "element_ids": [
+        "FIX1",
+        "FIX2",
+        "FIX3"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "原因 → 対策の分岐: ラグの原因を1つ置き、そこから効く対策と効かない対策を左右に振り分ける",
+    "直列(パイプライン): ライター → binlog → レプリカ適用 → 読み取り の流れを描き、どこが詰まるかを示す"
+  ],
+  "selected_pattern": "原因 → 対策の分岐。誤答はどれも「実在するがラグの原因に効かない」ものなので、原因ノードを中心に置いて効く/効かないを分ける形が判断軸そのものになる。パイプライン案は詰まる場所は示せるが、4択の優劣を読み取るには対策側を別に描き足す必要があり図が二重になる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "解説にある「並列レプリケーションの設定見直し」は選択肢本文には無いため、対策ノードではなく注釈として置いた。",
+    "自動バックアップ無効化とマルチ AZ 化は解説が個別に触れていないため、原因に効かないという短い理由だけを付けている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"現状<br/>RDS for MySQL のリードレプリカでラグが数十分<br/>ライターで大量の一括更新バッチが動作中<br/>アプリは最新データの読み取りをレプリカに依存\"]:::req\n    CAUSE[\"ラグの原因<br/>レプリカの適用は単一スレッド(または並列度制限)になりがちで<br/>ライター側の大きなトランザクションが詰まる\"]:::req\n    Q{\"この原因に<br/>効くか?\"}:::judge\n    NOTE[\"並列レプリケーションの<br/>設定見直しも有効\"]:::note\n    ADD[\"レプリカを追加してラグを分散する<br/>各レプリカのラグは減らない\"]:::alt\n    NOBK[\"レプリカの自動バックアップを無効化する\"]:::alt\n    MAZ[\"レプリカをマルチ AZ 化する\"]:::alt\n\n    subgraph FIX[\"原因に効く対策の組み合わせ\"]\n        FIX1[\"バッチをより小さな<br/>トランザクションに分割する\"]:::best\n        FIX2[\"レプリカのインスタンスクラス/ストレージ性能を<br/>ライター以上に確保する\"]:::best\n        FIX3[\"整合性が必要な読み取りは<br/>ライターへ向ける\"]:::best\n    end\n\n    REQ --> CAUSE\n    CAUSE --> Q\n    Q -->|\"元を小さく\"| FIX1\n    Q -->|\"適用を速く\"| FIX2\n    Q -->|\"読み先を分ける\"| FIX3\n    FIX2 -.- NOTE\n    Q -.->|\"ラグは減らない\"| ADD\n    Q -.->|\"原因に無関係\"| NOBK\n    Q -.->|\"可用性の話\"| MAZ"
+}

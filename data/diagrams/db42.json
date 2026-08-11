@@ -1,0 +1,147 @@
+{
+  "question_id": "db42",
+  "purpose": "大量の短命接続への対処が「DB が受ける接続の数そのものを減らせるか」で決まることを、接続の経路として1枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、接続数の問題をキャパシティ設定やレプリカ追加で解こうとしがちな人。",
+  "message": "アプリ改修を増やさずに DB のメモリ消費を抑えるには、DB の手前に RDS Proxy を置いて大量の短命接続を少数の DB 接続へ集約する。",
+  "source_summary": "RDS Proxy は接続のプーリングと多重化を行い、大量の短命接続を少数の DB 接続に集約してメモリ消費とフェイルオーバー時の影響を軽減する。導入はエンドポイントの変更が中心でアプリ改修は最小限。max_connections の引き上げは DB のメモリを圧迫し、リーダー追加は書き込み接続の問題を解決せず、各サービスでのプール拡大は総接続数をむしろ増やす。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "多数のマイクロサービス(合計で最大 8,000 の同時接続)が短時間の接続を繰り返し、接続確立コストとメモリ消費が問題(アプリ改修は最小限にしたい)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "DB が受ける接続の数そのものを減らせるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "MS",
+      "label": "多数のマイクロサービス(最大 8,000 の同時接続)",
+      "type": "actor",
+      "priority": "primary"
+    },
+    {
+      "id": "PROXY",
+      "label": "RDS Proxy(接続をプーリング・多重化する)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "AURORA",
+      "label": "Aurora MySQL(受ける接続は少数に集約される)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "導入はエンドポイントの変更が中心でアプリ改修は最小限。フェイルオーバー時の影響も軽減される",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "MAXC",
+      "label": "max_connections を上限まで引き上げる",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "READER",
+      "label": "リーダーインスタンスを追加して接続を分散する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "POOL",
+      "label": "各マイクロサービスにプールライブラリを入れてプールサイズを大きくする",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "何を減らすべきかを問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "MS",
+      "verb": "接続元はそのまま",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "MS",
+      "to": "PROXY",
+      "verb": "短命接続を受け止める",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "PROXY",
+      "to": "AURORA",
+      "verb": "少数の DB 接続へ集約する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "PROXY",
+      "to": "NOTE",
+      "verb": "導入の前提を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "Q",
+      "to": "MAXC",
+      "verb": "DB のメモリを圧迫する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "READER",
+      "verb": "書き込み接続の問題は残る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "POOL",
+      "verb": "総接続数がむしろ増える",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "接続を集約する経路",
+      "element_ids": [
+        "MS",
+        "PROXY",
+        "AURORA"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "直列(接続の経路): アプリ → RDS Proxy → Aurora と並べ、プロキシで本数が絞られることを見せる",
+    "対比(導入前 / 導入後): 8,000 本が直接 DB に届く図と、プロキシ経由で少数になる図を左右に並べる"
+  ],
+  "selected_pattern": "直列(接続の経路)。「DB の手前に集約点を1つ挟む」という構造の変化が正解の中身そのものなので、経路を1本描けば伝わる。導入前後の対比は変化を強調できるが、同じ構成を2度描くぶん要素数が倍になり、他3案を落とす理由を置く余地がなくなる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス・一般の構成要素、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、白=経路上の既存構成要素、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "集約後に DB が受ける接続数の具体値は解説に無いため「少数」と書くに留めた。",
+    "マイクロサービス側は既存の構成要素なので svc(白)にし、変更点である RDS Proxy と集約された Aurora を best(緑)にしている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"現状と要件<br/>多数のマイクロサービスが短時間の接続を繰り返す(合計 最大 8,000 同時接続)<br/>接続確立コストとメモリ消費が問題 / アプリ改修は最小限にしたい\"]:::req\n    Q{\"DB が受ける接続の数<br/>そのものを減らせるか?\"}:::judge\n    NOTE[\"導入はエンドポイントの変更が中心でアプリ改修は最小限<br/>フェイルオーバー時の影響も軽減される\"]:::note\n    MAXC[\"max_connections を上限まで引き上げる<br/>DB のメモリを圧迫する\"]:::alt\n    READER[\"リーダーインスタンスを追加して接続を分散<br/>書き込み接続の問題は解決しない\"]:::alt\n    POOL[\"各サービスのプールサイズを大きくする<br/>総接続数がむしろ増える\"]:::alt\n\n    subgraph PATH[\"接続を集約する経路\"]\n        MS[\"多数のマイクロサービス<br/>最大 8,000 の同時接続\"]:::svc\n        PROXY[\"RDS Proxy<br/>接続をプーリング・多重化する\"]:::best\n        AURORA[\"Aurora MySQL<br/>受ける接続は少数に集約される\"]:::best\n        MS -->|\"短命接続\"| PROXY\n        PROXY -->|\"少数に集約\"| AURORA\n    end\n\n    REQ --> Q\n    Q -->|\"集約できる\"| MS\n    PROXY -.- NOTE\n    Q -.->|\"メモリ圧迫\"| MAXC\n    Q -.->|\"書き込みは別\"| READER\n    Q -.->|\"接続が増える\"| POOL"
+}

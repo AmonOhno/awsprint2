@@ -1,0 +1,125 @@
+{
+  "question_id": "db41",
+  "purpose": "監視機能の選択が「SQL 単位の待機イベントまで分かるか」と「過去 2 週間さかのぼれるか」の2つの問いで決まることを1枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、CloudWatch メトリクス・拡張モニタリング・Performance Insights の守備範囲が混ざりやすい人。",
+  "message": "必要な粒度が「どの SQL がどの待機イベントで時間を使ったか」なので、DB ロードを SQL と待機イベントの次元で見られる Performance Insights を選ぶ。",
+  "source_summary": "Performance Insights は DB ロード(平均アクティブセッション)を待機イベント・SQL・ホスト・ユーザーの次元で可視化し、無料枠の 7 日または有料の長期保持(最大 24 か月)でさかのぼった分析ができる。CloudWatch メトリクスや拡張モニタリング(OS メトリクス)はリソース状況を示すのみで SQL 単位の因果は分からない。スロークエリログは閾値超過分に限られる。エージェントの追加導入は避けたい。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "本番 RDS の性能問題を「どの SQL がどの待機イベントでどれだけ時間を使ったか」で過去 2 週間分さかのぼって分析したい(追加エージェントは避ける)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q1",
+      "label": "SQL 単位で待機イベントまで分かるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "Q2",
+      "label": "過去 2 週間さかのぼれるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "PI",
+      "label": "RDS Performance Insights を有効化し、保持期間を延長する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "DB ロード(平均アクティブセッション)を待機イベント・SQL・ホスト・ユーザーの次元で見る",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "CW",
+      "label": "CloudWatch の CPUUtilization / DatabaseConnections を確認する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "EM",
+      "label": "拡張モニタリングを 1 秒間隔で有効化する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SLOW",
+      "label": "スロークエリログを有効化して CloudWatch Logs へ出力する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q1",
+      "verb": "まず必要な粒度を問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q1",
+      "to": "Q2",
+      "verb": "分かる→次の問いへ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q2",
+      "to": "PI",
+      "verb": "保持期間の延長でさかのぼれる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "PI",
+      "to": "NOTE",
+      "verb": "見える次元を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "Q1",
+      "to": "CW",
+      "verb": "リソース状況のみで SQL が分からない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q1",
+      "to": "EM",
+      "verb": "OS メトリクスのみで SQL が分からない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q1",
+      "to": "SLOW",
+      "verb": "閾値超過分に限られる",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「SQL 単位の待機イベントまで分かるか」→「2 週間さかのぼれるか」の順に4案をふるい落とす",
+    "レイヤー: OS メトリクス → DB メトリクス → セッション/SQL の層を積み、各案がどの層を見ているかを重ねる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。要件が粒度と期間の2つで、誤答は全て粒度の段階で落ちる。順に落とす形なら「なぜ CloudWatch では足りないか」がそのまま線のラベルになる。レイヤー案は守備範囲の違いを美しく表せるが、期間の要件を層の上に描き足すと2つの軸が混ざって読みにくい。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「追加エージェントを避けたい」という条件は、解説がどの選択肢の可否にも結び付けていないため要件ノードに書くだけにした。",
+    "スロークエリログは出力先の保持期間を延ばせば期間の要件は満たせるが、解説が「閾値超過分に限られる」と粒度で退けているため粒度の問いで落としている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>「どの SQL がどの待機イベントでどれだけ時間を使ったか」を<br/>過去 2 週間分さかのぼって分析したい<br/>追加のエージェント導入は避ける\"]:::req\n    Q1{\"SQL 単位で<br/>待機イベントまで<br/>分かるか?\"}:::judge\n    Q2{\"過去 2 週間<br/>さかのぼれるか?\"}:::judge\n    PI[\"RDS Performance Insights を有効化し保持期間を延長<br/>無料枠 7 日 / 有料の長期保持は最大 24 か月\"]:::best\n    NOTE[\"DB ロード(平均アクティブセッション)を<br/>待機イベント・SQL・ホスト・ユーザーの次元で見る\"]:::note\n    CW[\"CloudWatch の CPUUtilization / DatabaseConnections<br/>リソース状況を示すのみ\"]:::alt\n    EM[\"拡張モニタリングを 1 秒間隔で有効化<br/>OS メトリクスで SQL 単位の因果は分からない\"]:::alt\n    SLOW[\"スロークエリログを CloudWatch Logs へ出力<br/>閾値超過分に限られる\"]:::alt\n\n    REQ --> Q1\n    Q1 -->|\"分かる\"| Q2\n    Q2 -->|\"満たす\"| PI\n    PI -.- NOTE\n    Q1 -.->|\"リソースのみ\"| CW\n    Q1 -.->|\"OS のみ\"| EM\n    Q1 -.->|\"一部のみ\"| SLOW"
+}

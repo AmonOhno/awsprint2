@@ -1,0 +1,146 @@
+{
+  "question_id": "db44",
+  "purpose": "ホットキーによるスロットリングが「パーティション単位の上限」の話であり、容量を増やしても解けないことを1枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、スロットリング=キャパシティ不足と反射的に考えてしまう人。",
+  "message": "1 パーティションあたりの上限が効いているので、キャパシティを増やすのではなくキー空間を分散して書き込み先そのものを増やす。",
+  "source_summary": "DynamoDB は 1 パーティションあたり 1,000 WCU / 3,000 RCU の上限があり、単一キーへの集中はキャパシティを増やしても解消しない(アダプティブキャパシティで緩和されるが上限は残る)。書き込みシャーディングでキー空間を分散するのが根本対策。オンデマンドやキャパシティ増加はテーブル全体のスループットを上げるだけでホットキー問題そのものは解決しない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "書き込みが人気商品 ID のパーティションキーに集中しスロットリング(読み取りは DAX で緩和済み・アイテムの一貫性は保ちたい)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "LIMIT",
+      "label": "1 パーティションあたり 1,000 WCU / 3,000 RCU の上限がボトルネック",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "書き込み先のキーを増やせるか(容量を増やすだけではないか)",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "SHARD",
+      "label": "書き込みキーの末尾にランダムなサフィックスを付けて複数の論理パーティションへ分散する(write sharding)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "READ",
+      "label": "読み取り時は全シャードを集約する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "アダプティブキャパシティで緩和されるが、パーティション単位の上限は残る",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "ONDEMAND",
+      "label": "オンデマンドキャパシティモードに変更する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "X10",
+      "label": "RCU/WCU を 10 倍にプロビジョニングする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "GSI",
+      "label": "GSI を追加して書き込みを分散する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "LIMIT",
+      "verb": "ボトルネックを特定する",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "LIMIT",
+      "to": "Q",
+      "verb": "対策の方向を問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "SHARD",
+      "verb": "キー空間を分散する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "SHARD",
+      "to": "READ",
+      "verb": "読み取り側で辻褄を合わせる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "LIMIT",
+      "to": "NOTE",
+      "verb": "緩和策の限界を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "Q",
+      "to": "ONDEMAND",
+      "verb": "テーブル全体の話でホットキーは残る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "X10",
+      "verb": "テーブル全体の話でホットキーは残る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "GSI",
+      "verb": "書き込み先のキーは変わらない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "キー空間を分散する対策",
+      "element_ids": [
+        "SHARD",
+        "READ"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "原因 → 対策の分岐: パーティション単位の上限を原因として置き、キー空間を分散する案と容量を増やす案を分ける",
+    "対比(集中している状態 / 分散した状態): ホットキー1本に書き込みが集まる図と、サフィックスで複数キーに散る図を左右に並べる"
+  ],
+  "selected_pattern": "原因 → 対策の分岐。誤答3つはいずれも「容量を増やす方向」で共通して外れるため、原因ノードから対策の方向を1度問う形にすると3つまとめて落ちる理由が1本の軸で示せる。分散前後の対比はホットキーの絵としては直感的だが、容量を増やす案が効かない理由を同じ図に置けない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "シャード数の決め方(サフィックスの範囲)は解説に無いため書いていない。",
+    "問題文の「アイテムの一貫性は保ちたい」は、解説がシャーディングと結び付けて説明していないため要件ノードに残すだけにした。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"現状<br/>書き込みが人気商品 ID のパーティションキーに集中しスロットリング<br/>読み取りは DAX で緩和済み / アイテムの一貫性は保ちたい\"]:::req\n    LIMIT[\"ボトルネック<br/>1 パーティションあたり 1,000 WCU / 3,000 RCU の上限\"]:::req\n    Q{\"書き込み先のキーを<br/>増やせるか?\"}:::judge\n    NOTE[\"アダプティブキャパシティで緩和されるが<br/>パーティション単位の上限は残る\"]:::note\n    ONDEMAND[\"オンデマンドキャパシティモードに変更<br/>テーブル全体のスループットが上がるだけ\"]:::alt\n    X10[\"RCU/WCU を 10 倍にプロビジョニング<br/>単一キーへの集中は解消しない\"]:::alt\n    GSI[\"GSI を追加して書き込みを分散する<br/>書き込み先のキーは変わらない\"]:::alt\n\n    subgraph FIX[\"キー空間を分散する対策\"]\n        SHARD[\"write sharding<br/>書き込みキーの末尾にランダムなサフィックスを付け<br/>複数の論理パーティションへ分散する\"]:::best\n        READ[\"読み取り時は全シャードを集約する\"]:::best\n        SHARD -->|\"読み取りは集約\"| READ\n    end\n\n    REQ --> LIMIT\n    LIMIT --> Q\n    Q -->|\"増やせる\"| SHARD\n    LIMIT -.- NOTE\n    Q -.->|\"全体の話\"| ONDEMAND\n    Q -.->|\"全体の話\"| X10\n    Q -.->|\"キーは同じ\"| GSI"
+}

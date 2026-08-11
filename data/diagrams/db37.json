@@ -1,0 +1,125 @@
+{
+  "question_id": "db37",
+  "purpose": "検証環境の作り方が「全量コピーを避けられるか」と「検証の書き込みを本番から切り離せるか」の2つの問いで決まることを1枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、クローン・スナップショット復元・リードレプリカの違いが曖昧な人。",
+  "message": "数 TB を複製せずに書き込みを伴う検証をしたいなら、ストレージを共有しつつ書き込みだけを分離する Aurora のクローンを選ぶ。",
+  "source_summary": "Aurora のクローンは copy-on-write 方式でストレージを共有し、数分で作成でき、変更された分だけ追加ストレージが課金される。クローン側の書き込みは元クラスターに影響しない。スナップショット復元はデータ量に比例した時間と全量分のストレージ費用がかかり、リードレプリカは書き込み検証ができず本番と同じストレージを共有する。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "本番 Aurora の実データで負荷試験と本番相当のクエリ検証をしたい(数 TB のコピーは避けたい / 検証中の書き込みは本番に影響させない)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q1",
+      "label": "数 TB の全量コピーを避けて用意できるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "Q2",
+      "label": "検証中の書き込みが本番に影響しないか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CLONE",
+      "label": "Aurora のデータベースクローン(copy-on-write でストレージを共有し数分で作成)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "課金は変更された分の追加ストレージだけ",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "REPLICA",
+      "label": "リードレプリカを追加して検証に使う",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SNAP",
+      "label": "スナップショットから新しいクラスターを復元する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DUMP",
+      "label": "mysqldump で論理バックアップを取り別クラスターへインポートする",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q1",
+      "verb": "まず用意の速さを問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q1",
+      "to": "Q2",
+      "verb": "避けられる→次の問いへ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q1",
+      "to": "SNAP",
+      "verb": "全量コピーが必要になる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q1",
+      "to": "DUMP",
+      "verb": "全量コピーが必要になる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q2",
+      "to": "CLONE",
+      "verb": "影響しない→クローン",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q2",
+      "to": "REPLICA",
+      "verb": "書き込み検証ができない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "CLONE",
+      "to": "NOTE",
+      "verb": "課金の前提を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「全量コピーを避けられるか」→「書き込みが本番に影響しないか」の順に4案をふるい落とす",
+    "マトリクス: 準備コスト(時間・ストレージ) × 書き込み分離 の2軸に4案を配置する"
+  ],
+  "selected_pattern": "分岐(判断フロー)。要件が「コピーしたくない」「書き込みを本番に影響させない」の2つで、後者はスナップショット復元や mysqldump では最初から論点にならない。順に落とす形なら各案が落ちた理由が一目で読めるが、2軸マトリクスは4案の座標を読み取る手間が増える。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "リードレプリカが「本番と同じストレージを共有する」点は解説にあるが、図ではラベルを短くするため「書き込み検証ができない」側だけを線のラベルに出し、共有はノード本文に置いた。",
+    "クローンの作成時間「数分」は解説の記述をそのまま使った。具体的なコピー時間の比較値は解説に無いため書いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"要件<br/>本番 Aurora の実データで負荷試験と本番相当のクエリ検証をしたい<br/>数 TB のコピーに時間とコストをかけない / 検証中の書き込みは本番に影響させない\"]:::req\n    Q1{\"数 TB の全量コピーを<br/>避けて用意できるか?\"}:::judge\n    Q2{\"検証中の書き込みが<br/>本番に影響しないか?\"}:::judge\n    CLONE[\"Aurora のデータベースクローン<br/>copy-on-write でストレージを共有し数分で作成<br/>クローン側の書き込みは元クラスターに影響しない\"]:::best\n    NOTE[\"課金は変更された分の<br/>追加ストレージだけ\"]:::note\n    REPLICA[\"リードレプリカを追加して検証に使う<br/>書き込み検証ができず本番と同じストレージを共有\"]:::alt\n    SNAP[\"スナップショットから新クラスターを復元<br/>データ量に比例した時間と全量分のストレージ費用\"]:::alt\n    DUMP[\"mysqldump で論理バックアップを取り別クラスターへ<br/>同じく全量のコピーが必要\"]:::alt\n\n    REQ --> Q1\n    Q1 -->|\"避けられる\"| Q2\n    Q1 -->|\"全量コピー\"| SNAP\n    Q1 -->|\"全量コピー\"| DUMP\n    Q2 -->|\"影響しない\"| CLONE\n    Q2 -->|\"書き込めない\"| REPLICA\n    CLONE -.- NOTE"
+}
