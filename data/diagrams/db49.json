@@ -1,0 +1,133 @@
+{
+  "question_id": "db49",
+  "purpose": "セッションストアの可用性要件が「レプリカへ引き継げるか」「エンドポイントが変わらないか」の2点に還元されることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Redis と Memcached の違い、スナップショットとフェイルオーバーの違いが混ざる人。",
+  "message": "ノード障害でもアプリを変えずにセッションを保つには、レプリカを持たせてマルチAZ自動フェイルオーバーを有効にする。",
+  "source_summary": "ElastiCache for Redis はレプリカを持つレプリケーショングループでマルチ AZ 自動フェイルオーバーを構成でき、プライマリ障害時にレプリカが昇格して同じエンドポイント(またはクラスター設定エンドポイント)で継続できる。Memcached はレプリケーションと永続化をサポートしないためセッションの保護に向かない。スナップショットは復旧手段であり無停止の可用性にはならない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "セッションストアのノード障害でユーザーが強制ログアウトされる/書き込みエンドポイントの切り替えをアプリに意識させたくない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "レプリカへ引き継いで同じエンドポイントで続けられるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "REPL",
+      "label": "クラスターモードを有効にしたレプリケーショングループで各シャードにレプリカを配置",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "MAZ",
+      "label": "マルチAZの自動フェイルオーバーを有効化",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "EP",
+      "label": "プライマリ障害時にレプリカが昇格し、同じエンドポイントで継続できる",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "TWO",
+      "label": "単一ノードのクラスターを2つ作りアプリで書き分ける",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SNAP",
+      "label": "自動バックアップ(スナップショット)を1時間ごとに取得する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "MEMCD",
+      "label": "ElastiCache for Memcached に切り替えてノードを増やす",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "REPL",
+      "verb": "引き継げる構成にする",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "REPL",
+      "to": "MAZ",
+      "verb": "自動フェイルオーバーを付ける",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "MAZ",
+      "to": "EP",
+      "verb": "アプリから見た継続性",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "J",
+      "to": "TWO",
+      "verb": "切り替えをアプリが持つことになる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "SNAP",
+      "verb": "復旧手段であり無停止にはならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "MEMCD",
+      "verb": "レプリケーションと永続化がない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "レプリケーショングループ(クラスターモード有効)",
+      "element_ids": [
+        "REPL",
+        "MAZ",
+        "EP"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー)+ 正解構成の内訳: 1つの問いで振り分け、正解側だけ構成の中身を展開する",
+    "対比(左右2列): Redis のレプリケーショングループと Memcached を並べ、機能の有無を項目で比べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)+ 正解構成の内訳。誤答は Memcached だけでなく「単一ノード2つ」「スナップショット」と種類が違うため、Redis 対 Memcached の2列対比では収まらない。1つの判断軸で全選択肢を切る形が全体を1枚に収められる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「同じエンドポイント」はクラスターモード有効時のクラスター設定エンドポイントを指すが、解説の括弧書きの粒度に合わせて1ノードにまとめている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"Redis をセッションストアとして利用<br/>ノード障害でセッションを失うと強制ログアウトになる<br/>エンドポイントの切り替えを<br/>アプリに意識させたくない\"]:::req\n    J{\"レプリカへ引き継いで<br/>同じエンドポイントで<br/>続けられるか?\"}:::judge\n\n    subgraph GROUP[\"レプリケーショングループ(クラスターモード有効)\"]\n        REPL[\"各シャードにレプリカを配置する\"]:::best\n        MAZ[\"マルチAZの自動フェイルオーバーを有効化する\"]:::best\n        EP[\"プライマリ障害時にレプリカが昇格し<br/>同じクラスター設定エンドポイントで継続できる\"]:::best\n        REPL --> MAZ --> EP\n    end\n\n    TWO[\"単一ノードのクラスターを2つ作りアプリで書き分ける<br/>切り替えをアプリが持つことになる\"]:::alt\n    SNAP[\"スナップショットを1時間ごとに取得する<br/>復旧手段であり無停止の可用性にはならない\"]:::alt\n    MEMCD[\"Memcached に切り替えてノードを増やす<br/>レプリケーションと永続化をサポートしない\"]:::alt\n\n    REQ --> J\n    J -->|\"できる\"| REPL\n    J -.->|\"アプリが切替\"| TWO\n    J -.->|\"復旧のみ\"| SNAP\n    J -.->|\"複製できない\"| MEMCD"
+}

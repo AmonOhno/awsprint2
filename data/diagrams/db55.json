@@ -1,0 +1,187 @@
+{
+  "question_id": "db55",
+  "purpose": "クラスターを分けずに優先度を制御する仕組みとして、WLM のキューと QMR の役割分担を示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Redshift の競合をクラスター分割やメンテナンス作業で解こうとしがちな人。",
+  "message": "同じクラスターのまま SLA を守るには、WLM のキューで優先度を割り当て、QMR で暴走クエリを抑える。",
+  "source_summary": "Redshift の WLM はユーザーグループやクエリグループごとにキューと優先度を割り当て、自動 WLM はメモリと同時実行数を動的に調整する。QMR で「実行時間が N 秒を超えたら中断/低優先度へ移動」といったルールを設定して暴走クエリを抑制できる。同時実行スケーリングはピーク時の追加キャパシティとして有効で、無効化は逆効果。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "同じクラスターでアドホッククエリの集中により経営レポートのバッチが SLA を割る。クラスターは分けずに優先度を制御したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "ADHOC",
+      "label": "特定チームのアドホッククエリ",
+      "type": "actor",
+      "priority": "secondary"
+    },
+    {
+      "id": "BATCH",
+      "label": "経営レポートのバッチクエリ(SLAあり)",
+      "type": "actor",
+      "priority": "secondary"
+    },
+    {
+      "id": "AUTO",
+      "label": "自動 WLM(メモリと同時実行数を動的に調整)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "QH",
+      "label": "高優先度キュー(経営レポート)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "QL",
+      "label": "低優先度キュー(アドホック)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "QMR",
+      "label": "クエリモニタリングルール(QMR)で暴走クエリを中断/低優先度へ移動",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "同時実行スケーリングはピーク時の追加キャパシティとして有効で、無効化は逆効果",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "OFFCS",
+      "label": "同時実行スケーリングを無効化してリソースを固定する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SPLIT",
+      "label": "各チーム用に別クラスターを作成しデータを複製する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "VAC",
+      "label": "VACUUM と ANALYZE を毎時実行する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "ADHOC",
+      "verb": "同居する2つのワークロード",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "REQ",
+      "to": "BATCH",
+      "verb": "同居する2つのワークロード",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "ADHOC",
+      "to": "AUTO",
+      "verb": "同じクラスターへ流れ込む",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "BATCH",
+      "to": "AUTO",
+      "verb": "同じクラスターへ流れ込む",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "AUTO",
+      "to": "QH",
+      "verb": "優先度で守る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "AUTO",
+      "to": "QL",
+      "verb": "優先度を下げる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "QH",
+      "to": "QMR",
+      "verb": "暴走クエリを抑える",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "QL",
+      "to": "QMR",
+      "verb": "暴走クエリを抑える",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "REQ",
+      "to": "OFFCS",
+      "verb": "むしろ逆効果",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "OFFCS",
+      "to": "NOTE",
+      "verb": "誤読しやすい点を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "REQ",
+      "to": "SPLIT",
+      "verb": "クラスターを分けない要件に反する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "VAC",
+      "verb": "保守作業であって優先度制御ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "ワークロード管理(WLM)",
+      "element_ids": [
+        "AUTO",
+        "QH",
+        "QL",
+        "QMR"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "合流→分配(構成図): 2種類のクエリが WLM に入り、優先度の違うキューへ振り分けられる形を描く",
+    "分岐(判断フロー): 「クラスターを分けるか / 同一クラスターで優先度を付けるか」の問いで振り分ける"
+  ],
+  "selected_pattern": "合流→分配(構成図)。「クラスターを分けずに」という条件は問題文で既に確定しているため、判断フローにすると分岐が形だけになる。誰のクエリがどのキューに入るかを描くほうが WLM の効き方を直接示せる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "VACUUM / ANALYZE は解説で評価されていないため、優先度制御ではないという位置づけだけを線のラベルで示している。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"アドホッククエリと経営レポートが同じクラスターに同居<br/>アドホック集中時にバッチが待たされ SLA を割る<br/>クラスターは分けずに優先度を制御したい\"]:::req\n\n    ADHOC[\"特定チームのアドホッククエリ\"]:::svc\n    BATCH[\"経営レポートのバッチクエリ(SLAあり)\"]:::svc\n\n    subgraph WLMG[\"ワークロード管理(WLM)\"]\n        AUTO[\"自動WLM<br/>メモリと同時実行数を動的に調整する\"]:::best\n        QH[\"高優先度キュー<br/>経営レポート\"]:::best\n        QL[\"低優先度キュー<br/>アドホック\"]:::best\n        QMR[\"クエリモニタリングルール(QMR)<br/>実行時間がN秒を超えたら<br/>中断/低優先度へ移動\"]:::best\n        QH -.- QMR\n        QL -.- QMR\n    end\n\n    NOTE[\"同時実行スケーリングはピーク時の<br/>追加キャパシティとして有効<br/>無効化はむしろ逆効果\"]:::note\n    OFFCS[\"同時実行スケーリングを無効化して<br/>リソースを固定する\"]:::alt\n    SPLIT[\"各チーム用に別クラスターを作り<br/>データを複製する<br/>クラスターを分けない要件に反する\"]:::alt\n    VAC[\"VACUUM と ANALYZE を毎時実行する<br/>保守作業であって優先度制御ではない\"]:::alt\n\n    REQ --> ADHOC\n    REQ --> BATCH\n    ADHOC --> AUTO\n    BATCH --> AUTO\n    AUTO -->|\"優先度で守る\"| QH\n    AUTO -->|\"優先度を下げ\"| QL\n    REQ -.->|\"逆効果\"| OFFCS\n    OFFCS -.- NOTE\n    REQ -.->|\"分けたくない\"| SPLIT\n    REQ -.->|\"別の作業\"| VAC"
+}

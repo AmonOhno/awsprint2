@@ -1,0 +1,133 @@
+{
+  "question_id": "db53",
+  "purpose": "Redshift の結合が遅い原因(データ再配分)を、分散スタイルの設計で消すという対応関係を示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Redshift の性能問題をノード追加で解こうとしがちな人。",
+  "message": "DS_BCAST_INNER は分散設計で消す — 結合キーを揃えた KEY 分散と、小さいディメンションの ALL 分散が効く。",
+  "source_summary": "Redshift の分散スタイルは結合性能を大きく左右し、結合キーを揃えた KEY 分散にすると同一ノード内で結合でき再配分が不要になる。小さなディメンションは ALL 分散で全ノードに複製するとブロードキャストが不要になる。SORTKEY はゾーンマップによるブロックスキップに効く。EVEN 分散は再配分を招き、ノード追加はコスト増でも根本改善にならない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "ファクトとディメンションの結合クエリが遅く、DS_BCAST_INNER(データ再配分)が大量に発生している",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "CAUSE",
+      "label": "結合するデータがノードをまたぐため再配分・ブロードキャストが起きる",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "DK",
+      "label": "結合キーを同じ DISTKEY にする(KEY分散)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ALLD",
+      "label": "小さなディメンションは DISTSTYLE ALL にする",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "SK",
+      "label": "頻用フィルタ列を SORTKEY にする",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "EVEN",
+      "label": "全テーブルの DISTSTYLE を EVEN に統一する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NODES",
+      "label": "ノード数を2倍に増やす",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOENC",
+      "label": "すべての列の圧縮エンコードを無効化する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "CAUSE",
+      "verb": "原因をたどる",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "CAUSE",
+      "to": "DK",
+      "verb": "同一ノード内で結合させる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CAUSE",
+      "to": "ALLD",
+      "verb": "全ノードに複製する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CAUSE",
+      "to": "SK",
+      "verb": "読むブロックを減らす",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "REQ",
+      "to": "EVEN",
+      "verb": "再配分を招く",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "NODES",
+      "verb": "コスト増でも根本改善にならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "NOENC",
+      "verb": "再配分の原因に効かない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "分散とソートの設計で解く",
+      "element_ids": [
+        "DK",
+        "ALLD",
+        "SK"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "因果 → 対処(分岐): 再配分という原因を頂点に、効く設計変更をぶら下げる",
+    "包含(ノード配置図): 複数ノードにまたがるテーブルの置かれ方を描き、KEY分散とALL分散で配置が変わる様子を見せる"
+  ],
+  "selected_pattern": "因果 → 対処(分岐)。ノード配置図は再配分が消える理屈を直感的に見せられるが、SORTKEY のようにデータ配置と無関係な施策を同じ図に置けない。原因と対策の対応を線で示す形なら3つの施策と誤答をまとめて1枚に収められる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "圧縮エンコードの無効化について解説は直接評価していないため、再配分という原因に効かないという点だけを書いている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"ファクトテーブルとディメンションテーブルの結合が遅い<br/>DS_BCAST_INNER(データ再配分)が大量に発生している\"]:::req\n    CAUSE[\"結合するデータがノードをまたぐため<br/>再配分・ブロードキャストが起きる\"]:::best\n\n    subgraph FIXES[\"分散とソートの設計で解く\"]\n        DK[\"結合キーを同じ DISTKEY にする(KEY分散)<br/>同一ノード内で結合でき再配分が不要になる\"]:::best\n        ALLD[\"小さなディメンションは DISTSTYLE ALL<br/>全ノードに複製されブロードキャストが不要になる\"]:::best\n        SK[\"頻用フィルタ列を SORTKEY にする<br/>ゾーンマップでブロックをスキップできる\"]:::best\n    end\n\n    EVEN[\"全テーブルの DISTSTYLE を EVEN に統一する<br/>再配分を招く\"]:::alt\n    NODES[\"ノード数を2倍に増やす<br/>コスト増でも根本改善にならない\"]:::alt\n    NOENC[\"すべての列の圧縮エンコードを無効化する\"]:::alt\n\n    REQ --> CAUSE\n    CAUSE -->|\"同一ノードで\"| DK\n    CAUSE -->|\"全ノード複製\"| ALLD\n    CAUSE -->|\"読む量を削る\"| SK\n    REQ -.->|\"再配分が増\"| EVEN\n    REQ -.->|\"根本でない\"| NODES\n    REQ -.->|\"原因が別\"| NOENC"
+}

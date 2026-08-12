@@ -1,0 +1,146 @@
+{
+  "question_id": "db52",
+  "purpose": "DMS の LOB レプリケーションが遅い原因(Full LOB モードの分割転送)と、設定で解く道筋を示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、DMS の遅さをインスタンスサイズやストレージの問題と考えがちな人。",
+  "message": "LOB が遅いのは Full LOB モードが分割転送するためなので、Limited か Inline に切り替え、フルロードは並列とバッチ適用で詰める。",
+  "source_summary": "DMS の Full LOB モードは LOB を分割して転送するため非常に遅く、実務では Limited LOB モード(想定最大サイズを指定して1度に転送)や Inline LOB モードが推奨される。加えてフルロードの並列度、バッチ適用(BatchApplyEnabled)、ターゲット側での外部キー・セカンダリインデックスの一時無効化も効果的。ストレージタイプの劣化や毎回フルロードは改善にならない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "DMS の CDC タスクで MySQL → Aurora MySQL、LOBカラムを含むテーブルが極端に遅い",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "CAUSE",
+      "label": "Full LOB モードは LOB を分割して転送するため非常に遅い",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "LIMITED",
+      "label": "Limited LOB モード(想定最大サイズを指定して1度に転送)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "INLINE",
+      "label": "Inline LOB モード",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "BATCH",
+      "label": "フルロードの並列度を上げ、バッチ適用(BatchApplyEnabled)を有効化する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "ターゲット側の外部キー・セカンダリインデックスの一時無効化も効果的",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "RELOAD",
+      "label": "タスクを削除して毎回フルロードのみを実行する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "MAG",
+      "label": "レプリケーションインスタンスのストレージタイプを magnetic に変更する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "FK",
+      "label": "ターゲットの外部キー制約を有効にしたまま並列ロードを行う",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "CAUSE",
+      "verb": "原因をたどる",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "CAUSE",
+      "to": "LIMITED",
+      "verb": "LOB の転送設定で解く",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CAUSE",
+      "to": "INLINE",
+      "verb": "LOB の転送設定で解く",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CAUSE",
+      "to": "BATCH",
+      "verb": "ロードの設定で解く",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "BATCH",
+      "to": "NOTE",
+      "verb": "併せて効く設定を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "REQ",
+      "to": "RELOAD",
+      "verb": "改善にならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "MAG",
+      "verb": "ストレージを劣化させる変更",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "FK",
+      "verb": "一時無効化とは逆の設定",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "設定で解く",
+      "element_ids": [
+        "LIMITED",
+        "INLINE",
+        "BATCH"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "因果 → 対処(分岐): 原因を1つ置き、そこから効く設定へ分岐させる",
+    "対比(LOBモード比較表): Full / Limited / Inline の3モードを並べて転送のしかたを比べる"
+  ],
+  "selected_pattern": "因果 → 対処(分岐)。正解の選択肢は LOB モードの変更とロード設定の変更を同時に含むため、モード比較表では後者が図に入らない。原因を頂点にして効く設定をぶら下げる形なら両方を1枚に置ける。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Limited LOB と Inline LOB は解説では並列の推奨として扱われており、どちらを優先するかの基準は書かれていないため図でも優劣を付けていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"DMS の CDC タスク(MySQL → Aurora MySQL)<br/>LOBカラムを含むテーブルの<br/>レプリケーションが極端に遅い\"]:::req\n    CAUSE[\"Full LOB モードは LOB を分割して転送する<br/>これが遅さの原因\"]:::best\n\n    subgraph FIXES[\"設定で解く\"]\n        LIMITED[\"Limited LOB モード<br/>想定最大サイズを指定して1度に転送する\"]:::best\n        INLINE[\"Inline LOB モード\"]:::best\n        BATCH[\"フルロードの並列度を上げ<br/>バッチ適用(BatchApplyEnabled)を有効化する\"]:::best\n    end\n\n    NOTE[\"ターゲット側の外部キー・セカンダリインデックスを<br/>一時的に無効化するのも効果的\"]:::note\n    RELOAD[\"タスクを削除して毎回フルロードのみを実行する\"]:::alt\n    MAG[\"レプリケーションインスタンスのストレージを<br/>magnetic に変更する\"]:::alt\n    FK[\"外部キー制約を有効にしたまま並列ロードする\"]:::alt\n\n    REQ --> CAUSE\n    CAUSE -->|\"LOBの設定\"| LIMITED\n    CAUSE -->|\"LOBの設定\"| INLINE\n    CAUSE -->|\"ロード設定\"| BATCH\n    BATCH -.- NOTE\n    REQ -.->|\"改善でない\"| RELOAD\n    REQ -.->|\"劣化させる\"| MAG\n    REQ -.->|\"逆の設定\"| FK"
+}

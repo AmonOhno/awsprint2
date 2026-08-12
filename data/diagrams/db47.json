@@ -1,0 +1,124 @@
+{
+  "question_id": "db47",
+  "purpose": "DynamoDB のバックアップ選択が「戻せるのは連続した時点か、取得した時点だけか」で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、DynamoDB のバックアップ手段の名前は知っているが復元できる粒度の違いが曖昧な人。",
+  "message": "過去35日以内の任意の秒へ戻せる連続的なバックアップは PITR だけで、復元は新しいテーブルに作られるので本番に影響しない。",
+  "source_summary": "PITR は過去35日以内の任意の秒単位の時点へ復元でき、継続的なバックアップなので性能に影響しない。復元は常に新しいテーブルとして作成されるため本番テーブルには影響しない。オンデマンドバックアップや日次バックアップは取得時点への復元しかできない。グローバルテーブルはレプリケーションであってバックアップではなく、誤削除も複製される。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "バックアップ要件:過去35日以内の任意の時点へ秒単位で復元できる/復元操作が本番性能に影響しない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "戻せるのは連続した時点か、取得した時点だけか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "PITR",
+      "label": "ポイントインタイムリカバリ(PITR)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NEW",
+      "label": "復元は常に新しいテーブルとして作成される",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "ONDEMAND",
+      "label": "オンデマンドバックアップを1時間ごとに取得する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "BACKUP",
+      "label": "AWS Backup で日次バックアップを設定する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "GT",
+      "label": "グローバルテーブルの別リージョンのコピーから復元する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "グローバルテーブルは誤削除も複製される",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "PITR",
+      "verb": "連続した時点へ戻せる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "PITR",
+      "to": "NEW",
+      "verb": "本番へ影響しない理由",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "J",
+      "to": "ONDEMAND",
+      "verb": "取得時点にしか戻せない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "BACKUP",
+      "verb": "取得時点にしか戻せない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "GT",
+      "verb": "複製でありバックアップではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "GT",
+      "to": "NOTE",
+      "verb": "誤読しやすい点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「連続した時点か / 取得した時点だけか」の1問で正解と誤答を振り分ける",
+    "マトリクス: 復元の粒度(連続 / 取得時点)× 本番への影響(あり / なし)の2軸に4選択肢を配置"
+  ],
+  "selected_pattern": "分岐(判断フロー)。誤答3つはいずれも「取得した時点にしか戻せない/そもそもバックアップではない」という同じ理由で落ちるため、1つの問いで切る形が最も解読が少ない。2軸マトリクスは本番への影響という第2軸が PITR 以外で判定しにくく、かえって読みづらい。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「復元操作が本番性能に影響しない」という第2要件は、PITR の性質(新しいテーブルへ復元)として正解側にだけ描いた。他の選択肢がこの要件を満たすかは解説に記載がないため判定を描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"バックアップ要件<br/>過去35日以内の任意の時点へ秒単位で復元できる<br/>復元操作が本番性能に影響しない\"]:::req\n    J{\"戻せるのは<br/>連続した時点か<br/>取得した時点だけか?\"}:::judge\n    PITR[\"ポイントインタイムリカバリ(PITR)<br/>継続的なバックアップで<br/>過去35日以内の任意の秒へ復元できる\"]:::best\n    NEW[\"復元は常に新しいテーブルとして作成される<br/>本番テーブルには影響しない\"]:::best\n    ONDEMAND[\"オンデマンドバックアップを1時間ごと<br/>取得した時点にしか戻せない\"]:::alt\n    BACKUP[\"AWS Backup で日次バックアップ<br/>取得した時点にしか戻せない\"]:::alt\n    GT[\"グローバルテーブルの別リージョンのコピー<br/>レプリケーションでありバックアップではない\"]:::alt\n    NOTE[\"グローバルテーブルでは誤削除も複製される<br/>「別リージョンにコピーがある」は復元手段にならない\"]:::note\n\n    REQ --> J\n    J -->|\"連続した時点\"| PITR\n    PITR --> NEW\n    J -.->|\"取得時点のみ\"| ONDEMAND\n    J -.->|\"取得時点のみ\"| BACKUP\n    J -.->|\"複製であり別物\"| GT\n    GT -.- NOTE"
+}

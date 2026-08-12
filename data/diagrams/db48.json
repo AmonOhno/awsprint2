@@ -1,0 +1,133 @@
+{
+  "question_id": "db48",
+  "purpose": "グローバルテーブルの競合解決が last writer wins であり、その帰結としてアプリ側の設計が要ることを1本の流れで示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、グローバルテーブルを「勝手に整合してくれる仕組み」と捉えがちな人。",
+  "message": "グローバルテーブルはマルチアクティブな非同期レプリケーションなので競合は後勝ちで解決され、同一アイテムを同時更新しない設計がアプリ側に要る。",
+  "source_summary": "DynamoDB グローバルテーブルはマルチアクティブな非同期レプリケーションで、競合はタイムスタンプに基づく last writer wins で解決される。そのため同一アイテムを複数リージョンから同時更新しない設計(ユーザーの所属リージョンで書き込み先を固定する、バージョン属性と条件式を使う)が求められる。トランザクションは単一リージョン内で ACID を提供する。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "3リージョンのグローバルテーブルで同じアイテムがほぼ同時に更新される",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "FACT",
+      "label": "マルチアクティブな非同期レプリケーション",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "LWW",
+      "label": "競合はタイムスタンプに基づく last writer wins で解決される",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "DESIGN",
+      "label": "アプリ側で競合を避ける設計(書き込み先リージョンの固定、バージョン属性と条件式)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "FIRST",
+      "label": "先に書き込まれた方が優先され後続はエラーになる、とする説明",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SYNC",
+      "label": "同期レプリケーションなので競合は発生しない、とする説明",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "TX",
+      "label": "トランザクション API でリージョン間の原子性が保証される、とする説明",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "トランザクションが ACID を提供するのは単一リージョン内",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "FACT",
+      "verb": "仕組みを確認する",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "FACT",
+      "to": "LWW",
+      "verb": "競合の解決方式が決まる",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "LWW",
+      "to": "DESIGN",
+      "verb": "だから設計で避ける",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "REQ",
+      "to": "FIRST",
+      "verb": "後勝ちであって先勝ちではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "SYNC",
+      "verb": "非同期なので競合は起きる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "TX",
+      "verb": "ACID は単一リージョン内",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "TX",
+      "to": "NOTE",
+      "verb": "誤読しやすい点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "グローバルテーブルの実際の挙動",
+      "element_ids": [
+        "FACT",
+        "LWW",
+        "DESIGN"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "直列(仕組み → 競合解決 → 求められる設計)+ 誤答を横に並べる対比",
+    "包含(3リージョンの構造図): 3つのリージョンが同じアイテムへ書き込む様子を描き、後勝ちで1つが残ることを示す"
+  ],
+  "selected_pattern": "直列(仕組み → 競合解決 → 求められる設計)。この問題は「挙動として正しいのはどれか」を問うており、誤答は挙動の取り違えなので、正しい因果を1本の線にして誤答説を横に並べる形が比較しやすい。3リージョンの構造図は書き込みの同時性は描けるが、そこから設計要件が導かれる流れを表現できない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「ユーザーの所属リージョンで書き込み先を固定する」と「バージョン属性と条件式を使う」は解説では並列の対策なので1ノードにまとめた。それぞれを問う問題を追加する場合は分割が必要。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"3リージョンで運用するグローバルテーブル<br/>同じアイテムが複数リージョンでほぼ同時に更新される\"]:::req\n\n    subgraph FACTS[\"グローバルテーブルの実際の挙動\"]\n        FACT[\"マルチアクティブな非同期レプリケーション<br/>どのリージョンでも書き込みを受け付ける\"]:::best\n        LWW[\"競合はタイムスタンプに基づく<br/>last writer wins(後勝ち)で解決される\"]:::best\n        DESIGN[\"アプリ側で競合を避ける設計が要る<br/>ユーザーの所属リージョンで書き込み先を固定する<br/>バージョン属性と条件式を使う\"]:::best\n        FACT -->|\"競合の解決\"| LWW\n        LWW -->|\"だから設計で\"| DESIGN\n    end\n\n    FIRST[\"「先に書いた方が優先され<br/>後続はエラーになる」<br/>後勝ちであって先勝ちではない\"]:::alt\n    SYNC[\"「同期レプリケーションなので<br/>競合は発生しない」<br/>レプリケーションは非同期\"]:::alt\n    TX[\"「トランザクションAPIなら<br/>リージョン間でも原子性が保証される」\"]:::alt\n    NOTE[\"トランザクションが ACID を提供するのは<br/>単一リージョン内\"]:::note\n\n    REQ --> FACT\n    REQ -.->|\"後勝ち\"| FIRST\n    REQ -.->|\"非同期\"| SYNC\n    REQ -.->|\"単一リージョン\"| TX\n    TX -.- NOTE"
+}

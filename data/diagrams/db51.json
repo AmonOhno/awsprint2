@@ -1,0 +1,147 @@
+{
+  "question_id": "db51",
+  "purpose": "異種DB移行の定石(SCT でコード資産を変換 → DMS のフルロード+CDC → 短時間カットオーバー)を1本の手順として示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、DMS だけでスキーマもコードも移せると考えがちな人。",
+  "message": "ストアドや独自型を伴う異種DB移行は SCT で評価・変換し、DMS のフルロード+CDC でラグを詰めてから短時間で切り替える。",
+  "source_summary": "異種 DB 間移行では SCT がスキーマ・ストアドプロシージャ・関数を評価して変換率と手動対応箇所のレポートを出し、変換を自動化する(DMS Schema Conversion も同等機能)。データは DMS のフルロード + CDC で継続同期し、ラグが十分小さくなった時点で短時間のカットオーバーを行う。DMS 単体のスキーマ生成は最低限のテーブル定義のみで、コード資産の変換は行わない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "Oracle 11g(12TB)→ Aurora PostgreSQL。ストアドプロシージャ・独自データ型が多用され、ダウンタイムは1時間以内",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "SCT",
+      "label": "AWS SCT でスキーマとコードを評価・変換する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "FULL",
+      "label": "DMS のフルロードでデータを移す",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "CDC",
+      "label": "CDC(継続的レプリケーション)で同期を続ける",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "CUT",
+      "label": "ラグが十分小さくなった時点で短時間で切り替える",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "DMS Schema Conversion も SCT と同等の機能を持つ",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "DMSONLY",
+      "label": "DMS のみでスキーマも自動生成しフルロードのみで移行する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DP",
+      "label": "Oracle Data Pump で論理エクスポートし S3 経由で一括インポートする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DUAL",
+      "label": "アプリから二重書き込みを実装する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "SCT",
+      "verb": "まずコード資産を評価する",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "SCT",
+      "to": "FULL",
+      "verb": "変換した器へデータを入れる",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "FULL",
+      "to": "CDC",
+      "verb": "差分を追い続ける",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "CDC",
+      "to": "CUT",
+      "verb": "ラグ最小で切り替える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "SCT",
+      "to": "NOTE",
+      "verb": "同等機能を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "REQ",
+      "to": "DMSONLY",
+      "verb": "コード資産が変換されない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "DP",
+      "verb": "一括移行のみで継続同期がない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "DUAL",
+      "verb": "移行の仕組みを自前で作ることになる",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "異種DB移行の進め方",
+      "element_ids": [
+        "SCT",
+        "FULL",
+        "CDC",
+        "CUT"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "直列(手順のタイムライン): SCT → フルロード → CDC → カットオーバー を1本に並べる",
+    "対比(2軸の判定表): 「コード資産を変換できるか」「切替までの差分を追えるか」で4選択肢を判定する"
+  ],
+  "selected_pattern": "直列(手順のタイムライン)。正解が単一の施策ではなく順序のある工程であり、ダウンタイム1時間以内という要件も「どの段階で切り替えるか」で満たされるため、時間の流れをそのまま図にするのが最も読みやすい。判定表案は誤答の落ちる理由は整理できるが、正解の工程の順序が消える。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Data Pump と二重書き込みについては解説に個別の言及がないため、選択肢そのものの内容(一括移行のみ/自前実装)だけを書き、性能や工数の評価は加えていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"Oracle 11g(12TB)→ Aurora PostgreSQL<br/>ストアドプロシージャ・独自データ型を多用<br/>カットオーバーのダウンタイムは1時間以内\"]:::req\n\n    subgraph PLAN[\"異種DB移行の進め方\"]\n        SCT[\"AWS SCT でスキーマとコードを評価・変換する<br/>変換率と手動対応箇所のレポートが出る\"]:::best\n        FULL[\"DMS のフルロードでデータを移す\"]:::best\n        CDC[\"CDC(継続的レプリケーション)で同期を続ける\"]:::best\n        CUT[\"ラグが十分小さくなった時点で短時間で切り替える\"]:::best\n        SCT -->|\"器を作る\"| FULL\n        FULL -->|\"差分を追う\"| CDC\n        CDC -->|\"ラグ最小で\"| CUT\n    end\n\n    NOTE[\"DMS Schema Conversion も SCT と同等の機能を持つ\"]:::note\n    DMSONLY[\"DMS のみでスキーマも自動生成しフルロードのみ<br/>生成されるのは最低限のテーブル定義で<br/>コード資産の変換は行わない\"]:::alt\n    DP[\"Oracle Data Pump で S3 経由の一括インポート<br/>一括移行のみで継続同期の手立てがない\"]:::alt\n    DUAL[\"アプリから二重書き込みを実装する<br/>移行の仕組みを自前で作ることになる\"]:::alt\n\n    REQ --> SCT\n    SCT -.- NOTE\n    REQ -.->|\"コード未変換\"| DMSONLY\n    REQ -.->|\"継続同期なし\"| DP\n    REQ -.->|\"自前実装\"| DUAL"
+}

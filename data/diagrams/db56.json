@@ -1,0 +1,124 @@
+{
+  "question_id": "db56",
+  "purpose": "Redshift の運用形態の選択が「容量管理を人手で続けるか」の1点で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Redshift の運用負荷とコストの話を切り分けられていない人。",
+  "message": "運用要員が足りず利用が業務時間帯に偏るなら、容量管理を自動に任せて使った分だけ払う Serverless を選ぶ。",
+  "source_summary": "Redshift Serverless はクラスター管理なしにワークロードに応じて自動でキャパシティ(RPU)を調整し、使用した分だけ課金されるため、利用が偏り運用要員が限られる場合に適する。最大 RPU の設定と使用量制御でコスト上限も管理できる。手動リサイズや停止・再開の運用は担当者の負荷が残り、Athena への全面移行は既存の DWH ワークロード特性次第で性能・機能面の制約が出る。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "運用担当は1名でノードサイズ選定・WLMチューニング・スケーリングに手が回らない。利用は業務時間帯に偏り夜間はほぼゼロ",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "クラスターの容量管理を人手で続けるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "SL",
+      "label": "Amazon Redshift Serverless(ワークロードに応じて RPU を自動調整)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "PAY",
+      "label": "使用した分だけ課金。最大 RPU の設定と使用量制御でコスト上限も管理できる",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "RA3",
+      "label": "最小構成の RA3 クラスターを常時稼働させ必要時に手動でリサイズする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DC2",
+      "label": "DC2 ノードのクラスターを毎晩停止し朝に再開する運用を組む",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ATHENA",
+      "label": "Athena に完全移行し Redshift の利用をやめる",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "Athena への全面移行は既存の DWH ワークロード特性次第で性能・機能面の制約が出る",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "SL",
+      "verb": "自動に任せる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "SL",
+      "to": "PAY",
+      "verb": "コスト面の帰結",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "J",
+      "to": "RA3",
+      "verb": "担当者の運用負荷が残る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "DC2",
+      "verb": "担当者の運用負荷が残る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "ATHENA",
+      "verb": "制約が出る可能性がある",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "ATHENA",
+      "to": "NOTE",
+      "verb": "誤読しやすい点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「容量管理を人手で続けるか」の1問で正解と誤答を振り分ける",
+    "対比(左右2列): 常時稼働クラスターと Serverless を並べ、運用作業とコストの持ち方を比べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。誤答のうち2つは運用のしかたが違うだけでどちらも人手の負荷が残るという同じ理由で落ち、残る1つは別サービスへの移行なので、2列対比には収まらない。1つの問いで4選択肢を切る形が最も単純になる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「利用が夜間ほぼゼロ」という条件はコスト面(使った分だけ課金)の根拠として正解側に描いたが、DC2 の停止・再開案も同じ条件に応えている点は図では扱わず、運用負荷の観点だけで切っている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"分析基盤の運用担当は1名<br/>ノードサイズ選定・WLMチューニング・スケーリングに<br/>手が回らない<br/>利用は業務時間帯に偏り夜間はほぼゼロ\"]:::req\n    J{\"クラスターの容量管理を<br/>人手で続けるか?\"}:::judge\n    SL[\"Amazon Redshift Serverless<br/>クラスター管理なしにワークロードに応じて<br/>キャパシティ(RPU)を自動調整する\"]:::best\n    PAY[\"使用した分だけ課金される<br/>最大RPUの設定と使用量制御でコスト上限も管理できる\"]:::best\n    RA3[\"最小構成のRA3を常時稼働させ必要時に手動リサイズ<br/>担当者の運用負荷が残る\"]:::alt\n    DC2[\"DC2クラスターを毎晩停止し朝に再開する運用<br/>担当者の運用負荷が残る\"]:::alt\n    ATHENA[\"Athena に完全移行し Redshift の利用をやめる\"]:::alt\n    NOTE[\"Athena への全面移行は<br/>既存のDWHワークロード特性次第で<br/>性能・機能面の制約が出る\"]:::note\n\n    REQ --> J\n    J -->|\"自動に任せる\"| SL\n    SL --> PAY\n    J -.->|\"負荷が残る\"| RA3\n    J -.->|\"負荷が残る\"| DC2\n    J -.->|\"制約が出る\"| ATHENA\n    ATHENA -.- NOTE"
+}

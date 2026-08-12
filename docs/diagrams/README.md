@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 113 問 / 全 400 問
+収録: 123 問 / 全 400 問
 
 ---
 
@@ -5800,3 +5800,515 @@ flowchart TD
 **解説**: GSI への書き込みが追いつかない場合、DynamoDB はベーステーブルへの書き込みをスロットリングします。GSI のキャパシティを十分に確保する(またはテーブルとインデックスをオンデマンドにする)ことが対処です。射影を ALL にすると GSI の書き込み量とストレージが増えむしろ悪化する場合があります。GSI は結果整合の読み取りのみという性質はありますが、書き込みスロットリングの原因ではありません。
 
 **確認事項**: 誤答は「別の対処」ではなく「別の原因説」なので、alt ノードには対処ではなく説明の中身を置いた。この書き方は他問の alt(構成の選択肢)と役割が少し違う。 / GSI が結果整合の読み取りのみである点は解説にある事実なので残したが、スロットリングとは無関係であることを線のラベルで示している。
+
+---
+
+## db47 — データベース / level 3
+
+**問題**: DynamoDB テーブルのバックアップ要件は「任意の時点(過去 35 日以内)へ秒単位で復元できること」「復元操作が本番性能に影響しないこと」である。最適な機能はどれか?
+
+**正解**: ポイントインタイムリカバリ(PITR)を有効にし、必要時に新しいテーブルへ復元する
+
+**他の選択肢**: オンデマンドバックアップを 1 時間ごとに取得する / AWS Backup で日次バックアップを設定する / グローバルテーブルを作成し、別リージョンのコピーから復元する
+
+**図解の主メッセージ**: 過去35日以内の任意の秒へ戻せる連続的なバックアップは PITR だけで、復元は新しいテーブルに作られるので本番に影響しない。
+
+**採用パターン**: 分岐(判断フロー)。誤答3つはいずれも「取得した時点にしか戻せない/そもそもバックアップではない」という同じ理由で落ちるため、1つの問いで切る形が最も解読が少ない。2軸マトリクスは本番への影響という第2軸が PITR 以外で判定しにくく、かえって読みづらい。(候補: 分岐(判断フロー): 「連続した時点か / 取得した時点だけか」の1問で正解と誤答を振り分ける / マトリクス: 復元の粒度(連続 / 取得時点)× 本番への影響(あり / なし)の2軸に4選択肢を配置)
+
+```mermaid
+flowchart TD
+    REQ["バックアップ要件<br/>過去35日以内の任意の時点へ秒単位で復元できる<br/>復元操作が本番性能に影響しない"]:::req
+    J{"戻せるのは<br/>連続した時点か<br/>取得した時点だけか?"}:::judge
+    PITR["ポイントインタイムリカバリ(PITR)<br/>継続的なバックアップで<br/>過去35日以内の任意の秒へ復元できる"]:::best
+    NEW["復元は常に新しいテーブルとして作成される<br/>本番テーブルには影響しない"]:::best
+    ONDEMAND["オンデマンドバックアップを1時間ごと<br/>取得した時点にしか戻せない"]:::alt
+    BACKUP["AWS Backup で日次バックアップ<br/>取得した時点にしか戻せない"]:::alt
+    GT["グローバルテーブルの別リージョンのコピー<br/>レプリケーションでありバックアップではない"]:::alt
+    NOTE["グローバルテーブルでは誤削除も複製される<br/>「別リージョンにコピーがある」は復元手段にならない"]:::note
+
+    REQ --> J
+    J -->|"連続した時点"| PITR
+    PITR --> NEW
+    J -.->|"取得時点のみ"| ONDEMAND
+    J -.->|"取得時点のみ"| BACKUP
+    J -.->|"複製であり別物"| GT
+    GT -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db47.svg`](../../web/diagrams/db47.svg)
+
+**解説**: PITR は過去 35 日以内の任意の秒単位の時点へ復元でき、継続的なバックアップは性能に影響しません。復元は常に新しいテーブルとして作成されるため本番テーブルには影響しません。オンデマンドバックアップや日次バックアップは取得時点への復元しかできず、グローバルテーブルはレプリケーションであってバックアップではありません(誤削除も複製されます)。
+
+**確認事項**: 「復元操作が本番性能に影響しない」という第2要件は、PITR の性質(新しいテーブルへ復元)として正解側にだけ描いた。他の選択肢がこの要件を満たすかは解説に記載がないため判定を描いていない。
+
+---
+
+## db48 — データベース / level 3
+
+**問題**: DynamoDB のグローバルテーブルを 3 リージョンで運用しており、同じアイテムが複数リージョンでほぼ同時に更新されるケースがある。この場合の挙動として正しいのはどれか?
+
+**正解**: 最後の書き込みが優先される(last writer wins)方式で解決され、アプリ側で競合を避ける設計(リージョン分割やバージョン属性)が必要である
+
+**他の選択肢**: 先に書き込まれた方が優先され、後続の書き込みはエラーになる / グローバルテーブルは同期レプリケーションのため競合は発生しない / トランザクション API を使えばリージョン間でも原子性が保証される
+
+**図解の主メッセージ**: グローバルテーブルはマルチアクティブな非同期レプリケーションなので競合は後勝ちで解決され、同一アイテムを同時更新しない設計がアプリ側に要る。
+
+**採用パターン**: 直列(仕組み → 競合解決 → 求められる設計)。この問題は「挙動として正しいのはどれか」を問うており、誤答は挙動の取り違えなので、正しい因果を1本の線にして誤答説を横に並べる形が比較しやすい。3リージョンの構造図は書き込みの同時性は描けるが、そこから設計要件が導かれる流れを表現できない。(候補: 直列(仕組み → 競合解決 → 求められる設計)+ 誤答を横に並べる対比 / 包含(3リージョンの構造図): 3つのリージョンが同じアイテムへ書き込む様子を描き、後勝ちで1つが残ることを示す)
+
+```mermaid
+flowchart TD
+    REQ["3リージョンで運用するグローバルテーブル<br/>同じアイテムが複数リージョンでほぼ同時に更新される"]:::req
+
+    subgraph FACTS["グローバルテーブルの実際の挙動"]
+        FACT["マルチアクティブな非同期レプリケーション<br/>どのリージョンでも書き込みを受け付ける"]:::best
+        LWW["競合はタイムスタンプに基づく<br/>last writer wins(後勝ち)で解決される"]:::best
+        DESIGN["アプリ側で競合を避ける設計が要る<br/>ユーザーの所属リージョンで書き込み先を固定する<br/>バージョン属性と条件式を使う"]:::best
+        FACT -->|"競合の解決"| LWW
+        LWW -->|"だから設計で"| DESIGN
+    end
+
+    FIRST["「先に書いた方が優先され<br/>後続はエラーになる」<br/>後勝ちであって先勝ちではない"]:::alt
+    SYNC["「同期レプリケーションなので<br/>競合は発生しない」<br/>レプリケーションは非同期"]:::alt
+    TX["「トランザクションAPIなら<br/>リージョン間でも原子性が保証される」"]:::alt
+    NOTE["トランザクションが ACID を提供するのは<br/>単一リージョン内"]:::note
+
+    REQ --> FACT
+    REQ -.->|"後勝ち"| FIRST
+    REQ -.->|"非同期"| SYNC
+    REQ -.->|"単一リージョン"| TX
+    TX -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db48.svg`](../../web/diagrams/db48.svg)
+
+**解説**: DynamoDB グローバルテーブルはマルチアクティブな非同期レプリケーションで、競合はタイムスタンプに基づく last writer wins で解決されます。したがって「同一アイテムを複数リージョンから同時更新しない」設計(ユーザーの所属リージョンで書き込み先を固定する、バージョン属性と条件式を使う)が求められます。トランザクションは単一リージョン内で ACID を提供します。
+
+**確認事項**: 「ユーザーの所属リージョンで書き込み先を固定する」と「バージョン属性と条件式を使う」は解説では並列の対策なので1ノードにまとめた。それぞれを問う問題を追加する場合は分割が必要。
+
+---
+
+## db49 — データベース / level 3
+
+**問題**: ElastiCache for Redis をセッションストアとして使っている。ノード障害時にセッションが失われるとユーザーが強制ログアウトされるため、可用性を高めたい。書き込みエンドポイントの切り替えもアプリから意識したくない。最適な構成はどれか?
+
+**正解**: クラスターモードを有効にしたレプリケーショングループで各シャードにレプリカを配置し、マルチ AZ の自動フェイルオーバーを有効化する
+
+**他の選択肢**: 単一ノードのクラスターを 2 つ作り、アプリで書き分ける / 自動バックアップ(スナップショット)を 1 時間ごとに取得する / ElastiCache for Memcached に切り替えてノードを増やす
+
+**図解の主メッセージ**: ノード障害でもアプリを変えずにセッションを保つには、レプリカを持たせてマルチAZ自動フェイルオーバーを有効にする。
+
+**採用パターン**: 分岐(判断フロー)+ 正解構成の内訳。誤答は Memcached だけでなく「単一ノード2つ」「スナップショット」と種類が違うため、Redis 対 Memcached の2列対比では収まらない。1つの判断軸で全選択肢を切る形が全体を1枚に収められる。(候補: 分岐(判断フロー)+ 正解構成の内訳: 1つの問いで振り分け、正解側だけ構成の中身を展開する / 対比(左右2列): Redis のレプリケーショングループと Memcached を並べ、機能の有無を項目で比べる)
+
+```mermaid
+flowchart TD
+    REQ["Redis をセッションストアとして利用<br/>ノード障害でセッションを失うと強制ログアウトになる<br/>エンドポイントの切り替えを<br/>アプリに意識させたくない"]:::req
+    J{"レプリカへ引き継いで<br/>同じエンドポイントで<br/>続けられるか?"}:::judge
+
+    subgraph GROUP["レプリケーショングループ(クラスターモード有効)"]
+        REPL["各シャードにレプリカを配置する"]:::best
+        MAZ["マルチAZの自動フェイルオーバーを有効化する"]:::best
+        EP["プライマリ障害時にレプリカが昇格し<br/>同じクラスター設定エンドポイントで継続できる"]:::best
+        REPL --> MAZ --> EP
+    end
+
+    TWO["単一ノードのクラスターを2つ作りアプリで書き分ける<br/>切り替えをアプリが持つことになる"]:::alt
+    SNAP["スナップショットを1時間ごとに取得する<br/>復旧手段であり無停止の可用性にはならない"]:::alt
+    MEMCD["Memcached に切り替えてノードを増やす<br/>レプリケーションと永続化をサポートしない"]:::alt
+
+    REQ --> J
+    J -->|"できる"| REPL
+    J -.->|"アプリが切替"| TWO
+    J -.->|"復旧のみ"| SNAP
+    J -.->|"複製できない"| MEMCD
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db49.svg`](../../web/diagrams/db49.svg)
+
+**解説**: ElastiCache for Redis はレプリカを持つレプリケーショングループでマルチ AZ 自動フェイルオーバーを構成でき、プライマリ障害時にレプリカが昇格して同じエンドポイント(またはクラスター設定エンドポイント)で継続できます。Memcached はレプリケーションと永続化をサポートしないためセッションの保護に向きません。スナップショットは復旧手段であり無停止の可用性にはなりません。
+
+**確認事項**: 「同じエンドポイント」はクラスターモード有効時のクラスター設定エンドポイントを指すが、解説の括弧書きの粒度に合わせて1ノードにまとめている。
+
+---
+
+## db50 — データベース / level 3
+
+**問題**: ElastiCache のキャッシュヒット率が低下し、DB 負荷が上がっている。調査するとキーの有効期限が切れた直後に同一キーへのリクエストが集中し、DB へ大量の同時クエリが飛んでいた(キャッシュスタンピード)。最も適切な対策はどれか?
+
+**正解**: キャッシュ再生成をロック(単一フライト)で 1 リクエストに限定し、TTL にジッターを加えて期限切れを分散させる
+
+**他の選択肢**: TTL を無期限にしてキャッシュを消えないようにする / ノード数を増やしてキャッシュ容量を拡張する / 書き込み時に常にキャッシュを更新するライトスルー方式に変更し、TTL を短くする
+
+**図解の主メッセージ**: 原因は同一キーの同時再生成なので、再生成をロックで1本化し、TTL にジッターを加えて期限切れを分散させる。
+
+**採用パターン**: 直列(因果の連鎖 → 対処)。4択の判断は「原因に効くか効かないか」で決まるため、原因と対策を線でつないだ形が選択の根拠に直結する。タイムライン案はジッターの効き方は直感的だが、もう一方の対策であるロックを同じ図に置きにくい。(候補: 直列(因果の連鎖 → 対処)+ 誤答を横に並べる対比 / タイムライン: 期限切れの瞬間にリクエストが重なる様子を時間軸で描き、ジッターで山を崩す図にする)
+
+```mermaid
+flowchart TD
+    REQ["キャッシュヒット率が低下しDB負荷が上昇<br/>キーの有効期限が切れた直後に<br/>同一キーへのリクエストが集中している"]:::req
+
+    subgraph CHAIN["起きている因果"]
+        CAUSE["同一キーの再生成が同時に走る"]:::best
+        EFFECT["DBへ大量の同時クエリが飛ぶ<br/>(キャッシュスタンピード)"]:::best
+        CAUSE -->|"DBへ集中"| EFFECT
+    end
+
+    subgraph FIXES["定石の対策"]
+        LOCK["再生成をロック(mutex / single-flight)で<br/>1リクエストに限定して直列化する"]:::best
+        JITTER["TTLにランダムなジッターを加えて<br/>期限切れのタイミングを分散させる"]:::best
+    end
+
+    NOEXP["TTLを無期限にする<br/>古いデータの温存につながる"]:::alt
+    NODES["ノード数を増やして容量を拡張する<br/>容量の問題でありスタンピードには効かない"]:::alt
+    WT["ライトスルーに変更しTTLを短くする"]:::alt
+    NOTE["ライトスルー自体は有効な補完策<br/>ただしTTLの短縮は逆効果"]:::note
+
+    REQ --> CAUSE
+    EFFECT -->|"直列化する"| LOCK
+    EFFECT -->|"期限を分散"| JITTER
+    REQ -.->|"古くなる"| NOEXP
+    REQ -.->|"容量の話"| NODES
+    REQ -.->|"TTL短縮が逆"| WT
+    WT -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db50.svg`](../../web/diagrams/db50.svg)
+
+**解説**: キャッシュスタンピードは同一キーの期限切れに対する同時再生成が原因で、ロック(mutex/single-flight)による再生成の直列化と、TTL にランダムなジッターを加えて期限切れを分散させるのが定石です。TTL 無期限は古いデータの温存につながり、ノード追加は容量の問題であってスタンピードには効きません。ライトスルーは有効な補完策ですが TTL 短縮は逆効果です。
+
+**確認事項**: 正解の選択肢はロックとジッターの2つの施策を含むため、対策側を2ノードに分けて両方とも緑にしている。片方だけを問う問題を追加する場合は図を分ける必要がある。
+
+---
+
+## db51 — データベース / level 3
+
+**問題**: オンプレミスの Oracle 11g(12 TB)を Aurora PostgreSQL へ移行する。ストアドプロシージャや独自データ型が多用されており、移行の工数見積もりと自動変換を行いたい。カットオーバーのダウンタイムは 1 時間以内にしたい。最適な進め方はどれか?
+
+**正解**: AWS SCT(Schema Conversion Tool)でスキーマとコードを評価・変換し、DMS のフルロード+CDC(継続的レプリケーション)で移行してから短時間で切り替える
+
+**他の選択肢**: DMS のみを使い、スキーマも自動生成させてフルロードのみで移行する / Oracle Data Pump で論理エクスポートし、S3 経由で一括インポートする / Database Migration Service のシリアル化を使わず、アプリから二重書き込みを実装する
+
+**図解の主メッセージ**: ストアドや独自型を伴う異種DB移行は SCT で評価・変換し、DMS のフルロード+CDC でラグを詰めてから短時間で切り替える。
+
+**採用パターン**: 直列(手順のタイムライン)。正解が単一の施策ではなく順序のある工程であり、ダウンタイム1時間以内という要件も「どの段階で切り替えるか」で満たされるため、時間の流れをそのまま図にするのが最も読みやすい。判定表案は誤答の落ちる理由は整理できるが、正解の工程の順序が消える。(候補: 直列(手順のタイムライン): SCT → フルロード → CDC → カットオーバー を1本に並べる / 対比(2軸の判定表): 「コード資産を変換できるか」「切替までの差分を追えるか」で4選択肢を判定する)
+
+```mermaid
+flowchart TD
+    REQ["Oracle 11g(12TB)→ Aurora PostgreSQL<br/>ストアドプロシージャ・独自データ型を多用<br/>カットオーバーのダウンタイムは1時間以内"]:::req
+
+    subgraph PLAN["異種DB移行の進め方"]
+        SCT["AWS SCT でスキーマとコードを評価・変換する<br/>変換率と手動対応箇所のレポートが出る"]:::best
+        FULL["DMS のフルロードでデータを移す"]:::best
+        CDC["CDC(継続的レプリケーション)で同期を続ける"]:::best
+        CUT["ラグが十分小さくなった時点で短時間で切り替える"]:::best
+        SCT -->|"器を作る"| FULL
+        FULL -->|"差分を追う"| CDC
+        CDC -->|"ラグ最小で"| CUT
+    end
+
+    NOTE["DMS Schema Conversion も SCT と同等の機能を持つ"]:::note
+    DMSONLY["DMS のみでスキーマも自動生成しフルロードのみ<br/>生成されるのは最低限のテーブル定義で<br/>コード資産の変換は行わない"]:::alt
+    DP["Oracle Data Pump で S3 経由の一括インポート<br/>一括移行のみで継続同期の手立てがない"]:::alt
+    DUAL["アプリから二重書き込みを実装する<br/>移行の仕組みを自前で作ることになる"]:::alt
+
+    REQ --> SCT
+    SCT -.- NOTE
+    REQ -.->|"コード未変換"| DMSONLY
+    REQ -.->|"継続同期なし"| DP
+    REQ -.->|"自前実装"| DUAL
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db51.svg`](../../web/diagrams/db51.svg)
+
+**解説**: 異種 DB 間移行では SCT がスキーマ・ストアドプロシージャ・関数を評価して変換率と手動対応箇所のレポートを出し、変換を自動化します(DMS Schema Conversion も同等機能)。データは DMS のフルロード + CDC で継続同期し、ラグが十分小さくなった時点で短時間のカットオーバーを行います。DMS 単体のスキーマ生成は最低限のテーブル定義のみで、コード資産の変換は行いません。
+
+**確認事項**: Data Pump と二重書き込みについては解説に個別の言及がないため、選択肢そのものの内容(一括移行のみ/自前実装)だけを書き、性能や工数の評価は加えていない。
+
+---
+
+## db52 — データベース / level 3
+
+**問題**: DMS の CDC タスクで、移行元 MySQL の LOB カラムを含むテーブルのレプリケーションが極端に遅い。ターゲットは Aurora MySQL である。パフォーマンスを改善する最も適切な設定はどれか?
+
+**正解**: LOB の扱いを Limited LOB モード(最大サイズを指定)にするか、Inline LOB モードを使い、フルロードでは並列ロードとバッチ適用を有効化する
+
+**他の選択肢**: タスクを削除して毎回フルロードのみを実行する / レプリケーションインスタンスのストレージタイプを magnetic に変更する / ターゲットの外部キー制約を有効にしたまま並列ロードを行う
+
+**図解の主メッセージ**: LOB が遅いのは Full LOB モードが分割転送するためなので、Limited か Inline に切り替え、フルロードは並列とバッチ適用で詰める。
+
+**採用パターン**: 因果 → 対処(分岐)。正解の選択肢は LOB モードの変更とロード設定の変更を同時に含むため、モード比較表では後者が図に入らない。原因を頂点にして効く設定をぶら下げる形なら両方を1枚に置ける。(候補: 因果 → 対処(分岐): 原因を1つ置き、そこから効く設定へ分岐させる / 対比(LOBモード比較表): Full / Limited / Inline の3モードを並べて転送のしかたを比べる)
+
+```mermaid
+flowchart TD
+    REQ["DMS の CDC タスク(MySQL → Aurora MySQL)<br/>LOBカラムを含むテーブルの<br/>レプリケーションが極端に遅い"]:::req
+    CAUSE["Full LOB モードは LOB を分割して転送する<br/>これが遅さの原因"]:::best
+
+    subgraph FIXES["設定で解く"]
+        LIMITED["Limited LOB モード<br/>想定最大サイズを指定して1度に転送する"]:::best
+        INLINE["Inline LOB モード"]:::best
+        BATCH["フルロードの並列度を上げ<br/>バッチ適用(BatchApplyEnabled)を有効化する"]:::best
+    end
+
+    NOTE["ターゲット側の外部キー・セカンダリインデックスを<br/>一時的に無効化するのも効果的"]:::note
+    RELOAD["タスクを削除して毎回フルロードのみを実行する"]:::alt
+    MAG["レプリケーションインスタンスのストレージを<br/>magnetic に変更する"]:::alt
+    FK["外部キー制約を有効にしたまま並列ロードする"]:::alt
+
+    REQ --> CAUSE
+    CAUSE -->|"LOBの設定"| LIMITED
+    CAUSE -->|"LOBの設定"| INLINE
+    CAUSE -->|"ロード設定"| BATCH
+    BATCH -.- NOTE
+    REQ -.->|"改善でない"| RELOAD
+    REQ -.->|"劣化させる"| MAG
+    REQ -.->|"逆の設定"| FK
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db52.svg`](../../web/diagrams/db52.svg)
+
+**解説**: DMS の Full LOB モードは LOB を分割して転送するため非常に遅く、実務では Limited LOB モード(想定最大サイズを指定して 1 度に転送)や Inline LOB モードが推奨されます。加えてフルロードの並列度、バッチ適用(BatchApplyEnabled)、ターゲット側での外部キー・セカンダリインデックスの一時無効化も効果的です。ストレージタイプの劣化や毎回フルロードは改善になりません。
+
+**確認事項**: Limited LOB と Inline LOB は解説では並列の推奨として扱われており、どちらを優先するかの基準は書かれていないため図でも優劣を付けていない。
+
+---
+
+## db53 — データベース / level 3
+
+**問題**: Redshift のクラスターで、頻繁に結合される大きなファクトテーブルとディメンションテーブルのクエリが遅い。データ再配分(DS_BCAST_INNER)が大量に発生している。最も効果的な設計変更はどれか?
+
+**正解**: ファクトテーブルとディメンションテーブルの結合キーを同じ DISTKEY に設定し、小さなディメンションは DISTSTYLE ALL にする。併せて頻用フィルタ列を SORTKEY にする
+
+**他の選択肢**: 全テーブルの DISTSTYLE を EVEN に統一する / ノード数を 2 倍に増やす / すべての列に対して圧縮エンコードを無効化する
+
+**図解の主メッセージ**: DS_BCAST_INNER は分散設計で消す — 結合キーを揃えた KEY 分散と、小さいディメンションの ALL 分散が効く。
+
+**採用パターン**: 因果 → 対処(分岐)。ノード配置図は再配分が消える理屈を直感的に見せられるが、SORTKEY のようにデータ配置と無関係な施策を同じ図に置けない。原因と対策の対応を線で示す形なら3つの施策と誤答をまとめて1枚に収められる。(候補: 因果 → 対処(分岐): 再配分という原因を頂点に、効く設計変更をぶら下げる / 包含(ノード配置図): 複数ノードにまたがるテーブルの置かれ方を描き、KEY分散とALL分散で配置が変わる様子を見せる)
+
+```mermaid
+flowchart TD
+    REQ["ファクトテーブルとディメンションテーブルの結合が遅い<br/>DS_BCAST_INNER(データ再配分)が大量に発生している"]:::req
+    CAUSE["結合するデータがノードをまたぐため<br/>再配分・ブロードキャストが起きる"]:::best
+
+    subgraph FIXES["分散とソートの設計で解く"]
+        DK["結合キーを同じ DISTKEY にする(KEY分散)<br/>同一ノード内で結合でき再配分が不要になる"]:::best
+        ALLD["小さなディメンションは DISTSTYLE ALL<br/>全ノードに複製されブロードキャストが不要になる"]:::best
+        SK["頻用フィルタ列を SORTKEY にする<br/>ゾーンマップでブロックをスキップできる"]:::best
+    end
+
+    EVEN["全テーブルの DISTSTYLE を EVEN に統一する<br/>再配分を招く"]:::alt
+    NODES["ノード数を2倍に増やす<br/>コスト増でも根本改善にならない"]:::alt
+    NOENC["すべての列の圧縮エンコードを無効化する"]:::alt
+
+    REQ --> CAUSE
+    CAUSE -->|"同一ノードで"| DK
+    CAUSE -->|"全ノード複製"| ALLD
+    CAUSE -->|"読む量を削る"| SK
+    REQ -.->|"再配分が増"| EVEN
+    REQ -.->|"根本でない"| NODES
+    REQ -.->|"原因が別"| NOENC
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db53.svg`](../../web/diagrams/db53.svg)
+
+**解説**: Redshift の分散スタイルは結合性能を大きく左右し、結合キーを揃えた KEY 分散にすると同一ノード内で結合でき再配分が不要になります。小さなディメンションは ALL 分散で全ノードに複製するとブロードキャストが不要になります。SORTKEY はゾーンマップによるブロックスキップに効きます。EVEN 分散は再配分を招き、ノード追加はコスト増でも根本改善になりません。
+
+**確認事項**: 圧縮エンコードの無効化について解説は直接評価していないため、再配分という原因に効かないという点だけを書いている。
+
+---
+
+## db54 — データベース / level 3
+
+**問題**: Redshift のデータウェアハウスに、S3 上の 5 年分の履歴データ(数 PB)も結合して分析したい。すべてをクラスターへロードするとストレージコストが見合わない。最適な構成はどれか?
+
+**正解**: Redshift Spectrum で S3 上の外部テーブル(Parquet・パーティション化)を定義し、クラスター内のテーブルと結合してクエリする
+
+**他の選択肢**: すべての履歴データを COPY でクラスターへロードし、ノードを増設する / Athena で S3 を分析し、結果を手動で Redshift に取り込む / S3 のデータを Aurora へロードして federated query で結合する
+
+**図解の主メッセージ**: 数PBの履歴はロードせず、Spectrum の外部テーブルとしてクラスター内のテーブルと同じクエリで結合する。
+
+**採用パターン**: 合流(構成図)。この問題の要は「ロードせずに結合できる」という構成そのものなので、2つのデータの置き場所が1つのクエリに合流する絵が主メッセージを直接示す。判断フロー案は誤答の切り分けには向くが、Spectrum の利点である結合の一体感が描けない。(候補: 合流(構成図): S3 の外部テーブルとクラスター内テーブルが1つのクエリに合流する形を描く / 分岐(判断フロー): 「全量をロードするか / 置いたままクエリするか」の問いで4選択肢を振り分ける)
+
+```mermaid
+flowchart TD
+    REQ["S3 に5年分の履歴データ(数PB)<br/>DWH のデータと結合して分析したい<br/>全量をクラスターへロードすると<br/>ストレージコストが見合わない"]:::req
+
+    subgraph SPEC["Redshift Spectrum(S3 をそのままクエリする)"]
+        S3["S3 の履歴データ<br/>Parquet・圧縮・パーティション化"]:::svc
+        EXT["外部テーブルとして定義する"]:::best
+        S3 --> EXT
+    end
+
+    LOCAL["クラスター内のローカルテーブル"]:::svc
+    JOIN["1つのクエリで結合して分析する"]:::best
+    NOTE["Spectrum はスキャンした量に対する課金<br/>列指向形式・圧縮・パーティション化で<br/>スキャン量を抑える"]:::note
+
+    LOADALL["全履歴を COPY でロードしノードを増設する<br/>ストレージ費用が膨らむ"]:::alt
+    ATHENA["Athena で分析し結果を手動で取り込む<br/>結合が手作業になる"]:::alt
+    AURORA["S3 のデータを Aurora へロードして federated query<br/>結局データを移す前提になる"]:::alt
+
+    REQ --> S3
+    EXT -->|"外部表として"| JOIN
+    LOCAL -->|"ローカル表"| JOIN
+    JOIN -.- NOTE
+    REQ -.->|"費用が膨らむ"| LOADALL
+    REQ -.->|"手作業になる"| ATHENA
+    REQ -.->|"移す前提"| AURORA
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db54.svg`](../../web/diagrams/db54.svg)
+
+**解説**: Redshift Spectrum は S3 上のデータを外部テーブルとして直接クエリでき、クラスター内のローカルテーブルと結合できます。スキャン量課金のため、Parquet などの列指向形式・圧縮・パーティション化でコストを抑えます。全量ロードはストレージ費用が膨らみ、Athena で別々に分析する方式は結合が手作業になります。
+
+**確認事項**: Aurora への federated query 案は解説で個別に評価されていないため、S3 からデータを移す前提になる点だけを書き、性能面の評価は加えていない。
+
+---
+
+## db55 — データベース / level 3
+
+**問題**: Redshift クラスターで、特定チームのアドホッククエリが集中する時間帯に、経営レポートのバッチクエリが待たされて SLA を割る。クラスターを分けずに優先度を制御したい。最適な機能はどれか?
+
+**正解**: ワークロード管理(WLM)で優先度付きのキューを定義し、自動 WLM とクエリモニタリングルール(QMR)で暴走クエリを制御する
+
+**他の選択肢**: 同時実行スケーリングを無効化してリソースを固定する / 各チーム用に別クラスターを作成し、データを複製する / VACUUM と ANALYZE を毎時実行する
+
+**図解の主メッセージ**: 同じクラスターのまま SLA を守るには、WLM のキューで優先度を割り当て、QMR で暴走クエリを抑える。
+
+**採用パターン**: 合流→分配(構成図)。「クラスターを分けずに」という条件は問題文で既に確定しているため、判断フローにすると分岐が形だけになる。誰のクエリがどのキューに入るかを描くほうが WLM の効き方を直接示せる。(候補: 合流→分配(構成図): 2種類のクエリが WLM に入り、優先度の違うキューへ振り分けられる形を描く / 分岐(判断フロー): 「クラスターを分けるか / 同一クラスターで優先度を付けるか」の問いで振り分ける)
+
+```mermaid
+flowchart TD
+    REQ["アドホッククエリと経営レポートが同じクラスターに同居<br/>アドホック集中時にバッチが待たされ SLA を割る<br/>クラスターは分けずに優先度を制御したい"]:::req
+
+    ADHOC["特定チームのアドホッククエリ"]:::svc
+    BATCH["経営レポートのバッチクエリ(SLAあり)"]:::svc
+
+    subgraph WLMG["ワークロード管理(WLM)"]
+        AUTO["自動WLM<br/>メモリと同時実行数を動的に調整する"]:::best
+        QH["高優先度キュー<br/>経営レポート"]:::best
+        QL["低優先度キュー<br/>アドホック"]:::best
+        QMR["クエリモニタリングルール(QMR)<br/>実行時間がN秒を超えたら<br/>中断/低優先度へ移動"]:::best
+        QH -.- QMR
+        QL -.- QMR
+    end
+
+    NOTE["同時実行スケーリングはピーク時の<br/>追加キャパシティとして有効<br/>無効化はむしろ逆効果"]:::note
+    OFFCS["同時実行スケーリングを無効化して<br/>リソースを固定する"]:::alt
+    SPLIT["各チーム用に別クラスターを作り<br/>データを複製する<br/>クラスターを分けない要件に反する"]:::alt
+    VAC["VACUUM と ANALYZE を毎時実行する<br/>保守作業であって優先度制御ではない"]:::alt
+
+    REQ --> ADHOC
+    REQ --> BATCH
+    ADHOC --> AUTO
+    BATCH --> AUTO
+    AUTO -->|"優先度で守る"| QH
+    AUTO -->|"優先度を下げ"| QL
+    REQ -.->|"逆効果"| OFFCS
+    OFFCS -.- NOTE
+    REQ -.->|"分けたくない"| SPLIT
+    REQ -.->|"別の作業"| VAC
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db55.svg`](../../web/diagrams/db55.svg)
+
+**解説**: Redshift の WLM はユーザーグループやクエリグループごとにキューと優先度を割り当て、自動 WLM はメモリと同時実行数を動的に調整します。QMR で「実行時間が N 秒を超えたら中断/低優先度へ移動」といったルールを設定して暴走クエリを抑制できます。同時実行スケーリングはむしろピーク時の追加キャパシティとして有効で、無効化は逆効果です。
+
+**確認事項**: VACUUM / ANALYZE は解説で評価されていないため、優先度制御ではないという位置づけだけを線のラベルで示している。
+
+---
+
+## db56 — データベース / level 3
+
+**問題**: 分析基盤の運用担当が 1 名しかおらず、Redshift のクラスター管理(ノードサイズ選定、WLM チューニング、スケーリング)に手が回らない。利用は業務時間帯に偏り、夜間はほぼゼロである。最適な選択肢はどれか?
+
+**正解**: Amazon Redshift Serverless を採用し、RPU の上限を設定して使用量ベースで課金させる
+
+**他の選択肢**: 最小構成の RA3 クラスターを常時稼働させ、必要時に手動でリサイズする / DC2 ノードのクラスターを毎晩停止し、朝に再開する運用を組む / Athena に完全移行し、Redshift の利用をやめる
+
+**図解の主メッセージ**: 運用要員が足りず利用が業務時間帯に偏るなら、容量管理を自動に任せて使った分だけ払う Serverless を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。誤答のうち2つは運用のしかたが違うだけでどちらも人手の負荷が残るという同じ理由で落ち、残る1つは別サービスへの移行なので、2列対比には収まらない。1つの問いで4選択肢を切る形が最も単純になる。(候補: 分岐(判断フロー): 「容量管理を人手で続けるか」の1問で正解と誤答を振り分ける / 対比(左右2列): 常時稼働クラスターと Serverless を並べ、運用作業とコストの持ち方を比べる)
+
+```mermaid
+flowchart TD
+    REQ["分析基盤の運用担当は1名<br/>ノードサイズ選定・WLMチューニング・スケーリングに<br/>手が回らない<br/>利用は業務時間帯に偏り夜間はほぼゼロ"]:::req
+    J{"クラスターの容量管理を<br/>人手で続けるか?"}:::judge
+    SL["Amazon Redshift Serverless<br/>クラスター管理なしにワークロードに応じて<br/>キャパシティ(RPU)を自動調整する"]:::best
+    PAY["使用した分だけ課金される<br/>最大RPUの設定と使用量制御でコスト上限も管理できる"]:::best
+    RA3["最小構成のRA3を常時稼働させ必要時に手動リサイズ<br/>担当者の運用負荷が残る"]:::alt
+    DC2["DC2クラスターを毎晩停止し朝に再開する運用<br/>担当者の運用負荷が残る"]:::alt
+    ATHENA["Athena に完全移行し Redshift の利用をやめる"]:::alt
+    NOTE["Athena への全面移行は<br/>既存のDWHワークロード特性次第で<br/>性能・機能面の制約が出る"]:::note
+
+    REQ --> J
+    J -->|"自動に任せる"| SL
+    SL --> PAY
+    J -.->|"負荷が残る"| RA3
+    J -.->|"負荷が残る"| DC2
+    J -.->|"制約が出る"| ATHENA
+    ATHENA -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db56.svg`](../../web/diagrams/db56.svg)
+
+**解説**: Redshift Serverless はクラスター管理なしにワークロードに応じて自動でキャパシティ(RPU)を調整し、使用した分だけ課金されるため、利用が偏り運用要員が限られる場合に適します。最大 RPU の設定と使用量制御でコスト上限も管理できます。手動リサイズや停止・再開の運用は担当者の負荷が残り、Athena への全面移行は既存の DWH ワークロード特性次第で性能・機能面の制約が出ます。
+
+**確認事項**: 「利用が夜間ほぼゼロ」という条件はコスト面(使った分だけ課金)の根拠として正解側に描いたが、DC2 の停止・再開案も同じ条件に応えている点は図では扱わず、運用負荷の観点だけで切っている。

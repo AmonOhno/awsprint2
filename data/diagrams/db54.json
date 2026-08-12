@@ -1,0 +1,145 @@
+{
+  "question_id": "db54",
+  "purpose": "PB級の履歴を「ロードせずに結合する」という構成上の選択を、S3 とクラスターの合流として示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Redshift で分析するにはクラスターへロードが必要と考えがちな人。",
+  "message": "数PBの履歴はロードせず、Spectrum の外部テーブルとしてクラスター内のテーブルと同じクエリで結合する。",
+  "source_summary": "Redshift Spectrum は S3 上のデータを外部テーブルとして直接クエリでき、クラスター内のローカルテーブルと結合できる。スキャン量課金のため、Parquet などの列指向形式・圧縮・パーティション化でコストを抑える。全量ロードはストレージ費用が膨らみ、Athena で別々に分析する方式は結合が手作業になる。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "S3 に5年分の履歴データ(数PB)。DWH と結合したいが全量ロードはストレージコストが見合わない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "S3",
+      "label": "S3 の履歴データ(Parquet・圧縮・パーティション化)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "EXT",
+      "label": "Redshift Spectrum の外部テーブルとして定義する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "LOCAL",
+      "label": "クラスター内のローカルテーブル",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "JOIN",
+      "label": "1つのクエリで結合して分析する",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "Spectrum はスキャン量課金。列指向形式・圧縮・パーティション化でスキャン量を抑える",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "LOADALL",
+      "label": "全履歴を COPY でクラスターへロードしノードを増設する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ATHENA",
+      "label": "Athena で S3 を分析し結果を手動で Redshift に取り込む",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "AURORA",
+      "label": "S3 のデータを Aurora へロードして federated query で結合する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "S3",
+      "verb": "ロードせずに置いたまま使う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "S3",
+      "to": "EXT",
+      "verb": "外部テーブルにする",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "EXT",
+      "to": "JOIN",
+      "verb": "結合できる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "LOCAL",
+      "to": "JOIN",
+      "verb": "結合できる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "JOIN",
+      "to": "NOTE",
+      "verb": "課金とコスト対策を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "REQ",
+      "to": "LOADALL",
+      "verb": "ストレージ費用が膨らむ",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "ATHENA",
+      "verb": "結合が手作業になる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "AURORA",
+      "verb": "結局データを移す前提になる",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "label": "Redshift Spectrum(S3 をそのままクエリする)",
+      "element_ids": [
+        "S3",
+        "EXT"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "合流(構成図): S3 の外部テーブルとクラスター内テーブルが1つのクエリに合流する形を描く",
+    "分岐(判断フロー): 「全量をロードするか / 置いたままクエリするか」の問いで4選択肢を振り分ける"
+  ],
+  "selected_pattern": "合流(構成図)。この問題の要は「ロードせずに結合できる」という構成そのものなので、2つのデータの置き場所が1つのクエリに合流する絵が主メッセージを直接示す。判断フロー案は誤答の切り分けには向くが、Spectrum の利点である結合の一体感が描けない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Aurora への federated query 案は解説で個別に評価されていないため、S3 からデータを移す前提になる点だけを書き、性能面の評価は加えていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"S3 に5年分の履歴データ(数PB)<br/>DWH のデータと結合して分析したい<br/>全量をクラスターへロードすると<br/>ストレージコストが見合わない\"]:::req\n\n    subgraph SPEC[\"Redshift Spectrum(S3 をそのままクエリする)\"]\n        S3[\"S3 の履歴データ<br/>Parquet・圧縮・パーティション化\"]:::svc\n        EXT[\"外部テーブルとして定義する\"]:::best\n        S3 --> EXT\n    end\n\n    LOCAL[\"クラスター内のローカルテーブル\"]:::svc\n    JOIN[\"1つのクエリで結合して分析する\"]:::best\n    NOTE[\"Spectrum はスキャンした量に対する課金<br/>列指向形式・圧縮・パーティション化で<br/>スキャン量を抑える\"]:::note\n\n    LOADALL[\"全履歴を COPY でロードしノードを増設する<br/>ストレージ費用が膨らむ\"]:::alt\n    ATHENA[\"Athena で分析し結果を手動で取り込む<br/>結合が手作業になる\"]:::alt\n    AURORA[\"S3 のデータを Aurora へロードして federated query<br/>結局データを移す前提になる\"]:::alt\n\n    REQ --> S3\n    EXT -->|\"外部表として\"| JOIN\n    LOCAL -->|\"ローカル表\"| JOIN\n    JOIN -.- NOTE\n    REQ -.->|\"費用が膨らむ\"| LOADALL\n    REQ -.->|\"手作業になる\"| ATHENA\n    REQ -.->|\"移す前提\"| AURORA"
+}

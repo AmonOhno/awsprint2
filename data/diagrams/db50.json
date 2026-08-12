@@ -1,0 +1,152 @@
+{
+  "question_id": "db50",
+  "purpose": "キャッシュスタンピードの原因(同一キーの同時再生成)と、それに直接効く2つの対策の対応を示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、キャッシュの不調をすべて「容量不足」や「TTL の設定ミス」に還元しがちな人。",
+  "message": "原因は同一キーの同時再生成なので、再生成をロックで1本化し、TTL にジッターを加えて期限切れを分散させる。",
+  "source_summary": "キャッシュスタンピードは同一キーの期限切れに対する同時再生成が原因で、ロック(mutex/single-flight)による再生成の直列化と、TTL にランダムなジッターを加えて期限切れを分散させるのが定石。TTL 無期限は古いデータの温存につながり、ノード追加は容量の問題であってスタンピードには効かない。ライトスルーは有効な補完策だが TTL 短縮は逆効果。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "キャッシュヒット率が低下しDB負荷が上昇。期限切れ直後に同一キーへのリクエストが集中している",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "CAUSE",
+      "label": "同一キーの再生成が同時に走る",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "EFFECT",
+      "label": "DBへ大量の同時クエリが飛ぶ(キャッシュスタンピード)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "LOCK",
+      "label": "再生成をロック(mutex / single-flight)で1リクエストに限定する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "JITTER",
+      "label": "TTL にランダムなジッターを加えて期限切れを分散させる",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NOEXP",
+      "label": "TTL を無期限にしてキャッシュを消えないようにする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NODES",
+      "label": "ノード数を増やしてキャッシュ容量を拡張する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "WT",
+      "label": "ライトスルー方式に変更し TTL を短くする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "ライトスルー自体は有効な補完策だが TTL の短縮は逆効果",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "CAUSE",
+      "verb": "原因をたどる",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "CAUSE",
+      "to": "EFFECT",
+      "verb": "DBへ集中する",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "EFFECT",
+      "to": "LOCK",
+      "verb": "再生成を直列化する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "EFFECT",
+      "to": "JITTER",
+      "verb": "期限切れを分散する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "REQ",
+      "to": "NOEXP",
+      "verb": "古いデータの温存につながる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "NODES",
+      "verb": "容量の問題であって効かない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "WT",
+      "verb": "TTL 短縮は逆効果",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "WT",
+      "to": "NOTE",
+      "verb": "部分的に正しい点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "起きている因果",
+      "element_ids": [
+        "CAUSE",
+        "EFFECT"
+      ]
+    },
+    {
+      "label": "定石の対策",
+      "element_ids": [
+        "LOCK",
+        "JITTER"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "直列(因果の連鎖 → 対処)+ 誤答を横に並べる対比",
+    "タイムライン: 期限切れの瞬間にリクエストが重なる様子を時間軸で描き、ジッターで山を崩す図にする"
+  ],
+  "selected_pattern": "直列(因果の連鎖 → 対処)。4択の判断は「原因に効くか効かないか」で決まるため、原因と対策を線でつないだ形が選択の根拠に直結する。タイムライン案はジッターの効き方は直感的だが、もう一方の対策であるロックを同じ図に置きにくい。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "正解の選択肢はロックとジッターの2つの施策を含むため、対策側を2ノードに分けて両方とも緑にしている。片方だけを問う問題を追加する場合は図を分ける必要がある。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"キャッシュヒット率が低下しDB負荷が上昇<br/>キーの有効期限が切れた直後に<br/>同一キーへのリクエストが集中している\"]:::req\n\n    subgraph CHAIN[\"起きている因果\"]\n        CAUSE[\"同一キーの再生成が同時に走る\"]:::best\n        EFFECT[\"DBへ大量の同時クエリが飛ぶ<br/>(キャッシュスタンピード)\"]:::best\n        CAUSE -->|\"DBへ集中\"| EFFECT\n    end\n\n    subgraph FIXES[\"定石の対策\"]\n        LOCK[\"再生成をロック(mutex / single-flight)で<br/>1リクエストに限定して直列化する\"]:::best\n        JITTER[\"TTLにランダムなジッターを加えて<br/>期限切れのタイミングを分散させる\"]:::best\n    end\n\n    NOEXP[\"TTLを無期限にする<br/>古いデータの温存につながる\"]:::alt\n    NODES[\"ノード数を増やして容量を拡張する<br/>容量の問題でありスタンピードには効かない\"]:::alt\n    WT[\"ライトスルーに変更しTTLを短くする\"]:::alt\n    NOTE[\"ライトスルー自体は有効な補完策<br/>ただしTTLの短縮は逆効果\"]:::note\n\n    REQ --> CAUSE\n    EFFECT -->|\"直列化する\"| LOCK\n    EFFECT -->|\"期限を分散\"| JITTER\n    REQ -.->|\"古くなる\"| NOEXP\n    REQ -.->|\"容量の話\"| NODES\n    REQ -.->|\"TTL短縮が逆\"| WT\n    WT -.- NOTE"
+}
