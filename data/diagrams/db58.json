@@ -1,0 +1,124 @@
+{
+  "question_id": "db58",
+  "purpose": "時系列データベースの選択が「階層化と時系列関数を DB 自身が持つか」の1点で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、時系列データを DynamoDB や Redshift でも扱えると考えている人。",
+  "message": "直近と過去でアクセス頻度が分かれ、補間や移動平均を SQL で使いたいなら、階層化と時系列関数を内蔵する Timestream を選ぶ。",
+  "source_summary": "Timestream は時系列に特化したサーバーレス DB で、直近データをメモリストア、古いデータをマグネティックストアへ自動階層化し、補間・スムージング・移動平均などの時系列関数を SQL で提供する。DynamoDB は時系列関数を持たず集計に不向き、RDS はこの規模の取り込みに厳しく、Redshift は分析用途では使えるが高頻度の取り込みと自動階層化の面で Timestream が適する。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "医療機器から1日100億件の時系列データ。直近7日は高頻度・それ以前は低頻度に集計。コストを抑えつつ時系列関数を SQL で使いたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "階層化と時系列関数を DB 自身が持つか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "TS",
+      "label": "Amazon Timestream(時系列に特化したサーバーレス DB)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "TIER",
+      "label": "直近はメモリストア、古いデータはマグネティックストアへ自動階層化",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "FUNC",
+      "label": "補間・スムージング・移動平均などの時系列関数を SQL で提供",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "DDB",
+      "label": "DynamoDB(パーティションキー=デバイスID、ソートキー=タイムスタンプ)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "RDS",
+      "label": "RDS for PostgreSQL(パーティションテーブル)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "RS",
+      "label": "Redshift(日付ソートキー)",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "TS",
+      "verb": "持つ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "TS",
+      "to": "TIER",
+      "verb": "コスト面の帰結",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "TS",
+      "to": "FUNC",
+      "verb": "クエリ面の帰結",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "J",
+      "to": "DDB",
+      "verb": "時系列関数を持たない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "RDS",
+      "verb": "この規模の取り込みに厳しい",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "RS",
+      "verb": "高頻度取り込みと自動階層化で劣る",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「階層化と時系列関数を DB 自身が持つか」の1問で4選択肢を振り分ける",
+    "マトリクス: 取り込み規模 × 時系列関数の有無の2軸に4サービスを配置する"
+  ],
+  "selected_pattern": "分岐(判断フロー)。誤答が落ちる理由は3つとも異なる(関数がない/規模に耐えない/階層化がない)ため、2軸マトリクスでは同じマスに寄ってしまう。1つの問いに対して各サービスが欠く点を並べる形が最も読み取りやすい。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Redshift は「分析用途では使える」と解説にあるが、図では非採用の枝としてのみ扱った。使える範囲まで描くと判断軸がぼやけるため省いている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"医療機器から1日100億件の時系列データ<br/>直近7日は高頻度・それ以前は低頻度に集計<br/>コストを抑えつつ時系列関数(補間・移動平均)を SQL で使いたい\"]:::req\n    J{\"階層化と時系列関数を<br/>DB 自身が持つか?\"}:::judge\n    TS[\"Amazon Timestream<br/>時系列に特化したサーバーレス DB\"]:::best\n    TIER[\"直近データはメモリストア<br/>古いデータはマグネティックストアへ自動階層化\"]:::best\n    FUNC[\"補間・スムージング・移動平均などの<br/>時系列関数を SQL で提供する\"]:::best\n    DDB[\"DynamoDB(PK=デバイスID / SK=タイムスタンプ)<br/>時系列関数を持たず集計に不向き\"]:::alt\n    RDS[\"RDS for PostgreSQL(パーティションテーブル)<br/>この規模の取り込みには厳しい\"]:::alt\n    RS[\"Redshift(日付ソートキー)<br/>高頻度の取り込みと自動階層化の面で劣る\"]:::alt\n\n    REQ --> J\n    J -->|\"持つ\"| TS\n    TS --> TIER\n    TS --> FUNC\n    J -.->|\"関数がない\"| DDB\n    J -.->|\"規模に厳しい\"| RDS\n    J -.->|\"階層化がない\"| RS"
+}

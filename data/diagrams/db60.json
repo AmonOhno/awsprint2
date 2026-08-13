@@ -1,0 +1,124 @@
+{
+  "question_id": "db60",
+  "purpose": "台帳系サービスの選択が「複数の参加者による分散合意が必要か」の1点で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、QLDB と Managed Blockchain の使い分けが曖昧な人。",
+  "message": "改ざん不能な変更履歴が要るが分散合意は不要なら、単一所有者向けの台帳データベースである QLDB を選ぶ。",
+  "source_summary": "QLDB は追記専用のジャーナルとハッシュチェーン(ダイジェスト)により、変更履歴の完全性を暗号学的に検証できる台帳データベースで、単一の信頼できる所有者がいるケースに適する。複数組織が分散合意を必要とする場合は Managed Blockchain を選ぶ。監査ログの保護やストリームのアーカイブは、DB 内の変更履歴そのものの検証可能性を提供しない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "すべての変更履歴が暗号学的に検証可能で改ざんできない形で必要。台帳としての一貫性のみで分散合意は不要",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "複数の参加者による分散合意が必要か?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "QLDB",
+      "label": "Amazon QLDB(台帳データベース)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "JOURNAL",
+      "label": "追記専用のジャーナルとハッシュチェーン(ダイジェスト)で完全性を検証できる",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "MB",
+      "label": "Managed Blockchain(Hyperledger Fabric)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "LOG",
+      "label": "Aurora の監査ログを S3 のオブジェクトロックで保護する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "STR",
+      "label": "DynamoDB のストリームを S3 にアーカイブする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "ログの保護やアーカイブは DB 内の変更履歴そのものの検証可能性を提供しない",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "QLDB",
+      "verb": "不要(単一の信頼できる所有者)",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "QLDB",
+      "to": "JOURNAL",
+      "verb": "検証可能性の根拠",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "J",
+      "to": "MB",
+      "verb": "必要な場合に選ぶ",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "LOG",
+      "verb": "検証可能性を与えない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "STR",
+      "verb": "検証可能性を与えない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "LOG",
+      "to": "NOTE",
+      "verb": "誤読しやすい点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「分散合意が必要か」の1問で QLDB と Managed Blockchain、および外付けの保護策を切り分ける",
+    "包含: 「改ざん検知の手段」という枠の中に4案を並べ、DB 内部か外付けかで内訳を示す"
+  ],
+  "selected_pattern": "分岐(判断フロー)。QLDB と Managed Blockchain は同じ問い(分散合意の要否)で表裏になり、残る2案は「DB 内の履歴そのものを検証できない」で落ちる。包含図では正解を決める問いが図に現れないため、分岐のほうが判断軸を直接示せる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Managed Blockchain は「分散合意が必要なら正解になりうる」選択肢だが、共通スタイルには条件付き正解のクラスがないため alt(グレー)で描き、条件をエッジラベルに置いた。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"監査要件: すべての変更履歴が暗号学的に検証可能で<br/>改ざんできない形で保持される必要がある<br/>台帳としての一貫性のみでよく分散合意は不要\"]:::req\n    J{\"複数の参加者による<br/>分散合意が必要か?\"}:::judge\n    QLDB[\"Amazon QLDB<br/>単一の信頼できる所有者向けの台帳データベース\"]:::best\n    JOURNAL[\"追記専用のジャーナルと<br/>ハッシュチェーン(ダイジェスト)により<br/>変更履歴の完全性を暗号学的に検証できる\"]:::best\n    MB[\"Managed Blockchain(Hyperledger Fabric)<br/>複数組織が分散合意を必要とする場合に選ぶ\"]:::alt\n    LOG[\"Aurora の監査ログを S3 のオブジェクトロックで保護する\"]:::alt\n    STR[\"DynamoDB のストリームを S3 にアーカイブする\"]:::alt\n    NOTE[\"ログの保護やアーカイブは<br/>DB 内の変更履歴そのものの<br/>検証可能性を提供しない\"]:::note\n\n    REQ --> J\n    J -->|\"不要\"| QLDB\n    QLDB --> JOURNAL\n    J -.->|\"必要な場合\"| MB\n    J -.->|\"要件外\"| LOG\n    J -.->|\"要件外\"| STR\n    LOG -.- NOTE"
+}

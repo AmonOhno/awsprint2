@@ -1,0 +1,137 @@
+{
+  "question_id": "db63",
+  "purpose": "Aurora Global Database の RPO/RTO と昇格操作の要否が「レプリケーションが非同期であること」から導かれることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、クロスリージョンのレプリカを同期レプリケーションと思い込んでいる人。",
+  "message": "レプリケーションが非同期だからこそ、RPO は 0 ではなく約1秒で、書き込み再開には昇格の操作が要る。",
+  "source_summary": "Aurora Global Database は専用インフラで非同期レプリケーションを行い、一般に1秒未満のラグ(RPO 1 秒程度)、昇格後の RTO は 1 分未満とされる。計画的な切り替えにはマネージドプランドフェイルオーバー(データ損失なし)、非計画時にはセカンダリのデタッチ&プロモートを使う。同期レプリケーションではないため RPO 0 は保証されない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "東京(プライマリ)と大阪(セカンダリ)の Aurora Global Database。東京リージョン全体の障害時に大阪で書き込みを再開したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "レプリケーションは同期か?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ASYNC",
+      "label": "専用インフラによる非同期レプリケーション(一般に1秒未満のラグ)",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "RPO",
+      "label": "RPO は 1 秒程度、昇格後の RTO は 1 分未満",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "PLAN",
+      "label": "計画的な切り替えはマネージドプランドフェイルオーバー(データ損失なし)",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "UNPLAN",
+      "label": "非計画時はセカンダリのデタッチ&プロモート",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "SYNC",
+      "label": "同期レプリケーションで RPO は常に 0、昇格操作も不要に自動で書き込み可能になる",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOPROMO",
+      "label": "セカンダリは昇格できずスナップショットからの復元が必要",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SLOW",
+      "label": "フェイルオーバーには最低1時間かかり、その間は読み取りもできない",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "ASYNC",
+      "verb": "同期ではない",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ASYNC",
+      "to": "RPO",
+      "verb": "指標としての帰結",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "RPO",
+      "to": "PLAN",
+      "verb": "計画的な切り替え手順",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "RPO",
+      "to": "UNPLAN",
+      "verb": "非計画時の切り替え手順",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "J",
+      "to": "SYNC",
+      "verb": "同期ではないため RPO 0 は保証されない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "NOPROMO",
+      "verb": "昇格できるので誤り",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "SLOW",
+      "verb": "RTO は 1 分未満なので誤り",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「レプリケーションは同期か」の1問から RPO/RTO と昇格手順を導く",
+    "タイムライン: 障害発生 → 昇格 → 書き込み再開の時間軸に RPO と RTO の区間を置く"
+  ],
+  "selected_pattern": "分岐(判断フロー)。誤答3つは RPO・昇格の要否・RTO と別々の箇所を誤っているが、すべて「非同期である」という1点から正誤が決まる。タイムラインは RPO と RTO の位置関係を描ける反面、誤答をどこにも置けない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "マネージドプランドフェイルオーバーは計画時の手順なので、リージョン全体障害という設問の場面ではデタッチ&プロモート側が実際に使われる。図では解説の記述どおり両方を並べており、どちらが今回の場面かは示していない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"東京(プライマリ)と大阪(セカンダリ)の<br/>Aurora Global Database<br/>東京リージョン全体の障害時に大阪で書き込みを再開したい\"]:::req\n    J{\"レプリケーションは<br/>同期か?\"}:::judge\n    ASYNC[\"専用インフラで非同期レプリケーションを行う<br/>一般に1秒未満のラグ\"]:::best\n    RPO[\"RPO は 1 秒程度<br/>昇格後の RTO は 1 分未満\"]:::best\n    PLAN[\"計画的な切り替え:<br/>マネージドプランドフェイルオーバー<br/>(データ損失なし)\"]:::best\n    UNPLAN[\"非計画時:<br/>セカンダリのデタッチ&プロモート\"]:::best\n    SYNC[\"同期のため RPO は常に 0 で<br/>昇格操作も不要に自動で書き込み可能になる\"]:::alt\n    NOPROMO[\"セカンダリは昇格できず<br/>スナップショットからの復元が必要\"]:::alt\n    SLOW[\"フェイルオーバーに最低1時間かかり<br/>その間は読み取りもできない\"]:::alt\n\n    REQ --> J\n    J -->|\"非同期\"| ASYNC\n    ASYNC --> RPO\n    RPO --> PLAN\n    RPO --> UNPLAN\n    J -.->|\"RPO0は不可\"| SYNC\n    J -.->|\"昇格できる\"| NOPROMO\n    J -.->|\"RTOは1分未満\"| SLOW"
+}

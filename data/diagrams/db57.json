@@ -1,0 +1,137 @@
+{
+  "question_id": "db57",
+  "purpose": "Athena のチューニングが「スキャンするデータ量を減らせるか」の1点で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Athena の課金体系とファイル設計の関係を結びつけられていない人。",
+  "message": "Athena はスキャンしたデータ量で課金されるので、列指向化と日付パーティション化で読む量そのものを減らす。",
+  "source_summary": "Athena はスキャンしたデータ量で課金されるため、列指向の Parquet/ORC に変換して必要列のみ読むこと、日付でパーティション化して不要なパーティションを読まないことが最も効果的。パーティション射影を使えばメタデータの肥大化や MSCK REPAIR の運用も不要になる。小さすぎるファイルは並列度とオーバーヘッドの面で性能を悪化させ、ストレージクラス変更はスキャン量に影響しない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "Athena のクエリが遅くスキャン量課金も高い。S3 に日次出力の JSON(gzip)が1日200GB、条件は常に日付範囲と数列のみ",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "スキャンするデータ量を減らせるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "COL",
+      "label": "Parquet(列指向)へ変換して必要な列だけ読む",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "PART",
+      "label": "日付でパーティション化して不要なパーティションを読まない",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "PROJ",
+      "label": "パーティション射影でメタデータの肥大化と MSCK REPAIR の運用が不要になる",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "REUSE",
+      "label": "ワークグループでクエリ結果の再利用を有効にするのみ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "IA",
+      "label": "ストレージクラスを Standard-IA に変更する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SMALL",
+      "label": "1ファイルあたり 1MB 程度に細分化する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "Athena はスキャンしたデータ量で課金される",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "COL",
+      "verb": "列方向に削る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "J",
+      "to": "PART",
+      "verb": "日付方向に削る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "PART",
+      "to": "PROJ",
+      "verb": "運用面の帰結",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "J",
+      "to": "REUSE",
+      "verb": "読む量を減らす手ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "IA",
+      "verb": "スキャン量に影響しない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "SMALL",
+      "verb": "並列度とオーバーヘッドで悪化する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "NOTE",
+      "verb": "判断軸の根拠を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「スキャンするデータ量を減らせるか」の1問で正解と誤答を振り分ける",
+    "レイヤー: S3 のファイル形式・配置・ストレージクラスを層に分け、どの層に効く施策かを示す"
+  ],
+  "selected_pattern": "分岐(判断フロー)。誤答3つはいずれも「読む量が減らない/かえって悪化する」という同じ理由で落ちるため、層に分けるより1つの問いで切るほうが解読が少ない。正解側だけ列方向と日付方向の2手に分けて、削り方が2方向あることを見せる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「クエリ結果の再利用」は解説が理由を述べていないため、図でも理由ラベルを付けずに非採用の枝として置いた。理由を明示したい場合は解説側に一文を足す必要がある。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"Athena のクエリが遅くスキャン量課金も高い<br/>S3 に日次出力の JSON(gzip)が1日200GB<br/>条件は常に日付範囲と数列のみ\"]:::req\n    J{\"スキャンする<br/>データ量を減らせるか?\"}:::judge\n    COL[\"Parquet(列指向)へ変換する<br/>必要な列だけを読む\"]:::best\n    PART[\"日付でパーティション化する<br/>不要なパーティションを読まない\"]:::best\n    PROJ[\"パーティション射影(Partition Projection)<br/>メタデータの肥大化と MSCK REPAIR の運用が不要になる\"]:::best\n    REUSE[\"ワークグループでクエリ結果の再利用を<br/>有効にするのみ\"]:::alt\n    IA[\"ストレージクラスを Standard-IA に変更する<br/>スキャン量には影響しない\"]:::alt\n    SMALL[\"1ファイルあたり 1MB 程度に細分化する<br/>並列度とオーバーヘッドの面で性能が悪化する\"]:::alt\n    NOTE[\"Athena はスキャンしたデータ量で課金される<br/>読む量を減らすことが速度とコストの両方に効く\"]:::note\n\n    REQ --> J\n    J -->|\"列を削る\"| COL\n    J -->|\"日付で削る\"| PART\n    PART --> PROJ\n    J -.-> REUSE\n    J -.->|\"影響しない\"| IA\n    J -.->|\"悪化する\"| SMALL\n    J -.- NOTE"
+}

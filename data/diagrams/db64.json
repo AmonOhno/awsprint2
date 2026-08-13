@@ -1,0 +1,111 @@
+{
+  "question_id": "db64",
+  "purpose": "開発環境のコスト対策が「停止運用を人手で回すか、容量を自動で合わせるか」の1点で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、コスト削減といえばインスタンスの停止・縮小しか思いつかない人。",
+  "message": "利用が断続的で停止運用も7日で自動再開されるなら、ACU 単位で自動スケールする Aurora Serverless v2 に任せる。",
+  "source_summary": "Aurora Serverless v2 は ACU 単位で細かく自動スケールし、断続的・予測不能な開発環境のワークロードでコストを最適化できる(最小 ACU の設定次第でアイドル時のコストを大きく下げられる)。停止し直す運用はスクリプトの維持と再開忘れのリスクがあり、スナップショット削除・復元は復元時間と手間がかかる。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "開発環境の Aurora を夜間・週末に停止したいが停止は最大7日で自動再開される。利用は平日日中の断続的なアクセスのみ",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "断続的な利用に容量を自動で合わせられるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "SLV2",
+      "label": "Aurora Serverless v2(ACU 単位で細かく自動スケール)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ACU",
+      "label": "最小 ACU を低く設定して未使用時のコストを抑える(ゼロにスケールする構成も検討する)",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "SCRIPT",
+      "label": "毎週スクリプトでクラスターを停止し直す運用を組む",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SMALLINST",
+      "label": "最小のインスタンスクラス(db.t3.medium)へ変更して常時起動する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SNAP",
+      "label": "スナップショットを取得してクラスターを削除し、必要時に復元する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "SLV2",
+      "verb": "自動に任せる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "SLV2",
+      "to": "ACU",
+      "verb": "コスト面の帰結",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "J",
+      "to": "SCRIPT",
+      "verb": "スクリプトの維持と再開忘れのリスクが残る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "SMALLINST",
+      "verb": "容量は利用に追従しない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "SNAP",
+      "verb": "復元時間と手間がかかる",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「容量を自動で合わせられるか」の1問で4選択肢を振り分ける",
+    "循環: 停止 → 自動再開 → 再び停止する運用ループを描き、人手の運用が終わらないことを見せる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。循環図は停止運用の面倒さは伝わるが、残る2つの誤答(常時起動・削除と復元)を同じ図に置けない。1つの問いで4選択肢を切る形のほうが単純に収まる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「最小インスタンスクラスで常時起動」は解説が理由を述べていないため、判断軸(容量が利用に追従しない)から言える範囲だけをラベルにした。コストの大小には踏み込んでいない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"開発環境の Aurora クラスターを夜間・週末に停止したい<br/>だが停止は最大7日で自動再開されてしまう<br/>利用は平日日中の断続的なアクセスのみ\"]:::req\n    J{\"断続的な利用に<br/>容量を自動で合わせられるか?\"}:::judge\n    SLV2[\"Aurora Serverless v2<br/>ACU 単位で細かく自動スケールする\"]:::best\n    ACU[\"最小 ACU を低く設定して未使用時のコストを抑える<br/>必要ならゼロにスケールする構成を検討する\"]:::best\n    SCRIPT[\"毎週スクリプトでクラスターを停止し直す運用<br/>スクリプトの維持と再開忘れのリスクが残る\"]:::alt\n    SMALLINST[\"db.t3.medium へ変更して常時起動する<br/>容量は利用に追従しない\"]:::alt\n    SNAP[\"スナップショットを取得して削除し必要時に復元する<br/>復元時間と手間がかかる\"]:::alt\n\n    REQ --> J\n    J -->|\"自動に任せる\"| SLV2\n    SLV2 --> ACU\n    J -.->|\"人手が残る\"| SCRIPT\n    J -.->|\"追従しない\"| SMALLINST\n    J -.->|\"手間がかかる\"| SNAP"
+}

@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 123 問 / 全 400 問
+収録: 133 問 / 全 400 問
 
 ---
 
@@ -6312,3 +6312,467 @@ flowchart TD
 **解説**: Redshift Serverless はクラスター管理なしにワークロードに応じて自動でキャパシティ(RPU)を調整し、使用した分だけ課金されるため、利用が偏り運用要員が限られる場合に適します。最大 RPU の設定と使用量制御でコスト上限も管理できます。手動リサイズや停止・再開の運用は担当者の負荷が残り、Athena への全面移行は既存の DWH ワークロード特性次第で性能・機能面の制約が出ます。
 
 **確認事項**: 「利用が夜間ほぼゼロ」という条件はコスト面(使った分だけ課金)の根拠として正解側に描いたが、DC2 の停止・再開案も同じ条件に応えている点は図では扱わず、運用負荷の観点だけで切っている。
+
+---
+
+## db57 — データベース / level 3
+
+**問題**: Athena のクエリが遅く、スキャン量課金も高い。データは S3 に日次で出力される JSON(gzip)で、1 日あたり 200 GB、クエリは常に日付範囲と数列のみを条件にする。最も効果的な改善はどれか?
+
+**正解**: データを Parquet(列指向)へ変換し、日付でパーティション化してパーティション射影(Partition Projection)を設定する
+
+**他の選択肢**: Athena のワークグループでクエリ結果の再利用を有効にするのみ / S3 のストレージクラスを Standard-IA に変更する / 1 ファイルあたりのサイズを 1 MB 程度に細分化する
+
+**図解の主メッセージ**: Athena はスキャンしたデータ量で課金されるので、列指向化と日付パーティション化で読む量そのものを減らす。
+
+**採用パターン**: 分岐(判断フロー)。誤答3つはいずれも「読む量が減らない/かえって悪化する」という同じ理由で落ちるため、層に分けるより1つの問いで切るほうが解読が少ない。正解側だけ列方向と日付方向の2手に分けて、削り方が2方向あることを見せる。(候補: 分岐(判断フロー): 「スキャンするデータ量を減らせるか」の1問で正解と誤答を振り分ける / レイヤー: S3 のファイル形式・配置・ストレージクラスを層に分け、どの層に効く施策かを示す)
+
+```mermaid
+flowchart TD
+    REQ["Athena のクエリが遅くスキャン量課金も高い<br/>S3 に日次出力の JSON(gzip)が1日200GB<br/>条件は常に日付範囲と数列のみ"]:::req
+    J{"スキャンする<br/>データ量を減らせるか?"}:::judge
+    COL["Parquet(列指向)へ変換する<br/>必要な列だけを読む"]:::best
+    PART["日付でパーティション化する<br/>不要なパーティションを読まない"]:::best
+    PROJ["パーティション射影(Partition Projection)<br/>メタデータの肥大化と MSCK REPAIR の運用が不要になる"]:::best
+    REUSE["ワークグループでクエリ結果の再利用を<br/>有効にするのみ"]:::alt
+    IA["ストレージクラスを Standard-IA に変更する<br/>スキャン量には影響しない"]:::alt
+    SMALL["1ファイルあたり 1MB 程度に細分化する<br/>並列度とオーバーヘッドの面で性能が悪化する"]:::alt
+    NOTE["Athena はスキャンしたデータ量で課金される<br/>読む量を減らすことが速度とコストの両方に効く"]:::note
+
+    REQ --> J
+    J -->|"列を削る"| COL
+    J -->|"日付で削る"| PART
+    PART --> PROJ
+    J -.-> REUSE
+    J -.->|"影響しない"| IA
+    J -.->|"悪化する"| SMALL
+    J -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db57.svg`](../../web/diagrams/db57.svg)
+
+**解説**: Athena はスキャンしたデータ量で課金されるため、列指向の Parquet/ORC に変換して必要列のみ読むこと、日付でパーティション化して不要なパーティションを読まないことが最も効果的です。パーティション射影を使えばメタデータの肥大化や MSCK REPAIR の運用も不要になります。小さすぎるファイルは並列度とオーバーヘッドの面で性能を悪化させ、ストレージクラス変更はスキャン量に影響しません。
+
+**確認事項**: 「クエリ結果の再利用」は解説が理由を述べていないため、図でも理由ラベルを付けずに非採用の枝として置いた。理由を明示したい場合は解説側に一文を足す必要がある。
+
+---
+
+## db58 — データベース / level 3
+
+**問題**: 医療機器から届く 1 日 100 億件の時系列データを保存し、直近 7 日は高頻度に、それ以前は低頻度に集計クエリを実行したい。データ量に対するコストを抑えつつ、時系列関数(補間、移動平均)を SQL で使いたい。最適なサービスはどれか?
+
+**正解**: Amazon Timestream(メモリストアとマグネティックストアの階層化と時系列関数を利用)
+
+**他の選択肢**: Amazon DynamoDB(パーティションキーにデバイス ID、ソートキーにタイムスタンプ) / Amazon RDS for PostgreSQL(パーティションテーブル) / Amazon Redshift(日付ソートキー)
+
+**図解の主メッセージ**: 直近と過去でアクセス頻度が分かれ、補間や移動平均を SQL で使いたいなら、階層化と時系列関数を内蔵する Timestream を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。誤答が落ちる理由は3つとも異なる(関数がない/規模に耐えない/階層化がない)ため、2軸マトリクスでは同じマスに寄ってしまう。1つの問いに対して各サービスが欠く点を並べる形が最も読み取りやすい。(候補: 分岐(判断フロー): 「階層化と時系列関数を DB 自身が持つか」の1問で4選択肢を振り分ける / マトリクス: 取り込み規模 × 時系列関数の有無の2軸に4サービスを配置する)
+
+```mermaid
+flowchart TD
+    REQ["医療機器から1日100億件の時系列データ<br/>直近7日は高頻度・それ以前は低頻度に集計<br/>コストを抑えつつ時系列関数(補間・移動平均)を SQL で使いたい"]:::req
+    J{"階層化と時系列関数を<br/>DB 自身が持つか?"}:::judge
+    TS["Amazon Timestream<br/>時系列に特化したサーバーレス DB"]:::best
+    TIER["直近データはメモリストア<br/>古いデータはマグネティックストアへ自動階層化"]:::best
+    FUNC["補間・スムージング・移動平均などの<br/>時系列関数を SQL で提供する"]:::best
+    DDB["DynamoDB(PK=デバイスID / SK=タイムスタンプ)<br/>時系列関数を持たず集計に不向き"]:::alt
+    RDS["RDS for PostgreSQL(パーティションテーブル)<br/>この規模の取り込みには厳しい"]:::alt
+    RS["Redshift(日付ソートキー)<br/>高頻度の取り込みと自動階層化の面で劣る"]:::alt
+
+    REQ --> J
+    J -->|"持つ"| TS
+    TS --> TIER
+    TS --> FUNC
+    J -.->|"関数がない"| DDB
+    J -.->|"規模に厳しい"| RDS
+    J -.->|"階層化がない"| RS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db58.svg`](../../web/diagrams/db58.svg)
+
+**解説**: Timestream は時系列に特化したサーバーレス DB で、直近データをメモリストア、古いデータをマグネティックストアへ自動階層化し、補間・スムージング・移動平均などの時系列関数を SQL で提供します。DynamoDB は時系列関数を持たず集計に不向き、RDS はこの規模の取り込みに厳しく、Redshift は分析用途では使えますが高頻度の取り込みと自動階層化の面で Timestream が適します。
+
+**確認事項**: Redshift は「分析用途では使える」と解説にあるが、図では非採用の枝としてのみ扱った。使える範囲まで描くと判断軸がぼやけるため省いている。
+
+---
+
+## db59 — データベース / level 3
+
+**問題**: 不正検知システムで、取引・口座・デバイス・IP の関連を数ホップたどるクエリ(「この口座と同じデバイスを使った別口座の取引」など)を数十ミリ秒で実行したい。データ量は数十億のエッジになる。最適なサービスはどれか?
+
+**正解**: Amazon Neptune(Gremlin/openCypher によるグラフクエリ)
+
+**他の選択肢**: Amazon DocumentDB(ネスト構造で関連を保持) / Amazon Aurora PostgreSQL(再帰 CTE で探索) / Amazon OpenSearch Service(関連ドキュメントを検索)
+
+**図解の主メッセージ**: 関連を数ホップたどるクエリが主役なら、結合が指数的に増えるリレーショナル DB ではなくグラフ DB の Neptune を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。誤答3つは「関係の再帰的探索に向かない」という同じ理由で落ちるので、モデルの違いを2列で見せるより、1つの問いで一括して切るほうが読む要素が少ない。(候補: 分岐(判断フロー): 「多ホップの関係探索が主たるクエリか」の1問で4選択肢を振り分ける / 対比(左右2列): 結合で探索する関係モデルとエッジをたどるグラフモデルを並べて比べる)
+
+```mermaid
+flowchart TD
+    REQ["不正検知で取引・口座・デバイス・IP の関連を<br/>数ホップたどるクエリを数十ミリ秒で実行したい<br/>データ量は数十億のエッジ"]:::req
+    J{"多ホップの関係探索が<br/>主たるクエリか?"}:::judge
+    NEP["Amazon Neptune<br/>グラフデータベース"]:::best
+    LANG["Gremlin・openCypher・SPARQL で<br/>グラフクエリを書ける"]:::best
+    PERF["数十億のエッジに対して<br/>低レイテンシーな探索を提供する"]:::best
+    AUR["Aurora PostgreSQL(再帰 CTE で探索)<br/>結合が指数的に増えて性能が出ない"]:::alt
+    DOC["DocumentDB(ネスト構造で関連を保持)<br/>関係の再帰的探索に最適化されていない"]:::alt
+    OS["OpenSearch Service(関連ドキュメントを検索)<br/>関係の再帰的探索に最適化されていない"]:::alt
+
+    REQ --> J
+    J -->|"主たるクエリ"| NEP
+    NEP --> LANG
+    NEP --> PERF
+    J -.->|"結合が増える"| AUR
+    J -.->|"探索に不向き"| DOC
+    J -.->|"探索に不向き"| OS
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db59.svg`](../../web/diagrams/db59.svg)
+
+**解説**: 多ホップの関係探索はリレーショナル DB では結合が指数的に増えて性能が出ないため、グラフデータベースである Neptune が適します。Neptune は Gremlin・openCypher・SPARQL をサポートし、数十億のエッジに対して低レイテンシーな探索を提供します。DocumentDB や OpenSearch は関係の再帰的探索に最適化されていません。
+
+**確認事項**: 「この口座と同じデバイスを使った別口座の取引」という具体例は要件ノードに入れず、問題文側に残した。図に入れるとノードが長くなり判断軸が埋もれるため。
+
+---
+
+## db60 — データベース / level 3
+
+**問題**: 監査要件として、データベースへのすべての変更履歴が暗号学的に検証可能で、改ざんできない形で保持される必要がある。アプリケーションは台帳としての一貫性のみを必要とし、複数の参加者による分散合意は不要である。最適なサービスはどれか?
+
+**正解**: Amazon QLDB(不変で暗号学的に検証可能なジャーナルを持つ台帳データベース)
+
+**他の選択肢**: Amazon Managed Blockchain(Hyperledger Fabric) / Amazon Aurora の監査ログを S3 のオブジェクトロックで保護する / Amazon DynamoDB のストリームを S3 にアーカイブする
+
+**図解の主メッセージ**: 改ざん不能な変更履歴が要るが分散合意は不要なら、単一所有者向けの台帳データベースである QLDB を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。QLDB と Managed Blockchain は同じ問い(分散合意の要否)で表裏になり、残る2案は「DB 内の履歴そのものを検証できない」で落ちる。包含図では正解を決める問いが図に現れないため、分岐のほうが判断軸を直接示せる。(候補: 分岐(判断フロー): 「分散合意が必要か」の1問で QLDB と Managed Blockchain、および外付けの保護策を切り分ける / 包含: 「改ざん検知の手段」という枠の中に4案を並べ、DB 内部か外付けかで内訳を示す)
+
+```mermaid
+flowchart TD
+    REQ["監査要件: すべての変更履歴が暗号学的に検証可能で<br/>改ざんできない形で保持される必要がある<br/>台帳としての一貫性のみでよく分散合意は不要"]:::req
+    J{"複数の参加者による<br/>分散合意が必要か?"}:::judge
+    QLDB["Amazon QLDB<br/>単一の信頼できる所有者向けの台帳データベース"]:::best
+    JOURNAL["追記専用のジャーナルと<br/>ハッシュチェーン(ダイジェスト)により<br/>変更履歴の完全性を暗号学的に検証できる"]:::best
+    MB["Managed Blockchain(Hyperledger Fabric)<br/>複数組織が分散合意を必要とする場合に選ぶ"]:::alt
+    LOG["Aurora の監査ログを S3 のオブジェクトロックで保護する"]:::alt
+    STR["DynamoDB のストリームを S3 にアーカイブする"]:::alt
+    NOTE["ログの保護やアーカイブは<br/>DB 内の変更履歴そのものの<br/>検証可能性を提供しない"]:::note
+
+    REQ --> J
+    J -->|"不要"| QLDB
+    QLDB --> JOURNAL
+    J -.->|"必要な場合"| MB
+    J -.->|"要件外"| LOG
+    J -.->|"要件外"| STR
+    LOG -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db60.svg`](../../web/diagrams/db60.svg)
+
+**解説**: QLDB は追記専用のジャーナルとハッシュチェーン(ダイジェスト)により、変更履歴の完全性を暗号学的に検証できる台帳データベースで、単一の信頼できる所有者がいるケースに適します。複数組織が分散合意を必要とする場合は Managed Blockchain を選びます。監査ログの保護やストリームのアーカイブは、DB 内の変更履歴そのものの検証可能性を提供しません。
+
+**確認事項**: Managed Blockchain は「分散合意が必要なら正解になりうる」選択肢だが、共通スタイルには条件付き正解のクラスがないため alt(グレー)で描き、条件をエッジラベルに置いた。
+
+---
+
+## db61 — データベース / level 3
+
+**問題**: RDS for PostgreSQL の暗号化されていない本番 DB を、ダウンタイムを最小にして暗号化された DB へ移行したい。DB サイズは 2 TB である。最も適切な手順はどれか?
+
+**正解**: スナップショットを取得し、暗号化を有効にしてコピーしたスナップショットから新インスタンスを復元、DMS の CDC で差分を同期してから短時間で切り替える
+
+**他の選択肢**: 既存インスタンスの設定変更で暗号化を有効にし、再起動する / リードレプリカを暗号化ありで作成し、昇格させる / 自動バックアップから最新のポイントインタイムリカバリを暗号化ありで実行する
+
+**図解の主メッセージ**: 既存の暗号化されていない RDS は後から暗号化できないため、暗号化コピーからの復元と CDC の差分同期で切り替える。
+
+**採用パターン**: 直列(手順)+分岐。この問題は「後から暗号化できない」という制約を知っているかで決まり、正解は手順そのものなので、判断軸を1つ置いてから手順を直列に並べる形が最も素直。タイムラインは時間の目盛りが解説にないため、描くと数値を創作することになる。(候補: 直列(手順)+分岐: 制約を問う1問で誤答3つを切り、正解側は移行手順を4ステップの直列で示す / タイムライン: ダウンタイムの発生区間を時間軸に置き、カットオーバーの短さを見せる)
+
+```mermaid
+flowchart TD
+    REQ["暗号化されていない本番 RDS for PostgreSQL(2TB)を<br/>ダウンタイムを最小にして暗号化 DB へ移行したい"]:::req
+    J{"既存インスタンスを<br/>後から暗号化できるか?"}:::judge
+    S1["スナップショットを取得し<br/>暗号化を有効にしてコピーする"]:::best
+    S2["コピーしたスナップショットから<br/>新インスタンスを復元する"]:::best
+    S3["復元中に生じた差分を<br/>DMS の CDC で追いつかせる"]:::best
+    S4["短時間のカットオーバーで切り替える"]:::best
+    MOD["設定変更で暗号化を有効にして再起動する"]:::alt
+    RR["暗号化ありのリードレプリカを作成して昇格させる"]:::alt
+    PITR["暗号化ありでポイントインタイムリカバリを実行する"]:::alt
+
+    REQ --> J
+    J -->|"できない"| S1
+    S1 --> S2
+    S2 --> S3
+    S3 --> S4
+    J -.->|"変えられない"| MOD
+    J -.->|"変えられない"| RR
+    J -.->|"変えられない"| PITR
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db61.svg`](../../web/diagrams/db61.svg)
+
+**解説**: 既存の暗号化されていない RDS インスタンスを後から暗号化することはできず、スナップショットを暗号化コピーして復元する方法が基本です。2 TB の復元中に生じる差分は DMS の CDC で追いつかせ、最後に短時間のカットオーバーを行うことでダウンタイムを最小化します。設定変更やレプリカ昇格、PITR では暗号化属性を変更できません。
+
+**確認事項**: ダウンタイムが実際にどの区間で発生するか(カットオーバーのみか)は解説に明示がないため、図では手順の最後に置くだけにして時間の長さは描いていない。
+
+---
+
+## db62 — データベース / level 3
+
+**問題**: アプリケーションが RDS へ接続する際、パスワードの配布と管理をやめたい。加えて、通信は必ず TLS で暗号化し、サーバー証明書の検証も行いたい。Aurora MySQL を利用している。適切な構成はどれか?
+
+**正解**: IAM データベース認証を有効にし、アプリは rds:connect 権限を持つ IAM ロールで認証トークンを生成、接続時は RDS のルート CA 証明書で TLS 検証を行う
+
+**他の選択肢**: Secrets Manager にパスワードを保存し、TLS は RDS 側で自動的に強制されるため設定不要である / DB パラメータグループで require_secure_transport を無効化し、VPC 内通信のみに限定する / RDS Proxy を使えば IAM 認証も TLS 検証も不要になる
+
+**図解の主メッセージ**: パスワード配布をやめるのは IAM データベース認証、TLS と証明書検証は接続側の設定で、2つの要件は別々に満たす。
+
+**採用パターン**: 分岐(2つの判断軸)。誤答はどれも「片方の要件を別の要件で代用できる」と考えた形なので、要件を2本に割って別々に答えを置くほうが誤りの位置がはっきりする。合流図では2つの要件が最初から一体に見えてしまう。(候補: 分岐(2つの判断軸): 認証の要件と通信の要件を別々の問いに立て、それぞれの答えを並べる / 合流: IAM 認証と TLS 検証の2つを1つの構成へ集約する形で描く)
+
+```mermaid
+flowchart TD
+    REQ["Aurora MySQL への接続で<br/>パスワードの配布と管理をやめたい<br/>通信は必ず TLS で暗号化しサーバー証明書の検証も行いたい"]:::req
+    J1{"パスワードを配らずに<br/>認証できるか?"}:::judge
+    J2{"TLS とサーバー証明書の<br/>検証を満たせるか?"}:::judge
+    IAM["IAM データベース認証を有効にする<br/>rds:connect 権限を持つ IAM ロールで<br/>認証トークンを生成して接続する"]:::best
+    TLS["接続文字列で TLS を有効化し<br/>AWS が公開する RDS のルート CA 証明書で<br/>サーバー証明書を検証する"]:::best
+    SM["Secrets Manager に保存し<br/>TLS は自動で強制されるため設定不要とする"]:::alt
+    NOSEC["require_secure_transport を無効化し<br/>VPC 内通信のみに限定する"]:::alt
+    PROXY["RDS Proxy を使えば<br/>IAM 認証も TLS 検証も不要になる"]:::alt
+    NOTE["認証トークンは15分間有効<br/>接続レートの上限に注意する"]:::note
+
+    REQ --> J1
+    REQ --> J2
+    J1 -->|"トークン認証"| IAM
+    J2 -->|"ルートCAで検証"| TLS
+    IAM -.- NOTE
+    J1 -.->|"満たさない"| PROXY
+    J2 -.->|"設定は必要"| SM
+    J2 -.->|"要件に反する"| NOSEC
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db62.svg`](../../web/diagrams/db62.svg)
+
+**解説**: IAM データベース認証では、IAM の認証情報から 15 分間有効な認証トークンを生成してパスワードの代わりに使用でき、パスワード配布が不要になります(接続レートの上限に注意)。TLS は接続文字列で有効化し、AWS が公開する RDS のルート CA 証明書を使ってサーバー証明書を検証します。require_secure_transport の無効化は TLS 強制をやめる方向で要件に反します。
+
+**確認事項**: RDS Proxy の選択肢は解説が理由を述べていないため、認証側の枝に置いて「要件を満たさない」とだけ示した。Proxy と IAM 認証の関係を問う問題を足すなら、解説側に一文が要る。
+
+---
+
+## db63 — データベース / level 3
+
+**問題**: Aurora Global Database を東京(プライマリ)と大阪(セカンダリ)で構成している。東京リージョン全体の障害時に、大阪で書き込みを再開する際の RPO/RTO と手順の理解として正しいのはどれか?
+
+**正解**: 通常の RPO は 1 秒程度、RTO は 1 分未満で、リージョン障害時は手動または自動のフェイルオーバー(マネージドプランドフェイルオーバー/デタッチ&プロモート)でセカンダリを昇格させる
+
+**他の選択肢**: セカンダリは同期レプリケーションのため RPO は常に 0 で、昇格操作も不要に自動で書き込み可能になる / セカンダリは読み取り専用で昇格できないため、スナップショットからの復元が必要である / フェイルオーバーには最低 1 時間かかり、その間は読み取りもできない
+
+**図解の主メッセージ**: レプリケーションが非同期だからこそ、RPO は 0 ではなく約1秒で、書き込み再開には昇格の操作が要る。
+
+**採用パターン**: 分岐(判断フロー)。誤答3つは RPO・昇格の要否・RTO と別々の箇所を誤っているが、すべて「非同期である」という1点から正誤が決まる。タイムラインは RPO と RTO の位置関係を描ける反面、誤答をどこにも置けない。(候補: 分岐(判断フロー): 「レプリケーションは同期か」の1問から RPO/RTO と昇格手順を導く / タイムライン: 障害発生 → 昇格 → 書き込み再開の時間軸に RPO と RTO の区間を置く)
+
+```mermaid
+flowchart TD
+    REQ["東京(プライマリ)と大阪(セカンダリ)の<br/>Aurora Global Database<br/>東京リージョン全体の障害時に大阪で書き込みを再開したい"]:::req
+    J{"レプリケーションは<br/>同期か?"}:::judge
+    ASYNC["専用インフラで非同期レプリケーションを行う<br/>一般に1秒未満のラグ"]:::best
+    RPO["RPO は 1 秒程度<br/>昇格後の RTO は 1 分未満"]:::best
+    PLAN["計画的な切り替え:<br/>マネージドプランドフェイルオーバー<br/>(データ損失なし)"]:::best
+    UNPLAN["非計画時:<br/>セカンダリのデタッチ&プロモート"]:::best
+    SYNC["同期のため RPO は常に 0 で<br/>昇格操作も不要に自動で書き込み可能になる"]:::alt
+    NOPROMO["セカンダリは昇格できず<br/>スナップショットからの復元が必要"]:::alt
+    SLOW["フェイルオーバーに最低1時間かかり<br/>その間は読み取りもできない"]:::alt
+
+    REQ --> J
+    J -->|"非同期"| ASYNC
+    ASYNC --> RPO
+    RPO --> PLAN
+    RPO --> UNPLAN
+    J -.->|"RPO0は不可"| SYNC
+    J -.->|"昇格できる"| NOPROMO
+    J -.->|"RTOは1分未満"| SLOW
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db63.svg`](../../web/diagrams/db63.svg)
+
+**解説**: Aurora Global Database は専用インフラで非同期レプリケーションを行い、一般に 1 秒未満のラグ(RPO 1 秒程度)、昇格後の RTO は 1 分未満とされます。計画的な切り替えにはマネージドプランドフェイルオーバー(データ損失なし)、非計画時にはセカンダリのデタッチ&プロモートを使います。同期レプリケーションではないため RPO 0 は保証されません。
+
+**確認事項**: マネージドプランドフェイルオーバーは計画時の手順なので、リージョン全体障害という設問の場面ではデタッチ&プロモート側が実際に使われる。図では解説の記述どおり両方を並べており、どちらが今回の場面かは示していない。
+
+---
+
+## db64 — データベース / level 3
+
+**問題**: コスト削減のため、開発環境の Aurora クラスターを夜間・週末に停止したい。だが Aurora クラスターの停止は最大 7 日で自動再開されてしまう。利用実態は平日日中の断続的なアクセスのみである。最適な対応はどれか?
+
+**正解**: Aurora Serverless v2 を採用し、最小 ACU を低く設定して未使用時のコストを抑える(必要ならゼロにスケールする構成を検討する)
+
+**他の選択肢**: 毎週スクリプトでクラスターを停止し直す運用を組む / 最小のインスタンスクラス(db.t3.medium)へ変更して常時起動する / スナップショットを取得してクラスターを削除し、必要時に復元する
+
+**図解の主メッセージ**: 利用が断続的で停止運用も7日で自動再開されるなら、ACU 単位で自動スケールする Aurora Serverless v2 に任せる。
+
+**採用パターン**: 分岐(判断フロー)。循環図は停止運用の面倒さは伝わるが、残る2つの誤答(常時起動・削除と復元)を同じ図に置けない。1つの問いで4選択肢を切る形のほうが単純に収まる。(候補: 分岐(判断フロー): 「容量を自動で合わせられるか」の1問で4選択肢を振り分ける / 循環: 停止 → 自動再開 → 再び停止する運用ループを描き、人手の運用が終わらないことを見せる)
+
+```mermaid
+flowchart TD
+    REQ["開発環境の Aurora クラスターを夜間・週末に停止したい<br/>だが停止は最大7日で自動再開されてしまう<br/>利用は平日日中の断続的なアクセスのみ"]:::req
+    J{"断続的な利用に<br/>容量を自動で合わせられるか?"}:::judge
+    SLV2["Aurora Serverless v2<br/>ACU 単位で細かく自動スケールする"]:::best
+    ACU["最小 ACU を低く設定して未使用時のコストを抑える<br/>必要ならゼロにスケールする構成を検討する"]:::best
+    SCRIPT["毎週スクリプトでクラスターを停止し直す運用<br/>スクリプトの維持と再開忘れのリスクが残る"]:::alt
+    SMALLINST["db.t3.medium へ変更して常時起動する<br/>容量は利用に追従しない"]:::alt
+    SNAP["スナップショットを取得して削除し必要時に復元する<br/>復元時間と手間がかかる"]:::alt
+
+    REQ --> J
+    J -->|"自動に任せる"| SLV2
+    SLV2 --> ACU
+    J -.->|"人手が残る"| SCRIPT
+    J -.->|"追従しない"| SMALLINST
+    J -.->|"手間がかかる"| SNAP
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db64.svg`](../../web/diagrams/db64.svg)
+
+**解説**: Aurora Serverless v2 は ACU 単位で細かく自動スケールし、断続的・予測不能な開発環境のワークロードでコストを最適化できます(最小 ACU の設定次第でアイドル時のコストを大きく下げられます)。停止し直す運用はスクリプトの維持と再開忘れのリスクがあり、スナップショット削除・復元は復元時間と手間がかかります。
+
+**確認事項**: 「最小インスタンスクラスで常時起動」は解説が理由を述べていないため、判断軸(容量が利用に追従しない)から言える範囲だけをラベルにした。コストの大小には踏み込んでいない。
+
+---
+
+## db65 — データベース / level 3
+
+**問題**: DynamoDB のデータを BI ツールから SQL で分析したいが、本番テーブルへのスキャンで RCU を消費して業務影響が出ることは避けたい。データは 1 日 1 回更新で十分である。最適な構成はどれか?
+
+**正解**: DynamoDB のエクスポート to S3(PITR ベース、テーブルの RCU を消費しない)を日次で実行し、Athena や Redshift Spectrum で分析する
+
+**他の選択肢**: Scan API を夜間に実行して S3 に出力する Lambda を作成する / DynamoDB Streams を有効化して全アイテムを S3 へ複製する / グローバルセカンダリインデックスを追加して BI ツールから直接クエリさせる
+
+**図解の主メッセージ**: 本番の RCU を消費せずに全量を取り出せるのは PITR ベースの S3 エクスポートで、Scan でも Streams でもない。
+
+**採用パターン**: 分岐(判断フロー)。直列のデータフローは正解の経路をよく表せるが、誤答3つを同じ図に置くと線が交差する。判断軸を1つ置いて4案を振り分け、正解側だけ出力先を1手つなげる形にした。(候補: 分岐(判断フロー): 「本番テーブルの読み取りキャパシティを使うか」の1問で4選択肢を振り分ける / 直列(データの流れ): テーブル → PITR バックアップ → S3 → Athena の経路を描き、本番を経由しないことを見せる)
+
+```mermaid
+flowchart TD
+    REQ["DynamoDB のデータを BI ツールから SQL で分析したい<br/>本番テーブルのスキャンで RCU を消費して業務影響が出るのは避けたい<br/>データは1日1回の更新で十分"]:::req
+    J{"本番テーブルの読み取り<br/>キャパシティを使うか?"}:::judge
+    EXP["DynamoDB のエクスポート to S3(PITR ベース)<br/>テーブルの RCU を消費せず本番に影響しない"]:::best
+    ANALYZE["日次で実行し出力された DynamoDB JSON/ION を<br/>Athena や Redshift Spectrum・Glue で分析する"]:::best
+    SCAN["Scan API を夜間に実行して S3 へ出力する Lambda<br/>全件読み出しで RCU を大量に消費する"]:::alt
+    STREAM["DynamoDB Streams で全アイテムを S3 へ複製する<br/>変更差分のみで初期全量の取得には向かない"]:::alt
+    GSI["GSI を追加して BI ツールから直接クエリさせる<br/>本番テーブル側に読みに行く"]:::alt
+
+    REQ --> J
+    J -->|"使わない"| EXP
+    EXP --> ANALYZE
+    J -.->|"大量に消費"| SCAN
+    J -.->|"差分のみ"| STREAM
+    J -.->|"本番を読む"| GSI
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db65.svg`](../../web/diagrams/db65.svg)
+
+**解説**: DynamoDB の S3 エクスポート機能は PITR のバックアップからデータを書き出すため、テーブルの読み取りキャパシティを消費せず本番に影響しません。出力された DynamoDB JSON/ION を Athena や Glue で分析できます。Scan による全件読み出しは RCU を大量消費し、Streams は変更差分のみで初期全量の取得には向きません。
+
+**確認事項**: GSI の選択肢は解説が理由を述べていないため、判断軸(本番テーブルを読みに行く)から言える範囲だけをラベルにした。GSI が SQL 分析に向かない理由には踏み込んでいない。
+
+---
+
+## db66 — データベース / level 3
+
+**問題**: 商品検索機能で、あいまい検索・日本語の形態素解析・ファセット集計(カテゴリ別件数)・関連度スコアによる並び替えが必要である。商品マスタは Aurora にあり、更新をほぼリアルタイムに反映したい。最適な構成はどれか?
+
+**正解**: Amazon OpenSearch Service に検索インデックスを構築し、Aurora の変更を DMS(CDC)または Lambda 経由で継続的に同期する
+
+**他の選択肢**: Aurora の LIKE 検索とインデックスをチューニングして対応する / DynamoDB に商品データを複製し、GSI で検索する / Athena で S3 上の商品データを都度検索する
+
+**図解の主メッセージ**: 形態素解析・ファセット集計・関連度スコアが要るなら、マスタは Aurora のまま OpenSearch に検索インデックスを持たせて継続同期する。
+
+**採用パターン**: 分岐(判断フロー)。レイヤー図は CQRS 的な構成そのものをよく表せるが、誤答3つが落ちる理由を置く場所がない。判断軸を1つ置いて4案を切り、正解側だけ同期の流れを直列でつなぐ形にした。(候補: 分岐(判断フロー): 「検索エンジンの機能が必要か」の1問で4選択肢を振り分け、正解側に同期の手順をつなげる / レイヤー: 書き込み用のマスタ(Aurora)と読み取り用のインデックス(OpenSearch)を2層に分けて描く)
+
+```mermaid
+flowchart TD
+    REQ["商品検索であいまい検索・日本語の形態素解析・<br/>ファセット集計・関連度スコアによる並び替えが必要<br/>商品マスタは Aurora にあり更新をほぼリアルタイムに反映したい"]:::req
+    J{"検索エンジンの機能が<br/>必要か?"}:::judge
+    OS["Amazon OpenSearch Service に検索インデックスを構築する<br/>全文検索・形態素解析(kuromoji 等)・<br/>ファセット集計・関連度スコアリング"]:::best
+    SYNC["Aurora の変更を DMS(CDC)または<br/>Lambda 経由で継続的に同期する"]:::best
+    CQRS["マスタは Aurora に置いたままの CQRS 的な構成"]:::best
+    LIKE["Aurora の LIKE 検索とインデックスのチューニング<br/>日本語の分かち書きやスコアリングに対応できない"]:::alt
+    DDB["DynamoDB に複製して GSI で検索する<br/>柔軟な検索条件を扱えない"]:::alt
+    ATH["Athena で S3 上の商品データを都度検索する<br/>検索エンジンの機能を満たさない"]:::alt
+
+    REQ --> J
+    J -->|"必要"| OS
+    OS --> SYNC
+    SYNC --> CQRS
+    J -.->|"日本語に非対応"| LIKE
+    J -.->|"柔軟性がない"| DDB
+    J -.->|"機能不足"| ATH
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/db66.svg`](../../web/diagrams/db66.svg)
+
+**解説**: 全文検索・形態素解析(kuromoji 等)・ファセット集計・関連度スコアリングは検索エンジンの領域で、OpenSearch Service が適します。マスタは Aurora に置いたまま、DMS の CDC や Lambda によるイベント連携で検索インデックスを継続同期する CQRS 的な構成が定石です。LIKE 検索は日本語の分かち書きやスコアリングに対応できず、DynamoDB の GSI は柔軟な検索条件を扱えません。
+
+**確認事項**: Athena の選択肢は解説が理由を述べていないため、判断軸(検索エンジンの機能を満たさない)から言える範囲だけをラベルにした。更新のリアルタイム性の観点は図に入れていない。

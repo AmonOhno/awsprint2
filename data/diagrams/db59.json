@@ -1,0 +1,124 @@
+{
+  "question_id": "db59",
+  "purpose": "データベース選択が「多ホップの関係探索が主たるクエリか」の1点で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、関連をたどるクエリをリレーショナル DB の結合で書けると考えている人。",
+  "message": "関連を数ホップたどるクエリが主役なら、結合が指数的に増えるリレーショナル DB ではなくグラフ DB の Neptune を選ぶ。",
+  "source_summary": "多ホップの関係探索はリレーショナル DB では結合が指数的に増えて性能が出ないため、グラフデータベースである Neptune が適する。Neptune は Gremlin・openCypher・SPARQL をサポートし、数十億のエッジに対して低レイテンシーな探索を提供する。DocumentDB や OpenSearch は関係の再帰的探索に最適化されていない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "不正検知で取引・口座・デバイス・IP の関連を数ホップたどるクエリを数十ミリ秒で実行したい。数十億のエッジ",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "多ホップの関係探索が主たるクエリか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "NEP",
+      "label": "Amazon Neptune(グラフデータベース)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "LANG",
+      "label": "Gremlin・openCypher・SPARQL でグラフクエリを書ける",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "PERF",
+      "label": "数十億のエッジに対して低レイテンシーな探索を提供する",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "AUR",
+      "label": "Aurora PostgreSQL(再帰 CTE で探索)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DOC",
+      "label": "DocumentDB(ネスト構造で関連を保持)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "OS",
+      "label": "OpenSearch Service(関連ドキュメントを検索)",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "NEP",
+      "verb": "主たるクエリである",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "NEP",
+      "to": "LANG",
+      "verb": "クエリ面の帰結",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "NEP",
+      "to": "PERF",
+      "verb": "性能面の帰結",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "J",
+      "to": "AUR",
+      "verb": "結合が指数的に増える",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "DOC",
+      "verb": "再帰的探索に最適化されていない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "OS",
+      "verb": "再帰的探索に最適化されていない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「多ホップの関係探索が主たるクエリか」の1問で4選択肢を振り分ける",
+    "対比(左右2列): 結合で探索する関係モデルとエッジをたどるグラフモデルを並べて比べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。誤答3つは「関係の再帰的探索に向かない」という同じ理由で落ちるので、モデルの違いを2列で見せるより、1つの問いで一括して切るほうが読む要素が少ない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「この口座と同じデバイスを使った別口座の取引」という具体例は要件ノードに入れず、問題文側に残した。図に入れるとノードが長くなり判断軸が埋もれるため。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"不正検知で取引・口座・デバイス・IP の関連を<br/>数ホップたどるクエリを数十ミリ秒で実行したい<br/>データ量は数十億のエッジ\"]:::req\n    J{\"多ホップの関係探索が<br/>主たるクエリか?\"}:::judge\n    NEP[\"Amazon Neptune<br/>グラフデータベース\"]:::best\n    LANG[\"Gremlin・openCypher・SPARQL で<br/>グラフクエリを書ける\"]:::best\n    PERF[\"数十億のエッジに対して<br/>低レイテンシーな探索を提供する\"]:::best\n    AUR[\"Aurora PostgreSQL(再帰 CTE で探索)<br/>結合が指数的に増えて性能が出ない\"]:::alt\n    DOC[\"DocumentDB(ネスト構造で関連を保持)<br/>関係の再帰的探索に最適化されていない\"]:::alt\n    OS[\"OpenSearch Service(関連ドキュメントを検索)<br/>関係の再帰的探索に最適化されていない\"]:::alt\n\n    REQ --> J\n    J -->|\"主たるクエリ\"| NEP\n    NEP --> LANG\n    NEP --> PERF\n    J -.->|\"結合が増える\"| AUR\n    J -.->|\"探索に不向き\"| DOC\n    J -.->|\"探索に不向き\"| OS"
+}

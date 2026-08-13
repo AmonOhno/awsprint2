@@ -1,0 +1,124 @@
+{
+  "question_id": "db66",
+  "purpose": "検索要件が「検索エンジンの機能が必要か」の1点で、マスタとは別に検索インデックスを持つ構成へ導かれることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、全文検索を RDB の LIKE やインデックスで賄えると考えている人。",
+  "message": "形態素解析・ファセット集計・関連度スコアが要るなら、マスタは Aurora のまま OpenSearch に検索インデックスを持たせて継続同期する。",
+  "source_summary": "全文検索・形態素解析(kuromoji 等)・ファセット集計・関連度スコアリングは検索エンジンの領域で、OpenSearch Service が適する。マスタは Aurora に置いたまま、DMS の CDC や Lambda によるイベント連携で検索インデックスを継続同期する CQRS 的な構成が定石。LIKE 検索は日本語の分かち書きやスコアリングに対応できず、DynamoDB の GSI は柔軟な検索条件を扱えない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "あいまい検索・日本語の形態素解析・ファセット集計・関連度スコアによる並び替えが必要。商品マスタは Aurora にあり更新をほぼリアルタイムに反映したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "検索エンジンの機能が必要か?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "OS",
+      "label": "Amazon OpenSearch Service に検索インデックスを構築する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "SYNC",
+      "label": "Aurora の変更を DMS(CDC)または Lambda 経由で継続的に同期する",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CQRS",
+      "label": "マスタは Aurora に置いたままにする CQRS 的な構成",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "LIKE",
+      "label": "Aurora の LIKE 検索とインデックスをチューニングする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DDB",
+      "label": "DynamoDB に商品データを複製して GSI で検索する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ATH",
+      "label": "Athena で S3 上の商品データを都度検索する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "OS",
+      "verb": "必要である",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "OS",
+      "to": "SYNC",
+      "verb": "更新反映の手段",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "SYNC",
+      "to": "CQRS",
+      "verb": "構成としての帰結",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "J",
+      "to": "LIKE",
+      "verb": "分かち書きやスコアリングに対応できない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "DDB",
+      "verb": "柔軟な検索条件を扱えない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "ATH",
+      "verb": "検索機能を満たさない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「検索エンジンの機能が必要か」の1問で4選択肢を振り分け、正解側に同期の手順をつなげる",
+    "レイヤー: 書き込み用のマスタ(Aurora)と読み取り用のインデックス(OpenSearch)を2層に分けて描く"
+  ],
+  "selected_pattern": "分岐(判断フロー)。レイヤー図は CQRS 的な構成そのものをよく表せるが、誤答3つが落ちる理由を置く場所がない。判断軸を1つ置いて4案を切り、正解側だけ同期の流れを直列でつなぐ形にした。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Athena の選択肢は解説が理由を述べていないため、判断軸(検索エンジンの機能を満たさない)から言える範囲だけをラベルにした。更新のリアルタイム性の観点は図に入れていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"商品検索であいまい検索・日本語の形態素解析・<br/>ファセット集計・関連度スコアによる並び替えが必要<br/>商品マスタは Aurora にあり更新をほぼリアルタイムに反映したい\"]:::req\n    J{\"検索エンジンの機能が<br/>必要か?\"}:::judge\n    OS[\"Amazon OpenSearch Service に検索インデックスを構築する<br/>全文検索・形態素解析(kuromoji 等)・<br/>ファセット集計・関連度スコアリング\"]:::best\n    SYNC[\"Aurora の変更を DMS(CDC)または<br/>Lambda 経由で継続的に同期する\"]:::best\n    CQRS[\"マスタは Aurora に置いたままの CQRS 的な構成\"]:::best\n    LIKE[\"Aurora の LIKE 検索とインデックスのチューニング<br/>日本語の分かち書きやスコアリングに対応できない\"]:::alt\n    DDB[\"DynamoDB に複製して GSI で検索する<br/>柔軟な検索条件を扱えない\"]:::alt\n    ATH[\"Athena で S3 上の商品データを都度検索する<br/>検索エンジンの機能を満たさない\"]:::alt\n\n    REQ --> J\n    J -->|\"必要\"| OS\n    OS --> SYNC\n    SYNC --> CQRS\n    J -.->|\"日本語に非対応\"| LIKE\n    J -.->|\"柔軟性がない\"| DDB\n    J -.->|\"機能不足\"| ATH"
+}

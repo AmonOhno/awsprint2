@@ -1,0 +1,137 @@
+{
+  "question_id": "db61",
+  "purpose": "RDS の暗号化移行が「後から暗号化はできない」という制約から一本の手順に決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、暗号化は設定変更で後付けできると考えている人。",
+  "message": "既存の暗号化されていない RDS は後から暗号化できないため、暗号化コピーからの復元と CDC の差分同期で切り替える。",
+  "source_summary": "既存の暗号化されていない RDS インスタンスを後から暗号化することはできず、スナップショットを暗号化コピーして復元する方法が基本。2TB の復元中に生じる差分は DMS の CDC で追いつかせ、最後に短時間のカットオーバーを行うことでダウンタイムを最小化する。設定変更やレプリカ昇格、PITR では暗号化属性を変更できない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "暗号化されていない本番 RDS for PostgreSQL(2TB)をダウンタイム最小で暗号化 DB へ移行したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "既存インスタンスを後から暗号化できるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "S1",
+      "label": "スナップショットを取得し、暗号化を有効にしてコピーする",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "S2",
+      "label": "コピーしたスナップショットから新インスタンスを復元する",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "S3",
+      "label": "復元中に生じた差分を DMS の CDC で同期する",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "S4",
+      "label": "短時間のカットオーバーで切り替える",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "MOD",
+      "label": "設定変更で暗号化を有効にして再起動する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "RR",
+      "label": "暗号化ありのリードレプリカを作成して昇格させる",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "PITR",
+      "label": "暗号化ありでポイントインタイムリカバリを実行する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "S1",
+      "verb": "できない(作り直す)",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "S1",
+      "to": "S2",
+      "verb": "次の手順へ",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "S2",
+      "to": "S3",
+      "verb": "次の手順へ",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "S3",
+      "to": "S4",
+      "verb": "次の手順へ",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "MOD",
+      "verb": "暗号化属性を変えられない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "RR",
+      "verb": "暗号化属性を変えられない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "PITR",
+      "verb": "暗号化属性を変えられない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "直列(手順)+分岐: 制約を問う1問で誤答3つを切り、正解側は移行手順を4ステップの直列で示す",
+    "タイムライン: ダウンタイムの発生区間を時間軸に置き、カットオーバーの短さを見せる"
+  ],
+  "selected_pattern": "直列(手順)+分岐。この問題は「後から暗号化できない」という制約を知っているかで決まり、正解は手順そのものなので、判断軸を1つ置いてから手順を直列に並べる形が最も素直。タイムラインは時間の目盛りが解説にないため、描くと数値を創作することになる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "ダウンタイムが実際にどの区間で発生するか(カットオーバーのみか)は解説に明示がないため、図では手順の最後に置くだけにして時間の長さは描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"暗号化されていない本番 RDS for PostgreSQL(2TB)を<br/>ダウンタイムを最小にして暗号化 DB へ移行したい\"]:::req\n    J{\"既存インスタンスを<br/>後から暗号化できるか?\"}:::judge\n    S1[\"スナップショットを取得し<br/>暗号化を有効にしてコピーする\"]:::best\n    S2[\"コピーしたスナップショットから<br/>新インスタンスを復元する\"]:::best\n    S3[\"復元中に生じた差分を<br/>DMS の CDC で追いつかせる\"]:::best\n    S4[\"短時間のカットオーバーで切り替える\"]:::best\n    MOD[\"設定変更で暗号化を有効にして再起動する\"]:::alt\n    RR[\"暗号化ありのリードレプリカを作成して昇格させる\"]:::alt\n    PITR[\"暗号化ありでポイントインタイムリカバリを実行する\"]:::alt\n\n    REQ --> J\n    J -->|\"できない\"| S1\n    S1 --> S2\n    S2 --> S3\n    S3 --> S4\n    J -.->|\"変えられない\"| MOD\n    J -.->|\"変えられない\"| RR\n    J -.->|\"変えられない\"| PITR"
+}
