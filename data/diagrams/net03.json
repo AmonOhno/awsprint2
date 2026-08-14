@@ -1,0 +1,125 @@
+{
+  "question_id": "net03",
+  "purpose": "S3 への私的経路の選択が「追加コストなしで済むか」の1点で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、VPC エンドポイントのゲートウェイ型とインターフェイス型の違いが曖昧な人。",
+  "message": "相手が S3(または DynamoDB)なら、無料のゲートウェイ型 VPC エンドポイントを選ぶ。",
+  "source_summary": "ゲートウェイ型 VPC エンドポイント(S3 と DynamoDB のみ対応)は無料で、ルートテーブル経由で AWS ネットワーク内から直接アクセスできる。インターフェイス型(PrivateLink)でも実現できるが時間課金+データ処理料金がかかる。NAT ゲートウェイ経由はインターネット向け経路になるうえ処理料金も高くつく。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "VPC 内の EC2 から S3 へインターネットを経由せず、追加コストなしでアクセスしたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "相手は S3 / DynamoDB か(無料の経路が使えるか)?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "GW",
+      "label": "S3 用のゲートウェイ型 VPC エンドポイント(無料)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "RT",
+      "label": "ルートテーブル経由で AWS ネットワーク内から直接アクセスする",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "IF",
+      "label": "インターフェイス型 VPC エンドポイント(PrivateLink)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NAT",
+      "label": "NAT ゲートウェイ経由でアクセスする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DX",
+      "label": "Direct Connect を契約する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "ゲートウェイ型が対応する相手の限定",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "GW",
+      "verb": "S3 なので無料の経路が使える",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "GW",
+      "to": "RT",
+      "verb": "どう通るか",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "J",
+      "to": "IF",
+      "verb": "実現できるが有料",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "NAT",
+      "verb": "インターネット向け経路になり処理料金も高い",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "DX",
+      "verb": "要件を満たさない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "GW",
+      "to": "NOTE",
+      "verb": "適用範囲を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「無料の経路が使えるか」の1問で4選択肢を振り分ける",
+    "マトリクス: インターネットを経由するか × 追加コストがかかるか の2軸に4案を配置する"
+  ],
+  "selected_pattern": "分岐(判断フロー)。2軸マトリクスは「無料かつ私的経路」の升目が正解だと示せて筋は通るが、升目の位置を読み取る手間がかかる。相手が S3 かどうかという1つの問いで切る方が、試験本番の判断順序をそのままなぞれる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Direct Connect については解説が理由を述べていないため、要件(追加コストなし)から言える範囲だけをラベルにし、オンプレミス接続用途などの説明は足していない。",
+    "インターフェイス型は「実現できるが有料」なので、機能不足ではなくコストで落ちることが伝わるようラベルを分けている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"VPC 内の EC2 から S3 へ<br/>インターネットを経由せずアクセスしたい<br/>追加コストなしで実現したい\"]:::req\n    J{\"相手は S3 / DynamoDB か<br/>無料の経路が使えるか?\"}:::judge\n    GW[\"S3 用のゲートウェイ型 VPC エンドポイント<br/>無料\"]:::best\n    RT[\"ルートテーブル経由で<br/>AWS ネットワーク内から直接アクセスする\"]:::best\n    IF[\"インターフェイス型 VPC エンドポイント(PrivateLink)<br/>実現できるが時間課金+データ処理料金\"]:::alt\n    NAT[\"NAT ゲートウェイ経由でアクセスする<br/>インターネット向け経路になり処理料金も高い\"]:::alt\n    DX[\"Direct Connect を契約する\"]:::alt\n    NOTE[\"ゲートウェイ型が対応するのは S3 と DynamoDB のみ\"]:::note\n\n    REQ --> J\n    J -->|\"S3 なので可\"| GW\n    GW --> RT\n    J -.->|\"有料\"| IF\n    J -.->|\"経路が違う\"| NAT\n    J -.->|\"要件外\"| DX\n    GW -.- NOTE"
+}

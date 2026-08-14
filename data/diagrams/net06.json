@@ -1,0 +1,138 @@
+{
+  "question_id": "net06",
+  "purpose": "「外部からの接続は一切受け付けない」という条件が、NAT ゲートウェイという答えを一意に決めることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、プライベートサブネットからの外向き通信の作り方を手順として覚えたい人。",
+  "message": "出て行く通信だけを通したいなら、パブリックサブネットの NAT ゲートウェイへ 0.0.0.0/0 を向ける。",
+  "source_summary": "NAT ゲートウェイをパブリックサブネットに置き、プライベートサブネットのルートテーブルで 0.0.0.0/0 を NAT ゲートウェイへ向けると、アウトバウンド通信のみ可能になる。外部からの接続開始は不可能なため安全。高可用性のため AZ ごとに NAT ゲートウェイを配置するのがベストプラクティス。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "プライベートサブネットの EC2 からパッケージリポジトリへアクセスしたいが、外部からの接続は一切受け付けたくない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "出て行く通信だけを通せるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "NAT",
+      "label": "パブリックサブネットに NAT ゲートウェイを置く",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "RT",
+      "label": "プライベートサブネットのルートテーブルで 0.0.0.0/0 を NAT ゲートウェイへ向ける",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "OUT",
+      "label": "アウトバウンド通信のみ可能、外部からの接続開始は不可能",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "HA",
+      "label": "高可用性のため AZ ごとに配置するベストプラクティス",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "IGW",
+      "label": "プライベートサブネットにインターネットゲートウェイ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "PEER",
+      "label": "VPC ピアリング",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "EIP",
+      "label": "Elastic IP を EC2 に直接付与",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "NAT",
+      "verb": "通せる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "NAT",
+      "to": "RT",
+      "verb": "経路を向ける",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "RT",
+      "to": "OUT",
+      "verb": "結果として得られる状態",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "NAT",
+      "to": "HA",
+      "verb": "運用上の前提を補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "J",
+      "to": "IGW",
+      "verb": "要件を満たさない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "PEER",
+      "verb": "要件を満たさない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "EIP",
+      "verb": "要件を満たさない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー)+ 直列: 判断軸で4選択肢を切り、正解側は配置→経路→得られる状態の3ステップを直列に置く",
+    "直列のみ(手順図): NAT ゲートウェイ配置 → ルート設定 → アウトバウンドのみ可能、の3ステップだけを描く"
+  ],
+  "selected_pattern": "分岐(判断フロー)+ 直列。手順図だけでは他の3案が落ちる理由が残らない。判断軸を頭に置いて選択肢を切り、正解側だけ手順を直列でつなぐことで、選ぶ理由と作り方を1枚に収めた。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "net01 とほぼ同じ判断構造の問題。こちらは解説にある「AZ ごとの配置」を注釈に加えて差分を持たせたが、図解として重複が気になる場合は問題側の統合を検討する余地がある。",
+    "解説は誤答3つの落ちる理由を述べていないため、選択肢の文言のまま置き、理由を創作していない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"プライベートサブネットの EC2 から<br/>インターネット上のパッケージリポジトリへアクセスしたい<br/>外部からの接続は一切受け付けたくない\"]:::req\n    J{\"出て行く通信だけを<br/>通せるか?\"}:::judge\n    NAT[\"パブリックサブネットに<br/>NAT ゲートウェイを置く\"]:::best\n    RT[\"プライベートサブネットのルートテーブルで<br/>0.0.0.0/0 を NAT ゲートウェイへ向ける\"]:::best\n    OUT[\"アウトバウンド通信のみ可能<br/>外部からの接続開始は不可能\"]:::best\n    HA[\"高可用性のため AZ ごとに NAT ゲートウェイを配置するのが<br/>ベストプラクティス\"]:::note\n    IGW[\"プライベートサブネットに<br/>インターネットゲートウェイ\"]:::alt\n    PEER[\"VPC ピアリング\"]:::alt\n    EIP[\"Elastic IP を EC2 に直接付与\"]:::alt\n\n    REQ --> J\n    J -->|\"通せる\"| NAT\n    NAT --> RT\n    RT --> OUT\n    NAT -.- HA\n    J -.->|\"要件外\"| IGW\n    J -.->|\"要件外\"| PEER\n    J -.->|\"要件外\"| EIP"
+}

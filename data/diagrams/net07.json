@@ -1,0 +1,125 @@
+{
+  "question_id": "net07",
+  "purpose": "サブネットがパブリックかどうかを決める条件が「ルートテーブルに IGW へのルートがあるか」の1点だけであることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、パブリック IP の自動割り当てをパブリックサブネットの条件だと思っている人。",
+  "message": "サブネットがパブリックかどうかは、ルートテーブルに IGW への 0.0.0.0/0 ルートがあるかだけで決まる。",
+  "source_summary": "サブネットがパブリックかどうかは、関連付けられたルートテーブルに IGW への 0.0.0.0/0 ルートがあるかで決まる。パブリック IP 自動割り当ては補助設定にすぎず、IGW へのルートがなければインターネットとは通信できない。この定義は VPC 設計問題の土台になる。",
+  "elements": [
+    {
+      "id": "Q",
+      "label": "このサブネットはパブリックか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "RT",
+      "label": "関連付けられたルートテーブルに IGW への 0.0.0.0/0 ルートがあるか",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "PUB",
+      "label": "パブリックサブネット",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "PRI",
+      "label": "パブリックではないサブネット",
+      "type": "state",
+      "priority": "secondary"
+    },
+    {
+      "id": "AUTO",
+      "label": "パブリック IP が自動割り当てされる(補助設定にすぎない)",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "NATN",
+      "label": "NAT ゲートウェイが配置されている",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "NACL",
+      "label": "NACL で全許可されている",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "パブリック IP だけでは通信できないという補足",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "Q",
+      "to": "RT",
+      "verb": "唯一の判定条件",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "RT",
+      "to": "PUB",
+      "verb": "ルートがある",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "RT",
+      "to": "PRI",
+      "verb": "ルートがない",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "AUTO",
+      "verb": "決め手にならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NATN",
+      "verb": "決め手にならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NACL",
+      "verb": "決め手にならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "AUTO",
+      "to": "NOTE",
+      "verb": "誤読しやすい点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 判定条件を1つ置き、満たす/満たさないで2つの状態へ分け、決め手にならない3項目を脇に落とす",
+    "包含(定義の内訳): パブリックサブネットの定義を中心に置き、必須条件と補助設定を入れ子で描き分ける"
+  ],
+  "selected_pattern": "分岐(判断フロー)。定義の内訳図は必須と補助の区別を表せるが、「ルートがなければパブリックではない」という裏側が描けない。判定条件を1つ置いて2状態に分ければ、定義がルートテーブルだけで決まることが線の本数として一目で伝わる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=定義を成立させる条件と結果、グレー=決め手にならない設定、青=判断軸、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「決め手にならない」というラベルは、解説がパブリック IP 自動割り当てについてのみ述べた内容を、定義がルートテーブルで決まる以上は他2つにも当てはまる、という範囲で使っている。個別の理由は創作していない。",
+    "NAT ゲートウェイはパブリックサブネットに置くものだが、その関係(置かれる側と定義の違い)は解説の範囲外なので描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    Q{\"このサブネットは<br/>パブリックか?\"}:::judge\n    RT[\"関連付けられたルートテーブルに<br/>インターネットゲートウェイへの<br/>0.0.0.0/0 ルートがあるか\"]:::best\n    PUB[\"パブリックサブネット\"]:::best\n    PRI[\"パブリックではないサブネット\"]:::svc\n    AUTO[\"パブリック IP が自動割り当てされる<br/>補助設定にすぎない\"]:::alt\n    NATN[\"NAT ゲートウェイが配置されている\"]:::alt\n    NACL[\"NACL で全許可されている\"]:::alt\n    NOTE[\"IGW へのルートがなければ<br/>パブリック IP があってもインターネットとは通信できない\"]:::note\n\n    Q --> RT\n    RT -->|\"ある\"| PUB\n    RT -->|\"ない\"| PRI\n    Q -.->|\"決め手でない\"| AUTO\n    Q -.->|\"決め手でない\"| NATN\n    Q -.->|\"決め手でない\"| NACL\n    AUTO -.- NOTE"
+}

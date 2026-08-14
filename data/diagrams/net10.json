@@ -1,0 +1,138 @@
+{
+  "question_id": "net10",
+  "purpose": "SaaS 型の VPC 間接続の選択が「ネットワーク全体をつなぐ必要があるか」の1点で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、VPC 間接続をピアリングや Transit Gateway だけで考えてしまう人。",
+  "message": "ネットワークを統合せずサービスだけを見せたいなら、CIDR 重複を許容できる PrivateLink を選ぶ。",
+  "source_summary": "PrivateLink はサービス側の NLB をエンドポイントサービスとして公開し、利用側 VPC にはインターフェイスエンドポイント(ENI)だけが現れる一方向のプライベート接続。ルーティング統合が不要なため CIDR 重複でも問題なく、数千の消費者にスケールする。ピアリングや TGW はネットワーク全体をつなぐため CIDR 重複不可で、SaaS 提供には過剰。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "自社 VPC のサービスをインターネットに公開せず、数百の顧客 VPC へ個別に提供したい。CIDR の重複も許容したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "ネットワーク全体をつなぐ必要があるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "PL",
+      "label": "AWS PrivateLink(インターフェイスエンドポイント)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NLB",
+      "label": "サービス側の NLB をエンドポイントサービスとして公開する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ENI",
+      "label": "利用側 VPC にはインターフェイスエンドポイント(ENI)だけが現れる一方向のプライベート接続",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "PEER",
+      "label": "全顧客と VPC ピアリングする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "TGW",
+      "label": "Transit Gateway で全 VPC を接続する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ALB",
+      "label": "パブリック ALB で公開する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "ルーティング統合が不要であることの帰結",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "PL",
+      "verb": "つなぐ必要はなくサービスだけ見せればよい",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "PL",
+      "to": "NLB",
+      "verb": "提供側の構成",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "NLB",
+      "to": "ENI",
+      "verb": "利用側に現れるもの",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "J",
+      "to": "PEER",
+      "verb": "ネットワーク全体をつなぐため CIDR 重複不可",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "TGW",
+      "verb": "同じく CIDR 重複不可で SaaS 提供には過剰",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "ALB",
+      "verb": "インターネットに公開してしまう",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "ENI",
+      "to": "NOTE",
+      "verb": "要件との対応を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「ネットワーク全体をつなぐ必要があるか」の1問で4選択肢を切り、正解側に提供側→利用側の流れをつなぐ",
+    "対比(接続モデルの2列): ネットワーク統合型(ピアリング・TGW)と サービス公開型(PrivateLink)を並べ、CIDR 重複の可否を比べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。2列の対比は接続モデルの違いをよく表せるが、パブリック ALB がどちらの列にも属さず置き場に困る。判断軸を1つ置いて4案を同じ土俵で切り、正解側だけ NLB → ENI の一方向接続を直列で示す形にした。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "解説の「数千の消費者にスケールする」は注釈に置いた。問題文の「数百の顧客 VPC」との数の違いは解説の記述をそのまま引いたもので、図では規模感の主張として扱っている。",
+    "エンドポイントサービスの承認フローや プライベート DNS 名は解説の範囲外なので描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"自社 VPC 内のサービスをインターネットに公開せず<br/>数百の顧客 VPC へ個別に提供したい<br/>CIDR の重複も許容したい\"]:::req\n    J{\"ネットワーク全体を<br/>つなぐ必要があるか?\"}:::judge\n    PL[\"AWS PrivateLink<br/>インターフェイスエンドポイント\"]:::best\n    NLB[\"サービス側の NLB を<br/>エンドポイントサービスとして公開する\"]:::best\n    ENI[\"利用側 VPC にはインターフェイスエンドポイント(ENI)だけが現れる<br/>一方向のプライベート接続\"]:::best\n    PEER[\"全顧客と VPC ピアリング<br/>ネットワーク全体をつなぐため CIDR 重複不可\"]:::alt\n    TGW[\"Transit Gateway で全 VPC を接続<br/>同じく CIDR 重複不可で SaaS 提供には過剰\"]:::alt\n    ALB[\"パブリック ALB で公開<br/>インターネットに公開してしまう\"]:::alt\n    NOTE[\"ルーティング統合が不要なため CIDR 重複でも問題なく<br/>数千の消費者にスケールする\"]:::note\n\n    REQ --> J\n    J -->|\"つなぐ必要なし\"| PL\n    PL --> NLB\n    NLB --> ENI\n    J -.->|\"CIDR 重複不可\"| PEER\n    J -.->|\"過剰\"| TGW\n    J -.->|\"公開になる\"| ALB\n    ENI -.- NOTE"
+}

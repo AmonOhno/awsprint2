@@ -1,0 +1,173 @@
+{
+  "question_id": "net02",
+  "purpose": "セキュリティグループとネットワーク ACL の違いを「適用単位・ステート性・書けるルール」の3項目に揃えて左右に並べ、混同を断つ。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、SG と NACL の名前は知っているが、どちらがステートフルかを取り違える人。",
+  "message": "セキュリティグループはインスタンス単位・ステートフル・許可のみ、NACL はサブネット単位・ステートレス・許可と拒否の両方。",
+  "source_summary": "セキュリティグループはインスタンス(ENI)単位・ステートフル(戻り通信は自動許可)・許可ルールのみ。NACL はサブネット単位・ステートレス(戻り通信も明示的に許可が必要)・許可と拒否の両方をルール番号順に評価する。「特定 IP を明示的に拒否したい」場合は NACL の出番。",
+  "elements": [
+    {
+      "id": "Q",
+      "label": "どこに効き、戻りの通信をどう扱い、何を書けるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "SG",
+      "label": "セキュリティグループ",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "SGU",
+      "label": "インスタンス(ENI)単位で適用される",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "SGS",
+      "label": "ステートフル(戻り通信は自動許可)",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "SGR",
+      "label": "許可ルールのみ書ける",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "NA",
+      "label": "ネットワーク ACL",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NAU",
+      "label": "サブネット単位で適用される",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "NAS",
+      "label": "ステートレス(戻り通信も明示的に許可が必要)",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "NAR",
+      "label": "許可と拒否の両方をルール番号順に評価する",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "特定 IP を明示的に拒否したいときの使い分け",
+      "type": "other",
+      "priority": "support"
+    },
+    {
+      "id": "WRONG",
+      "label": "誤答はいずれも適用単位かステート性を入れ替えた説明",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "Q",
+      "to": "SG",
+      "verb": "一方の答え",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NA",
+      "verb": "もう一方の答え",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "SG",
+      "to": "SGU",
+      "verb": "適用単位",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "SG",
+      "to": "SGS",
+      "verb": "ステート性",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "SG",
+      "to": "SGR",
+      "verb": "書けるルール",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "NA",
+      "to": "NAU",
+      "verb": "適用単位",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "NA",
+      "to": "NAS",
+      "verb": "ステート性",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "NA",
+      "to": "NAR",
+      "verb": "書けるルール",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "NAR",
+      "to": "NOTE",
+      "verb": "使い分けを補う",
+      "direction": "none",
+      "kind": "other"
+    },
+    {
+      "from": "Q",
+      "to": "WRONG",
+      "verb": "誤読しやすい点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "label": "セキュリティグループ",
+      "element_ids": ["SG", "SGU", "SGS", "SGR"]
+    },
+    {
+      "label": "ネットワーク ACL",
+      "element_ids": ["NA", "NAU", "NAS", "NAR"]
+    }
+  ],
+  "candidate_patterns": [
+    "対比(左右2グループ): 適用単位・ステート性・書けるルールの3項目を同じ順で並べ、行ごとに読み比べられるようにする",
+    "分岐(判断フロー): 「拒否を書きたいか」「戻り通信を自動許可したいか」で SG と NACL に振り分ける"
+  ],
+  "selected_pattern": "対比(左右2グループ)。この問題は選択を求めず「正しい説明」を選ばせる形式で、誤答はいずれも2つの属性を入れ替えたもの。同じ3項目を同じ順で左右に並べる方が、入れ替えに気づく形として素直に読める。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=正解の説明を構成する2つの機能、白=その属性、青=判断軸、薄黄=補足注釈(誤答の型もここに置く)。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "SG と NACL はどちらも正しい機能なので、両方を緑(best)にしている。他の問題では緑=正解の選択肢だが、この問題では「正しい説明の構成要素」の意味で使っている。",
+    "NACL のルール番号順評価は解説の記述どおりに置いたが、番号の付け方(100 刻みなど)は解説にないため描いていない。"
+  ],
+  "mermaid": "flowchart TB\n    Q{\"どこに効き<br/>戻りの通信をどう扱い<br/>何を書けるか?\"}:::judge\n    WRONG[\"誤答はいずれも<br/>適用単位かステート性を入れ替えた説明\"]:::note\n    NOTE[\"「特定 IP を明示的に拒否したい」なら NACL の出番\"]:::note\n\n    subgraph SGG[\"セキュリティグループ\"]\n        SG[\"セキュリティグループ\"]:::best\n        SGU[\"インスタンス(ENI)単位\"]:::svc\n        SGS[\"ステートフル<br/>戻り通信は自動許可\"]:::svc\n        SGR[\"許可ルールのみ\"]:::svc\n        SG --> SGU\n        SG --> SGS\n        SG --> SGR\n    end\n\n    subgraph NAG[\"ネットワーク ACL\"]\n        NA[\"ネットワーク ACL\"]:::best\n        NAU[\"サブネット単位\"]:::svc\n        NAS[\"ステートレス<br/>戻り通信も明示的に許可が必要\"]:::svc\n        NAR[\"許可と拒否の両方を<br/>ルール番号順に評価\"]:::svc\n        NA --> NAU\n        NA --> NAS\n        NA --> NAR\n    end\n\n    Q --> SG\n    Q --> NA\n    Q -.- WRONG\n    NAR -.- NOTE"
+}

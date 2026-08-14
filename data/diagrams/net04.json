@@ -1,0 +1,138 @@
+{
+  "question_id": "net04",
+  "purpose": "静的コンテンツ配信の構成が「低レイテンシ配信」と「オリジンへの直接アクセス禁止」を同時に満たせるかで決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、CloudFront は知っているが OAC/OAI の役割が曖昧な人。",
+  "message": "エッジ配信と直接アクセス禁止を同時に満たすのは、CloudFront + OAC で S3 をオリジンにする構成だけ。",
+  "source_summary": "CloudFront はエッジロケーションからコンテンツをキャッシュ配信し、OAC を使うと「CloudFront 経由のみ S3 にアクセス可能」というバケットポリシーを構成できる。旧方式の OAI に代わり、現在は OAC が推奨。S3 の公開設定は直接アクセスを許してしまい要件を満たさない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "静的コンテンツを世界中へ低レイテンシで配信し、オリジンの S3 への直接アクセスは禁止したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "エッジ配信と直接アクセス禁止を同時に満たせるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CF",
+      "label": "CloudFront(エッジロケーションからキャッシュ配信)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "OAC",
+      "label": "OAC(オリジンアクセスコントロール)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "S3",
+      "label": "オリジンの S3 バケット",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "PUB",
+      "label": "S3 の静的 Web サイトホスティングを公開設定で使う",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "REP",
+      "label": "各リージョンに S3 バケットを複製し Route 53 で振り分ける",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NGX",
+      "label": "EC2 上に Nginx を立てて S3 をプロキシする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "OAI から OAC への移行に関する補足",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "CF",
+      "verb": "両方満たせる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CF",
+      "to": "OAC",
+      "verb": "直接アクセスを閉じる手段",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "OAC",
+      "to": "S3",
+      "verb": "CloudFront 経由のみ許可する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "J",
+      "to": "PUB",
+      "verb": "直接アクセスを許してしまう",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "REP",
+      "verb": "要件を満たさない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "NGX",
+      "verb": "要件を満たさない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "OAC",
+      "to": "NOTE",
+      "verb": "現行の推奨方式を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「2つの要件を同時に満たせるか」の1問で4選択肢を切り、正解側だけ配信経路を直列でつなぐ",
+    "直列(配信経路図): 利用者 → CloudFront → OAC → S3 の流れを描き、S3 への直接アクセスに×印を付ける"
+  ],
+  "selected_pattern": "分岐(判断フロー)。配信経路図は OAC の効き方をよく表せるが、誤答3つが落ちる理由の置き場がない。判断軸を1つ置いて4案を切り、正解側だけ CloudFront → OAC → S3 の経路を残す形にした。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "S3 複製 + Route 53 と Nginx プロキシは解説が個別の理由を述べていないため、選択肢の文言のまま置き、落ちる理由は判断軸から言える範囲にとどめた。",
+    "キャッシュの無効化や TTL といった運用面は解説の範囲外なので描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"静的コンテンツを世界中のユーザーへ低レイテンシで配信したい<br/>オリジンの S3 バケットへの直接アクセスは禁止したい\"]:::req\n    J{\"エッジ配信と直接アクセス禁止を<br/>同時に満たせるか?\"}:::judge\n    CF[\"CloudFront<br/>エッジロケーションからキャッシュ配信\"]:::best\n    OAC[\"OAC(オリジンアクセスコントロール)<br/>CloudFront 経由のみ許可するバケットポリシー\"]:::best\n    S3[\"オリジンの S3 バケット\"]:::svc\n    PUB[\"S3 の静的 Web サイトホスティングを公開設定で使う<br/>直接アクセスを許してしまう\"]:::alt\n    REP[\"各リージョンに S3 を複製し Route 53 で振り分ける\"]:::alt\n    NGX[\"EC2 上に Nginx を立てて S3 をプロキシする\"]:::alt\n    NOTE[\"旧方式の OAI に代わり現在は OAC が推奨\"]:::note\n\n    REQ --> J\n    J -->|\"両方満たす\"| CF\n    CF --> OAC\n    OAC --> S3\n    J -.->|\"公開になる\"| PUB\n    J -.->|\"要件外\"| REP\n    J -.->|\"要件外\"| NGX\n    OAC -.- NOTE"
+}

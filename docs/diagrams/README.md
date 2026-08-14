@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 133 問 / 全 400 問
+収録: 143 問 / 全 400 問
 
 ---
 
@@ -6776,3 +6776,481 @@ flowchart TD
 **解説**: 全文検索・形態素解析(kuromoji 等)・ファセット集計・関連度スコアリングは検索エンジンの領域で、OpenSearch Service が適します。マスタは Aurora に置いたまま、DMS の CDC や Lambda によるイベント連携で検索インデックスを継続同期する CQRS 的な構成が定石です。LIKE 検索は日本語の分かち書きやスコアリングに対応できず、DynamoDB の GSI は柔軟な検索条件を扱えません。
 
 **確認事項**: Athena の選択肢は解説が理由を述べていないため、判断軸(検索エンジンの機能を満たさない)から言える範囲だけをラベルにした。更新のリアルタイム性の観点は図に入れていない。
+
+---
+
+## net01 — ネットワーク / level 1
+
+**問題**: プライベートサブネットの EC2 インスタンスから、インターネット上の外部 API へアウトバウンド通信したい(インバウンドは不要)。何を配置すべきか?
+
+**正解**: パブリックサブネットに NAT ゲートウェイを配置しルートテーブルに追加
+
+**他の選択肢**: プライベートサブネットにインターネットゲートウェイを直接アタッチ / インスタンスに Elastic IP を割り当てる / VPC ピアリング接続を作成する
+
+**図解の主メッセージ**: アウトバウンドだけ通したいなら、パブリックサブネットの NAT ゲートウェイへ 0.0.0.0/0 を向ける。
+
+**採用パターン**: 分岐(判断フロー)。構成図は経路のイメージを掴みやすいが、誤答3つが落ちる理由を置く場所がない。試験で問われるのは「どれを選ぶか」なので、判断軸を1つ置いて選択肢を切る形にした。(候補: 分岐(判断フロー): 「外部からの接続開始を許さずに出られるか」の1問で4選択肢を振り分け、正解側に経路設定を直列でつなぐ / 包含(VPC の構成図): VPC・パブリックサブネット・プライベートサブネットを入れ子で描き、通信の向きを矢印で示す)
+
+```mermaid
+flowchart TD
+    REQ["プライベートサブネットの EC2 から<br/>インターネット上の外部 API へ通信したい<br/>インバウンドは不要"]:::req
+    J{"外部からの接続開始を<br/>許さずに出て行けるか?"}:::judge
+    NAT["パブリックサブネットに<br/>NAT ゲートウェイを配置する"]:::best
+    RT["プライベートサブネットのルートテーブルで<br/>0.0.0.0/0 を NAT ゲートウェイへ向ける"]:::best
+    OUT["アウトバウンドのみ許可される<br/>外部からの接続開始は不可"]:::best
+    IGW["プライベートサブネットに<br/>インターネットゲートウェイを直接アタッチ"]:::alt
+    EIP["インスタンスに Elastic IP を割り当てる"]:::alt
+    PEER["VPC ピアリング接続を作成する"]:::alt
+    NOTE["インターネットゲートウェイは VPC 単位のアタッチ<br/>プライベートサブネットのインスタンスに直接使うものではない"]:::note
+
+    REQ --> J
+    J -->|"出る側だけ"| NAT
+    NAT --> RT
+    RT --> OUT
+    J -.->|"用途が違う"| IGW
+    J -.->|"要件外"| EIP
+    J -.->|"要件外"| PEER
+    IGW -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net01.svg`](../../web/diagrams/net01.svg)
+
+**解説**: NAT ゲートウェイをパブリックサブネットに置き、プライベートサブネットのルートテーブルで 0.0.0.0/0 を NAT ゲートウェイに向けるのが定番構成です。これでアウトバウンドのみ許可され、外部からの接続開始は不可になります。インターネットゲートウェイは VPC 単位のアタッチであり、プライベートサブネットのインスタンスに直接使うものではありません。
+
+**確認事項**: 解説が落ちる理由を述べているのは IGW の選択肢だけなので、Elastic IP と VPC ピアリングは選択肢の文言のまま置き、理由を創作していない。 / AZ ごとに NAT ゲートウェイを置く可用性の観点は、この問題の解説にないため描いていない(net06 側で扱う)。
+
+---
+
+## net02 — ネットワーク / level 1
+
+**問題**: セキュリティグループとネットワーク ACL の違いとして正しいのはどれか?
+
+**正解**: セキュリティグループはステートフルで許可ルールのみ、NACL はステートレスで許可/拒否両方を設定できる
+
+**他の選択肢**: セキュリティグループはサブネット単位、NACL はインスタンス単位で適用される / どちらもステートレスで、戻りの通信も明示的に許可が必要 / NACL はステートフルなので戻りの通信は自動許可される
+
+**図解の主メッセージ**: セキュリティグループはインスタンス単位・ステートフル・許可のみ、NACL はサブネット単位・ステートレス・許可と拒否の両方。
+
+**採用パターン**: 対比(左右2グループ)。この問題は選択を求めず「正しい説明」を選ばせる形式で、誤答はいずれも2つの属性を入れ替えたもの。同じ3項目を同じ順で左右に並べる方が、入れ替えに気づく形として素直に読める。(候補: 対比(左右2グループ): 適用単位・ステート性・書けるルールの3項目を同じ順で並べ、行ごとに読み比べられるようにする / 分岐(判断フロー): 「拒否を書きたいか」「戻り通信を自動許可したいか」で SG と NACL に振り分ける)
+
+```mermaid
+flowchart TB
+    Q{"どこに効き<br/>戻りの通信をどう扱い<br/>何を書けるか?"}:::judge
+    WRONG["誤答はいずれも<br/>適用単位かステート性を入れ替えた説明"]:::note
+    NOTE["「特定 IP を明示的に拒否したい」なら NACL の出番"]:::note
+
+    subgraph SGG["セキュリティグループ"]
+        SG["セキュリティグループ"]:::best
+        SGU["インスタンス(ENI)単位"]:::svc
+        SGS["ステートフル<br/>戻り通信は自動許可"]:::svc
+        SGR["許可ルールのみ"]:::svc
+        SG --> SGU
+        SG --> SGS
+        SG --> SGR
+    end
+
+    subgraph NAG["ネットワーク ACL"]
+        NA["ネットワーク ACL"]:::best
+        NAU["サブネット単位"]:::svc
+        NAS["ステートレス<br/>戻り通信も明示的に許可が必要"]:::svc
+        NAR["許可と拒否の両方を<br/>ルール番号順に評価"]:::svc
+        NA --> NAU
+        NA --> NAS
+        NA --> NAR
+    end
+
+    Q --> SG
+    Q --> NA
+    Q -.- WRONG
+    NAR -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net02.svg`](../../web/diagrams/net02.svg)
+
+**解説**: セキュリティグループはインスタンス(ENI)単位・ステートフル(戻り通信は自動許可)・許可ルールのみです。NACL はサブネット単位・ステートレス(戻り通信も明示的に許可が必要)・許可と拒否の両方をルール番号順に評価します。「特定 IP を明示的に拒否したい」場合は NACL の出番です。
+
+**確認事項**: SG と NACL はどちらも正しい機能なので、両方を緑(best)にしている。他の問題では緑=正解の選択肢だが、この問題では「正しい説明の構成要素」の意味で使っている。 / NACL のルール番号順評価は解説の記述どおりに置いたが、番号の付け方(100 刻みなど)は解説にないため描いていない。
+
+---
+
+## net03 — ネットワーク / level 2
+
+**問題**: VPC 内の EC2 から S3 へ、インターネットを経由せずにアクセスしたい。追加コストなしで実現できる方法はどれか?
+
+**正解**: S3 用のゲートウェイ型 VPC エンドポイントを作成する
+
+**他の選択肢**: NAT ゲートウェイ経由でアクセスする / インターフェイス型 VPC エンドポイント(PrivateLink)を作成する / Direct Connect を契約する
+
+**図解の主メッセージ**: 相手が S3(または DynamoDB)なら、無料のゲートウェイ型 VPC エンドポイントを選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。2軸マトリクスは「無料かつ私的経路」の升目が正解だと示せて筋は通るが、升目の位置を読み取る手間がかかる。相手が S3 かどうかという1つの問いで切る方が、試験本番の判断順序をそのままなぞれる。(候補: 分岐(判断フロー): 「無料の経路が使えるか」の1問で4選択肢を振り分ける / マトリクス: インターネットを経由するか × 追加コストがかかるか の2軸に4案を配置する)
+
+```mermaid
+flowchart TD
+    REQ["VPC 内の EC2 から S3 へ<br/>インターネットを経由せずアクセスしたい<br/>追加コストなしで実現したい"]:::req
+    J{"相手は S3 / DynamoDB か<br/>無料の経路が使えるか?"}:::judge
+    GW["S3 用のゲートウェイ型 VPC エンドポイント<br/>無料"]:::best
+    RT["ルートテーブル経由で<br/>AWS ネットワーク内から直接アクセスする"]:::best
+    IF["インターフェイス型 VPC エンドポイント(PrivateLink)<br/>実現できるが時間課金+データ処理料金"]:::alt
+    NAT["NAT ゲートウェイ経由でアクセスする<br/>インターネット向け経路になり処理料金も高い"]:::alt
+    DX["Direct Connect を契約する"]:::alt
+    NOTE["ゲートウェイ型が対応するのは S3 と DynamoDB のみ"]:::note
+
+    REQ --> J
+    J -->|"S3 なので可"| GW
+    GW --> RT
+    J -.->|"有料"| IF
+    J -.->|"経路が違う"| NAT
+    J -.->|"要件外"| DX
+    GW -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net03.svg`](../../web/diagrams/net03.svg)
+
+**解説**: ゲートウェイ型 VPC エンドポイント(S3 と DynamoDB のみ対応)は無料で、ルートテーブル経由で AWS ネットワーク内から直接アクセスできます。インターフェイス型(PrivateLink)でも実現できますが時間課金+データ処理料金がかかります。NAT ゲートウェイ経由はインターネット向け経路になるうえ処理料金も高くつきます。
+
+**確認事項**: Direct Connect については解説が理由を述べていないため、要件(追加コストなし)から言える範囲だけをラベルにし、オンプレミス接続用途などの説明は足していない。 / インターフェイス型は「実現できるが有料」なので、機能不足ではなくコストで落ちることが伝わるようラベルを分けている。
+
+---
+
+## net04 — ネットワーク / level 2
+
+**問題**: 静的コンテンツを世界中のユーザーに低レイテンシで配信し、オリジンの S3 バケットへの直接アクセスは禁止したい。どの構成が最適か?
+
+**正解**: CloudFront + OAC(オリジンアクセスコントロール)で S3 をオリジンにする
+
+**他の選択肢**: S3 の静的 Web サイトホスティングを公開設定で使う / 各リージョンに S3 バケットを複製し Route 53 で振り分ける / EC2 上に Nginx を立てて S3 をプロキシする
+
+**図解の主メッセージ**: エッジ配信と直接アクセス禁止を同時に満たすのは、CloudFront + OAC で S3 をオリジンにする構成だけ。
+
+**採用パターン**: 分岐(判断フロー)。配信経路図は OAC の効き方をよく表せるが、誤答3つが落ちる理由の置き場がない。判断軸を1つ置いて4案を切り、正解側だけ CloudFront → OAC → S3 の経路を残す形にした。(候補: 分岐(判断フロー): 「2つの要件を同時に満たせるか」の1問で4選択肢を切り、正解側だけ配信経路を直列でつなぐ / 直列(配信経路図): 利用者 → CloudFront → OAC → S3 の流れを描き、S3 への直接アクセスに×印を付ける)
+
+```mermaid
+flowchart TD
+    REQ["静的コンテンツを世界中のユーザーへ低レイテンシで配信したい<br/>オリジンの S3 バケットへの直接アクセスは禁止したい"]:::req
+    J{"エッジ配信と直接アクセス禁止を<br/>同時に満たせるか?"}:::judge
+    CF["CloudFront<br/>エッジロケーションからキャッシュ配信"]:::best
+    OAC["OAC(オリジンアクセスコントロール)<br/>CloudFront 経由のみ許可するバケットポリシー"]:::best
+    S3["オリジンの S3 バケット"]:::svc
+    PUB["S3 の静的 Web サイトホスティングを公開設定で使う<br/>直接アクセスを許してしまう"]:::alt
+    REP["各リージョンに S3 を複製し Route 53 で振り分ける"]:::alt
+    NGX["EC2 上に Nginx を立てて S3 をプロキシする"]:::alt
+    NOTE["旧方式の OAI に代わり現在は OAC が推奨"]:::note
+
+    REQ --> J
+    J -->|"両方満たす"| CF
+    CF --> OAC
+    OAC --> S3
+    J -.->|"公開になる"| PUB
+    J -.->|"要件外"| REP
+    J -.->|"要件外"| NGX
+    OAC -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net04.svg`](../../web/diagrams/net04.svg)
+
+**解説**: CloudFront はエッジロケーションからコンテンツをキャッシュ配信し、OAC を使うと「CloudFront 経由のみ S3 にアクセス可能」というバケットポリシーを構成できます。旧方式の OAI に代わり、現在は OAC が推奨です。S3 公開設定は直接アクセスを許してしまい要件を満たしません。
+
+**確認事項**: S3 複製 + Route 53 と Nginx プロキシは解説が個別の理由を述べていないため、選択肢の文言のまま置き、落ちる理由は判断軸から言える範囲にとどめた。 / キャッシュの無効化や TTL といった運用面は解説の範囲外なので描いていない。
+
+---
+
+## net05 — ネットワーク / level 2
+
+**問題**: Route 53 で、プライマリサイトの障害時に静的なバックアップサイト(S3)へ自動的に切り替えたい。どのルーティングポリシーを使うべきか?
+
+**正解**: フェイルオーバールーティング + ヘルスチェック
+
+**他の選択肢**: 加重ルーティング / レイテンシールーティング / 位置情報ルーティング
+
+**図解の主メッセージ**: 障害時に別サイトへ自動で切り替えたいなら、フェイルオーバールーティングとヘルスチェックの組み合わせ。
+
+**採用パターン**: 分岐(判断フロー)。対応表は4つを一望できるが、どれが今回の正解かという流れが弱い。1つの問いから枝を伸ばす形なら、正解の枝を緑にするだけで判断とユースケース対応の両方を同時に見せられる。(候補: 分岐(判断フロー): 「DNS で何を決めたいか」の1問から4つのポリシーへ分け、各枝にユースケースを書く / テーブル(対応表): ポリシー名とユースケースを2列で並べ、該当行を強調する)
+
+```mermaid
+flowchart TD
+    REQ["プライマリサイトの障害時に<br/>静的なバックアップサイト(S3)へ<br/>自動的に切り替えたい"]:::req
+    J{"DNS で何を<br/>決めたいか?"}:::judge
+    FO["フェイルオーバールーティング + ヘルスチェック<br/>プライマリが異常になったら切り替える"]:::best
+    SEC["セカンダリ = S3 の静的サイト"]:::svc
+    W["加重ルーティング<br/>割合分散(カナリアリリース等)"]:::alt
+    L["レイテンシールーティング<br/>最速リージョンへの誘導"]:::alt
+    G["位置情報ルーティング<br/>ユーザーの場所に応じた出し分け"]:::alt
+
+    REQ --> J
+    J -->|"障害時の切替"| FO
+    FO --> SEC
+    J -.->|"割合分散"| W
+    J -.->|"速度で誘導"| L
+    J -.->|"場所で選ぶ"| G
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net05.svg`](../../web/diagrams/net05.svg)
+
+**解説**: フェイルオーバールーティングはヘルスチェックと組み合わせ、プライマリが異常になったらセカンダリ(S3 静的サイトなど)へ DNS を切り替えます。加重は割合分散(カナリアリリース等)、レイテンシーは最速リージョンへの誘導、位置情報はユーザーの場所に応じた出し分けに使います。ユースケースとポリシー名の対応を覚えましょう。
+
+**確認事項**: 誤答3つはいずれも実在する正当なポリシーで、要件に合わないだけなのでグレー(alt)にしている。「間違ったサービス」ではないことをラベルのユースケース併記で示した。 / 複数値回答やシンプルルーティングは解説に出てこないため描いていない。
+
+---
+
+## net06 — ネットワーク / level 1
+
+**問題**: プライベートサブネットの EC2 からインターネット上のパッケージリポジトリへアクセスしたいが、外部からの接続は一切受け付けたくない。何を配置すべきか?
+
+**正解**: パブリックサブネットに NAT ゲートウェイ
+
+**他の選択肢**: プライベートサブネットにインターネットゲートウェイ / VPC ピアリング / Elastic IP を EC2 に直接付与
+
+**図解の主メッセージ**: 出て行く通信だけを通したいなら、パブリックサブネットの NAT ゲートウェイへ 0.0.0.0/0 を向ける。
+
+**採用パターン**: 分岐(判断フロー)+ 直列。手順図だけでは他の3案が落ちる理由が残らない。判断軸を頭に置いて選択肢を切り、正解側だけ手順を直列でつなぐことで、選ぶ理由と作り方を1枚に収めた。(候補: 分岐(判断フロー)+ 直列: 判断軸で4選択肢を切り、正解側は配置→経路→得られる状態の3ステップを直列に置く / 直列のみ(手順図): NAT ゲートウェイ配置 → ルート設定 → アウトバウンドのみ可能、の3ステップだけを描く)
+
+```mermaid
+flowchart TD
+    REQ["プライベートサブネットの EC2 から<br/>インターネット上のパッケージリポジトリへアクセスしたい<br/>外部からの接続は一切受け付けたくない"]:::req
+    J{"出て行く通信だけを<br/>通せるか?"}:::judge
+    NAT["パブリックサブネットに<br/>NAT ゲートウェイを置く"]:::best
+    RT["プライベートサブネットのルートテーブルで<br/>0.0.0.0/0 を NAT ゲートウェイへ向ける"]:::best
+    OUT["アウトバウンド通信のみ可能<br/>外部からの接続開始は不可能"]:::best
+    HA["高可用性のため AZ ごとに NAT ゲートウェイを配置するのが<br/>ベストプラクティス"]:::note
+    IGW["プライベートサブネットに<br/>インターネットゲートウェイ"]:::alt
+    PEER["VPC ピアリング"]:::alt
+    EIP["Elastic IP を EC2 に直接付与"]:::alt
+
+    REQ --> J
+    J -->|"通せる"| NAT
+    NAT --> RT
+    RT --> OUT
+    NAT -.- HA
+    J -.->|"要件外"| IGW
+    J -.->|"要件外"| PEER
+    J -.->|"要件外"| EIP
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net06.svg`](../../web/diagrams/net06.svg)
+
+**解説**: NAT ゲートウェイをパブリックサブネットに置き、プライベートサブネットのルートテーブルで 0.0.0.0/0 を NAT ゲートウェイへ向けると、アウトバウンド通信のみ可能になります。外部からの接続開始は不可能なため安全です。高可用性のため AZ ごとに NAT ゲートウェイを配置するのがベストプラクティスです。
+
+**確認事項**: net01 とほぼ同じ判断構造の問題。こちらは解説にある「AZ ごとの配置」を注釈に加えて差分を持たせたが、図解として重複が気になる場合は問題側の統合を検討する余地がある。 / 解説は誤答3つの落ちる理由を述べていないため、選択肢の文言のまま置き、理由を創作していない。
+
+---
+
+## net07 — ネットワーク / level 1
+
+**問題**: 「パブリックサブネット」の定義として正しいものはどれか?
+
+**正解**: ルートテーブルにインターネットゲートウェイへのルートを持つサブネット
+
+**他の選択肢**: パブリック IP が自動割り当てされるサブネット / NAT ゲートウェイが配置されたサブネット / NACL で全許可されているサブネット
+
+**図解の主メッセージ**: サブネットがパブリックかどうかは、ルートテーブルに IGW への 0.0.0.0/0 ルートがあるかだけで決まる。
+
+**採用パターン**: 分岐(判断フロー)。定義の内訳図は必須と補助の区別を表せるが、「ルートがなければパブリックではない」という裏側が描けない。判定条件を1つ置いて2状態に分ければ、定義がルートテーブルだけで決まることが線の本数として一目で伝わる。(候補: 分岐(判断フロー): 判定条件を1つ置き、満たす/満たさないで2つの状態へ分け、決め手にならない3項目を脇に落とす / 包含(定義の内訳): パブリックサブネットの定義を中心に置き、必須条件と補助設定を入れ子で描き分ける)
+
+```mermaid
+flowchart TD
+    Q{"このサブネットは<br/>パブリックか?"}:::judge
+    RT["関連付けられたルートテーブルに<br/>インターネットゲートウェイへの<br/>0.0.0.0/0 ルートがあるか"]:::best
+    PUB["パブリックサブネット"]:::best
+    PRI["パブリックではないサブネット"]:::svc
+    AUTO["パブリック IP が自動割り当てされる<br/>補助設定にすぎない"]:::alt
+    NATN["NAT ゲートウェイが配置されている"]:::alt
+    NACL["NACL で全許可されている"]:::alt
+    NOTE["IGW へのルートがなければ<br/>パブリック IP があってもインターネットとは通信できない"]:::note
+
+    Q --> RT
+    RT -->|"ある"| PUB
+    RT -->|"ない"| PRI
+    Q -.->|"決め手でない"| AUTO
+    Q -.->|"決め手でない"| NATN
+    Q -.->|"決め手でない"| NACL
+    AUTO -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net07.svg`](../../web/diagrams/net07.svg)
+
+**解説**: サブネットがパブリックかどうかは、関連付けられたルートテーブルに IGW への 0.0.0.0/0 ルートがあるかで決まります。パブリック IP 自動割り当ては補助設定にすぎず、IGW へのルートがなければインターネットとは通信できません。この定義は VPC 設計問題の土台になるため正確に覚えます。
+
+**確認事項**: 「決め手にならない」というラベルは、解説がパブリック IP 自動割り当てについてのみ述べた内容を、定義がルートテーブルで決まる以上は他2つにも当てはまる、という範囲で使っている。個別の理由は創作していない。 / NAT ゲートウェイはパブリックサブネットに置くものだが、その関係(置かれる側と定義の違い)は解説の範囲外なので描いていない。
+
+---
+
+## net08 — ネットワーク / level 2
+
+**問題**: 特定の悪意ある IP アドレスからのアクセスをサブネット単位で明示的に拒否したい。どの機能を使うべきか?
+
+**正解**: ネットワーク ACL に拒否ルールを追加
+
+**他の選択肢**: セキュリティグループに拒否ルールを追加 / ルートテーブルからルートを削除 / IGW をデタッチ
+
+**図解の主メッセージ**: 特定 IP を明示的に拒否できるのは、許可と拒否の両方を書けてサブネット単位で効く NACL だけ。
+
+**採用パターン**: 分岐(判断フロー)。SG と NACL の対比は net02 で扱っており、この問題で問われているのは「遮断手段としてどれを選ぶか」。判断軸を1つ置いてルートテーブルや IGW を含む4案を同じ土俵で切る方が、設問の形に合う。(候補: 分岐(判断フロー): 「拒否を書けてサブネット単位で効くか」の1問で4選択肢を切る / 対比(SG と NACL の2列): 書けるルールと適用単位を並べ、拒否が書ける側を強調する)
+
+```mermaid
+flowchart TD
+    REQ["特定の悪意ある IP アドレスからのアクセスを<br/>サブネット単位で明示的に拒否したい"]:::req
+    J{"「拒否」を書けて<br/>サブネット単位で効くか?"}:::judge
+    NACL["ネットワーク ACL に拒否ルールを追加する"]:::best
+    EVAL["許可・拒否の両方をルール番号順に評価する<br/>サブネット単位で適用されるため IP ブロックに適する"]:::best
+    SG["セキュリティグループに拒否ルールを追加する<br/>許可ルールしか書けない"]:::alt
+    RT["ルートテーブルからルートを削除する"]:::alt
+    IGW["IGW をデタッチする"]:::alt
+    NOTE["SG はステートフル(戻りトラフィックを自動許可)<br/>NACL はステートレス"]:::note
+
+    REQ --> J
+    J -->|"両方満たす"| NACL
+    NACL --> EVAL
+    J -.->|"許可のみ"| SG
+    J -.->|"IP 指定不可"| RT
+    J -.->|"IP 指定不可"| IGW
+    EVAL -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net08.svg`](../../web/diagrams/net08.svg)
+
+**解説**: セキュリティグループは許可ルールしか書けないため、特定 IP の「拒否」はできません。ネットワーク ACL は許可・拒否の両方をルール番号順に評価でき、サブネット単位で適用されるため IP ブロックに適しています。SG はステートフル(戻りトラフィック自動許可)、NACL はステートレスという違いも必ず押さえます。
+
+**確認事項**: ルートテーブル削除と IGW デタッチの落ちる理由は解説に明記がないため、要件(特定の IP を対象にする)から言える範囲だけをラベルにした。通信全体が止まるといった副作用は書いていない。 / NACL のルール番号の付け方(評価順の設計)は解説の範囲外なので描いていない。
+
+---
+
+## net09 — ネットワーク / level 2
+
+**問題**: プライベートサブネットの EC2 から S3 へ、インターネットや NAT ゲートウェイを経由せず追加コストなしでアクセスしたい。どの構成が適切か?
+
+**正解**: S3 用のゲートウェイ型 VPC エンドポイント
+
+**他の選択肢**: NAT ゲートウェイ経由でアクセス / S3 用のインターフェイス型エンドポイントのみ / IGW を追加してパブリック化
+
+**図解の主メッセージ**: S3 が相手なら、無料のゲートウェイ型 VPC エンドポイントをまず検討する。
+
+**採用パターン**: 分岐(判断フロー)。コスト比較の3列はコスト差を強調できるが、料金の具体額は解説にないため列を埋められず、IGW の選択肢も並べにくい。判断軸を1つ置いて4案を切る形の方が余計な解読が要らない。(候補: 分岐(判断フロー): 「無料で私的経路を作れるか」の1問で4選択肢を切り、正解側に経路の作り方をつなぐ / 対比(コスト比較): ゲートウェイ型 / インターフェイス型 / NAT ゲートウェイを3列に並べ、料金の有無で比べる)
+
+```mermaid
+flowchart TD
+    REQ["プライベートサブネットの EC2 から S3 へ<br/>インターネットや NAT ゲートウェイを経由せず<br/>追加コストなしでアクセスしたい"]:::req
+    J{"無料で私的経路を<br/>作れるか?"}:::judge
+    GW["S3 用のゲートウェイ型 VPC エンドポイント<br/>利用料は無料"]:::best
+    RT["ルートテーブルにエントリを追加するだけで<br/>AWS 網内の私的経路になる"]:::best
+    NAT["NAT ゲートウェイ経由でアクセスする<br/>時間課金+データ処理料金がかかる"]:::alt
+    IF["S3 用のインターフェイス型エンドポイントのみ<br/>有料"]:::alt
+    IGW["IGW を追加してパブリック化する"]:::alt
+    NOTE["ゲートウェイ型は S3 と DynamoDB 専用<br/>S3 への大量アクセスではまずこれを検討する"]:::note
+
+    REQ --> J
+    J -->|"作れる"| GW
+    GW --> RT
+    J -.->|"有料"| NAT
+    J -.->|"有料"| IF
+    J -.->|"要件外"| IGW
+    GW -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net09.svg`](../../web/diagrams/net09.svg)
+
+**解説**: ゲートウェイ型 VPC エンドポイントは S3 と DynamoDB 専用で、ルートテーブルにエントリを追加するだけで AWS 網内の私的経路を提供し、利用料は無料です。NAT ゲートウェイ経由は時間課金+データ処理料金がかかるため、S3 への大量アクセスではまずゲートウェイエンドポイントを検討します。インターフェイス型は有料です。
+
+**確認事項**: net03 と判断構造がほぼ同じ問題。こちらは解説が強調する「S3 への大量アクセスではまずゲートウェイ型を検討する」という検討順序を注釈に置いて差分を持たせた。 / IGW でパブリック化する案は解説が理由を述べていないため、要件(インターネットを経由しない)から言える範囲にとどめた。
+
+---
+
+## net10 — ネットワーク / level 2
+
+**問題**: 自社 VPC 内のサービスを、インターネットに公開せず数百の顧客 VPC へ個別に提供したい。CIDR の重複も許容したい。どの仕組みが適切か?
+
+**正解**: AWS PrivateLink(インターフェイスエンドポイント)
+
+**他の選択肢**: 全顧客と VPC ピアリング / Transit Gateway で全 VPC を接続 / パブリック ALB で公開
+
+**図解の主メッセージ**: ネットワークを統合せずサービスだけを見せたいなら、CIDR 重複を許容できる PrivateLink を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。2列の対比は接続モデルの違いをよく表せるが、パブリック ALB がどちらの列にも属さず置き場に困る。判断軸を1つ置いて4案を同じ土俵で切り、正解側だけ NLB → ENI の一方向接続を直列で示す形にした。(候補: 分岐(判断フロー): 「ネットワーク全体をつなぐ必要があるか」の1問で4選択肢を切り、正解側に提供側→利用側の流れをつなぐ / 対比(接続モデルの2列): ネットワーク統合型(ピアリング・TGW)と サービス公開型(PrivateLink)を並べ、CIDR 重複の可否を比べる)
+
+```mermaid
+flowchart TD
+    REQ["自社 VPC 内のサービスをインターネットに公開せず<br/>数百の顧客 VPC へ個別に提供したい<br/>CIDR の重複も許容したい"]:::req
+    J{"ネットワーク全体を<br/>つなぐ必要があるか?"}:::judge
+    PL["AWS PrivateLink<br/>インターフェイスエンドポイント"]:::best
+    NLB["サービス側の NLB を<br/>エンドポイントサービスとして公開する"]:::best
+    ENI["利用側 VPC にはインターフェイスエンドポイント(ENI)だけが現れる<br/>一方向のプライベート接続"]:::best
+    PEER["全顧客と VPC ピアリング<br/>ネットワーク全体をつなぐため CIDR 重複不可"]:::alt
+    TGW["Transit Gateway で全 VPC を接続<br/>同じく CIDR 重複不可で SaaS 提供には過剰"]:::alt
+    ALB["パブリック ALB で公開<br/>インターネットに公開してしまう"]:::alt
+    NOTE["ルーティング統合が不要なため CIDR 重複でも問題なく<br/>数千の消費者にスケールする"]:::note
+
+    REQ --> J
+    J -->|"つなぐ必要なし"| PL
+    PL --> NLB
+    NLB --> ENI
+    J -.->|"CIDR 重複不可"| PEER
+    J -.->|"過剰"| TGW
+    J -.->|"公開になる"| ALB
+    ENI -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net10.svg`](../../web/diagrams/net10.svg)
+
+**解説**: PrivateLink はサービス側の NLB をエンドポイントサービスとして公開し、利用側 VPC にはインターフェイスエンドポイント(ENI)だけが現れる一方向のプライベート接続です。ルーティング統合が不要なため CIDR 重複でも問題なく、数千の消費者にスケールします。ピアリングや TGW はネットワーク全体をつなぐため CIDR 重複不可で、SaaS 提供には過剰です。
+
+**確認事項**: 解説の「数千の消費者にスケールする」は注釈に置いた。問題文の「数百の顧客 VPC」との数の違いは解説の記述をそのまま引いたもので、図では規模感の主張として扱っている。 / エンドポイントサービスの承認フローや プライベート DNS 名は解説の範囲外なので描いていない。

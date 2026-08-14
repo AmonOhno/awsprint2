@@ -1,0 +1,125 @@
+{
+  "question_id": "net08",
+  "purpose": "特定 IP の遮断が「拒否ルールを書けるか」という1点で NACL に決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、セキュリティグループに拒否ルールを書けると思っている人。",
+  "message": "特定 IP を明示的に拒否できるのは、許可と拒否の両方を書けてサブネット単位で効く NACL だけ。",
+  "source_summary": "セキュリティグループは許可ルールしか書けないため、特定 IP の「拒否」はできない。ネットワーク ACL は許可・拒否の両方をルール番号順に評価でき、サブネット単位で適用されるため IP ブロックに適している。SG はステートフル(戻りトラフィック自動許可)、NACL はステートレスという違いも押さえる。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "特定の悪意ある IP アドレスからのアクセスをサブネット単位で明示的に拒否したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "「拒否」を書けて、サブネット単位で効くか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "NACL",
+      "label": "ネットワーク ACL に拒否ルールを追加する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "EVAL",
+      "label": "許可・拒否の両方をルール番号順に評価し、サブネット単位で適用する",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "SG",
+      "label": "セキュリティグループに拒否ルールを追加する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "RT",
+      "label": "ルートテーブルからルートを削除する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "IGW",
+      "label": "IGW をデタッチする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "SG と NACL のステート性の違い",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "NACL",
+      "verb": "両方を満たす",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "NACL",
+      "to": "EVAL",
+      "verb": "なぜ適するか",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "J",
+      "to": "SG",
+      "verb": "許可ルールしか書けない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "RT",
+      "verb": "特定 IP を指定できない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "IGW",
+      "verb": "特定 IP を指定できない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "EVAL",
+      "to": "NOTE",
+      "verb": "対比を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「拒否を書けてサブネット単位で効くか」の1問で4選択肢を切る",
+    "対比(SG と NACL の2列): 書けるルールと適用単位を並べ、拒否が書ける側を強調する"
+  ],
+  "selected_pattern": "分岐(判断フロー)。SG と NACL の対比は net02 で扱っており、この問題で問われているのは「遮断手段としてどれを選ぶか」。判断軸を1つ置いてルートテーブルや IGW を含む4案を同じ土俵で切る方が、設問の形に合う。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "ルートテーブル削除と IGW デタッチの落ちる理由は解説に明記がないため、要件(特定の IP を対象にする)から言える範囲だけをラベルにした。通信全体が止まるといった副作用は書いていない。",
+    "NACL のルール番号の付け方(評価順の設計)は解説の範囲外なので描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"特定の悪意ある IP アドレスからのアクセスを<br/>サブネット単位で明示的に拒否したい\"]:::req\n    J{\"「拒否」を書けて<br/>サブネット単位で効くか?\"}:::judge\n    NACL[\"ネットワーク ACL に拒否ルールを追加する\"]:::best\n    EVAL[\"許可・拒否の両方をルール番号順に評価する<br/>サブネット単位で適用されるため IP ブロックに適する\"]:::best\n    SG[\"セキュリティグループに拒否ルールを追加する<br/>許可ルールしか書けない\"]:::alt\n    RT[\"ルートテーブルからルートを削除する\"]:::alt\n    IGW[\"IGW をデタッチする\"]:::alt\n    NOTE[\"SG はステートフル(戻りトラフィックを自動許可)<br/>NACL はステートレス\"]:::note\n\n    REQ --> J\n    J -->|\"両方満たす\"| NACL\n    NACL --> EVAL\n    J -.->|\"許可のみ\"| SG\n    J -.->|\"IP 指定不可\"| RT\n    J -.->|\"IP 指定不可\"| IGW\n    EVAL -.- NOTE"
+}

@@ -1,0 +1,125 @@
+{
+  "question_id": "net09",
+  "purpose": "S3 への私的経路を「無料で作れるか」という一点で比べ、ゲートウェイ型エンドポイントが第一候補になることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、プライベートサブネットから S3 へ出るのに NAT ゲートウェイを反射的に選んでしまう人。",
+  "message": "S3 が相手なら、無料のゲートウェイ型 VPC エンドポイントをまず検討する。",
+  "source_summary": "ゲートウェイ型 VPC エンドポイントは S3 と DynamoDB 専用で、ルートテーブルにエントリを追加するだけで AWS 網内の私的経路を提供し、利用料は無料。NAT ゲートウェイ経由は時間課金+データ処理料金がかかるため、S3 への大量アクセスではまずゲートウェイエンドポイントを検討する。インターフェイス型は有料。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "プライベートサブネットの EC2 から S3 へ、インターネットや NAT ゲートウェイを経由せず追加コストなしでアクセスしたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "無料で私的経路を作れるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "GW",
+      "label": "S3 用のゲートウェイ型 VPC エンドポイント(利用料は無料)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "RT",
+      "label": "ルートテーブルにエントリを追加するだけで AWS 網内の私的経路になる",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "NAT",
+      "label": "NAT ゲートウェイ経由でアクセスする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "IF",
+      "label": "S3 用のインターフェイス型エンドポイントのみ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "IGW",
+      "label": "IGW を追加してパブリック化する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "ゲートウェイ型の適用範囲と検討順序",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "GW",
+      "verb": "作れる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "GW",
+      "to": "RT",
+      "verb": "どう通るか",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "J",
+      "to": "NAT",
+      "verb": "時間課金+データ処理料金がかかる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "IF",
+      "verb": "有料",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "IGW",
+      "verb": "要件を満たさない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "GW",
+      "to": "NOTE",
+      "verb": "適用範囲を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「無料で私的経路を作れるか」の1問で4選択肢を切り、正解側に経路の作り方をつなぐ",
+    "対比(コスト比較): ゲートウェイ型 / インターフェイス型 / NAT ゲートウェイを3列に並べ、料金の有無で比べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。コスト比較の3列はコスト差を強調できるが、料金の具体額は解説にないため列を埋められず、IGW の選択肢も並べにくい。判断軸を1つ置いて4案を切る形の方が余計な解読が要らない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "net03 と判断構造がほぼ同じ問題。こちらは解説が強調する「S3 への大量アクセスではまずゲートウェイ型を検討する」という検討順序を注釈に置いて差分を持たせた。",
+    "IGW でパブリック化する案は解説が理由を述べていないため、要件(インターネットを経由しない)から言える範囲にとどめた。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"プライベートサブネットの EC2 から S3 へ<br/>インターネットや NAT ゲートウェイを経由せず<br/>追加コストなしでアクセスしたい\"]:::req\n    J{\"無料で私的経路を<br/>作れるか?\"}:::judge\n    GW[\"S3 用のゲートウェイ型 VPC エンドポイント<br/>利用料は無料\"]:::best\n    RT[\"ルートテーブルにエントリを追加するだけで<br/>AWS 網内の私的経路になる\"]:::best\n    NAT[\"NAT ゲートウェイ経由でアクセスする<br/>時間課金+データ処理料金がかかる\"]:::alt\n    IF[\"S3 用のインターフェイス型エンドポイントのみ<br/>有料\"]:::alt\n    IGW[\"IGW を追加してパブリック化する\"]:::alt\n    NOTE[\"ゲートウェイ型は S3 と DynamoDB 専用<br/>S3 への大量アクセスではまずこれを検討する\"]:::note\n\n    REQ --> J\n    J -->|\"作れる\"| GW\n    GW --> RT\n    J -.->|\"有料\"| NAT\n    J -.->|\"有料\"| IF\n    J -.->|\"要件外\"| IGW\n    GW -.- NOTE"
+}

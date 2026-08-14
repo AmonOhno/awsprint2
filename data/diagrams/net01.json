@@ -1,0 +1,138 @@
+{
+  "question_id": "net01",
+  "purpose": "プライベートサブネットからの外向き通信の定番構成が「出る側だけ通す」という1つの判断で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、IGW と NAT ゲートウェイの役割の違いが曖昧な人。",
+  "message": "アウトバウンドだけ通したいなら、パブリックサブネットの NAT ゲートウェイへ 0.0.0.0/0 を向ける。",
+  "source_summary": "NAT ゲートウェイをパブリックサブネットに置き、プライベートサブネットのルートテーブルで 0.0.0.0/0 を NAT ゲートウェイに向けるのが定番構成。アウトバウンドのみ許可され、外部からの接続開始は不可になる。インターネットゲートウェイは VPC 単位のアタッチであり、プライベートサブネットのインスタンスに直接使うものではない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "プライベートサブネットの EC2 から外部 API へアウトバウンド通信したい(インバウンドは不要)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "J",
+      "label": "外部からの接続開始を許さずに出て行けるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "NAT",
+      "label": "パブリックサブネットに NAT ゲートウェイを配置する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "RT",
+      "label": "プライベートサブネットのルートテーブルで 0.0.0.0/0 を NAT ゲートウェイへ向ける",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "OUT",
+      "label": "アウトバウンドのみ許可され、外部からの接続開始は不可になる",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "IGW",
+      "label": "プライベートサブネットにインターネットゲートウェイを直接アタッチする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "EIP",
+      "label": "インスタンスに Elastic IP を割り当てる",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "PEER",
+      "label": "VPC ピアリング接続を作成する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "IGW は VPC 単位のアタッチであるという補足",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "J",
+      "verb": "要件を判断軸に置き換える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "J",
+      "to": "NAT",
+      "verb": "出る側だけ通せる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "NAT",
+      "to": "RT",
+      "verb": "経路を向ける",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "RT",
+      "to": "OUT",
+      "verb": "結果として得られる状態",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "J",
+      "to": "IGW",
+      "verb": "VPC 単位のアタッチで用途が違う",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "EIP",
+      "verb": "要件を満たさない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "J",
+      "to": "PEER",
+      "verb": "要件を満たさない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "IGW",
+      "to": "NOTE",
+      "verb": "誤読しやすい点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「外部からの接続開始を許さずに出られるか」の1問で4選択肢を振り分け、正解側に経路設定を直列でつなぐ",
+    "包含(VPC の構成図): VPC・パブリックサブネット・プライベートサブネットを入れ子で描き、通信の向きを矢印で示す"
+  ],
+  "selected_pattern": "分岐(判断フロー)。構成図は経路のイメージを掴みやすいが、誤答3つが落ちる理由を置く場所がない。試験で問われるのは「どれを選ぶか」なので、判断軸を1つ置いて選択肢を切る形にした。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "解説が落ちる理由を述べているのは IGW の選択肢だけなので、Elastic IP と VPC ピアリングは選択肢の文言のまま置き、理由を創作していない。",
+    "AZ ごとに NAT ゲートウェイを置く可用性の観点は、この問題の解説にないため描いていない(net06 側で扱う)。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"プライベートサブネットの EC2 から<br/>インターネット上の外部 API へ通信したい<br/>インバウンドは不要\"]:::req\n    J{\"外部からの接続開始を<br/>許さずに出て行けるか?\"}:::judge\n    NAT[\"パブリックサブネットに<br/>NAT ゲートウェイを配置する\"]:::best\n    RT[\"プライベートサブネットのルートテーブルで<br/>0.0.0.0/0 を NAT ゲートウェイへ向ける\"]:::best\n    OUT[\"アウトバウンドのみ許可される<br/>外部からの接続開始は不可\"]:::best\n    IGW[\"プライベートサブネットに<br/>インターネットゲートウェイを直接アタッチ\"]:::alt\n    EIP[\"インスタンスに Elastic IP を割り当てる\"]:::alt\n    PEER[\"VPC ピアリング接続を作成する\"]:::alt\n    NOTE[\"インターネットゲートウェイは VPC 単位のアタッチ<br/>プライベートサブネットのインスタンスに直接使うものではない\"]:::note\n\n    REQ --> J\n    J -->|\"出る側だけ\"| NAT\n    NAT --> RT\n    RT --> OUT\n    J -.->|\"用途が違う\"| IGW\n    J -.->|\"要件外\"| EIP\n    J -.->|\"要件外\"| PEER\n    IGW -.- NOTE"
+}
