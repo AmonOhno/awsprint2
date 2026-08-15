@@ -1,0 +1,43 @@
+{
+  "question_id": "net14",
+  "purpose": "帯域の安定性が要件のときに Direct Connect が選ばれる理由が「経路からインターネットを外すこと」にあると示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、転送を速くする手段として Transfer Acceleration や NAT 増設と混同しがちな人。",
+  "message": "一貫した帯域と低レイテンシーが要件なら、インターネットを経由しない専用線の Direct Connect を選ぶ。",
+  "source_summary": "オンプレミスから AWS への大量データ転送でインターネット経由の帯域が不安定。正解は Direct Connect で、専用線により一貫した帯域(最大 100Gbps 超)と低レイテンシーを提供し、データ転送料金もインターネット経由より安価。デフォルトでは暗号化されないため、暗号化要件があれば DX 上に VPN を重ねるか MACsec を使う。",
+  "elements": [
+    { "id": "REQ", "label": "大量データを日常転送、インターネット経由では帯域が不安定", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "経路にインターネットを挟んでよいか?", "type": "process", "priority": "primary" },
+    { "id": "DX", "label": "AWS Direct Connect(専用線・一貫した帯域と低レイテンシー)", "type": "artifact", "priority": "primary" },
+    { "id": "COST", "label": "データ転送料金もインターネット経由より安価", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "デフォルトでは暗号化されない(DX 上に VPN を重ねるか MACsec)", "type": "other", "priority": "support" },
+    { "id": "VPN", "label": "サイト間 VPN を増設", "type": "artifact", "priority": "secondary" },
+    { "id": "TA", "label": "S3 Transfer Acceleration", "type": "artifact", "priority": "support" },
+    { "id": "NAT", "label": "NAT ゲートウェイを増やす", "type": "artifact", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "J", "verb": "要件を判断軸に置き換える", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "DX", "verb": "挟まないなら専用線", "direction": "one-way", "kind": "flow" },
+    { "from": "DX", "to": "COST", "verb": "副次的な利点を示す", "direction": "one-way", "kind": "flow" },
+    { "from": "DX", "to": "NOTE", "verb": "暗号化の前提を補う", "direction": "none", "kind": "other" },
+    { "from": "J", "to": "VPN", "verb": "挟むなら不安定さが残る", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "TA", "verb": "論点が違う(S3 へのアップロード高速化)", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "NAT", "verb": "論点が違う(VPC のアウトバウンド経路)", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「経路にインターネットを挟んでよいか」の1問から Direct Connect と VPN 増設へ分け、論点違いの 2 択を脇に置く",
+    "対比(経路図): 上段にインターネット経由の経路、下段に専用線の経路を描いて経路そのものの違いを見せる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。経路図の対比は「インターネットを通るか否か」を直接見せられるが、Transfer Acceleration と NAT ゲートウェイの誤答は経路図の中に置き場所がなく、なぜ違うのかを示せない。判断フローなら 4 択すべてを同じ軸の上で比較でき、暗号化の注意点も注釈として添えられる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=要件に合わない選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「最大 100Gbps 超」という数値は解説にあるが図には書いていない。判断軸は帯域の一貫性であって上限値ではなく、数値があると上限の暗記に誘導しかねないため。",
+    "暗号化の注意点(MACsec / DX 上の VPN)は net13 と重なる論点。両問を続けて解くと重複感が出る可能性がある。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"オンプレミスから AWS へ大量データを日常転送<br/>インターネット経由では帯域が不安定\"]:::req\n    J{\"経路にインターネットを<br/>挟んでよいか?\"}:::judge\n    DX[\"AWS Direct Connect<br/>専用線で一貫した帯域と低レイテンシー\"]:::best\n    COST[\"データ転送料金もインターネット経由より安価\"]:::svc\n    NOTE[\"デフォルトでは暗号化されない<br/>要件があれば DX 上に VPN を重ねるか MACsec\"]:::note\n    VPN[\"サイト間 VPN を増設<br/>経路はインターネットのままで不安定さが残る\"]:::alt\n    TA[\"S3 Transfer Acceleration<br/>S3 へのアップロード高速化でオンプレ回線は変わらない\"]:::alt\n    NAT[\"NAT ゲートウェイを増やす<br/>VPC のアウトバウンド経路の話\"]:::alt\n\n    REQ --> J\n    J -->|\"挟まない\"| DX\n    DX --> COST\n    DX -.- NOTE\n    J -.->|\"挟む\"| VPN\n    REQ -.->|\"論点が違う\"| TA\n    REQ -.->|\"論点が違う\"| NAT"
+}

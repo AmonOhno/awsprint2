@@ -1,0 +1,41 @@
+{
+  "question_id": "net13",
+  "purpose": "オンプレミスと VPC をつなぐ手段の選択が「開通までどれだけ待てるか」で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、VPN と Direct Connect の違いを帯域だけで覚えていて、開通期間の差を見落とす人。",
+  "message": "今週中という納期が制約なら、数時間〜数日で開通して常時暗号化されるサイト間 VPN を選ぶ。",
+  "source_summary": "オンプレミスと VPC を今週中に暗号化された経路で接続したい。正解はサイト間 VPN で、インターネット上に IPsec トンネルを張り数時間〜数日で開通し常時暗号化される。Direct Connect は専用線のため開通に数週間〜数か月かかるが帯域と品質は安定する。「すぐ・安く・暗号化 = VPN、安定・大容量 = Direct Connect」の対比が頻出。",
+  "elements": [
+    { "id": "REQ", "label": "今週中にオンプレミスと VPC を暗号化された経路で接続したい", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "開通までにどれだけ待てるか?", "type": "process", "priority": "primary" },
+    { "id": "VPN", "label": "サイト間 VPN(数時間〜数日で開通・常時暗号化)", "type": "artifact", "priority": "primary" },
+    { "id": "NET", "label": "インターネット上に IPsec トンネルを張る", "type": "artifact", "priority": "secondary" },
+    { "id": "DX", "label": "AWS Direct Connect(開通に数週間〜数か月・帯域と品質は安定)", "type": "artifact", "priority": "secondary" },
+    { "id": "PEER", "label": "VPC ピアリング", "type": "artifact", "priority": "support" },
+    { "id": "PL", "label": "AWS PrivateLink", "type": "artifact", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "J", "verb": "要件を判断軸に置き換える", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "VPN", "verb": "待てないなら VPN", "direction": "one-way", "kind": "flow" },
+    { "from": "VPN", "to": "NET", "verb": "どう暗号化するかを示す", "direction": "one-way", "kind": "flow" },
+    { "from": "J", "to": "DX", "verb": "数か月待てるなら専用線", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "PEER", "verb": "対象が違う(VPC 同士の接続)", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "PL", "verb": "対象が違う(サービスの個別公開)", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「開通までどれだけ待てるか」の1問から VPN と Direct Connect へ分け、残り 2 択は対象違いとして脇に置く",
+    "タイムライン: 横軸を経過時間にして VPN(数時間〜数日)と Direct Connect(数週間〜数か月)の開通時点を並べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。タイムラインは時間差そのものは鮮明だが、対象違いの誤答 2 つ(ピアリング・PrivateLink)を同じ軸に置けず、図が 2 つに割れる。1 つの問いから枝を伸ばす形なら、時間の差はノードのラベルに書くだけで足り、4 択すべてを 1 枚に収められる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=要件に合わない選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Direct Connect はグレー(alt)だが「劣った選択肢」ではなく納期要件に合わないだけ。ラベルに「帯域と品質は安定」と併記して優劣の誤読を防いでいる。",
+    "解説にある「安く」という観点は判断軸に採っていない。今回の問題文の制約は納期だけで、コスト比較は解説の一般論に留まるため。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"今週中にオンプレミスと VPC を<br/>暗号化された経路で接続したい\"]:::req\n    J{\"開通までに<br/>どれだけ待てるか?\"}:::judge\n    VPN[\"サイト間 VPN<br/>数時間〜数日で開通・常時暗号化\"]:::best\n    NET[\"インターネット上に IPsec トンネルを張る\"]:::svc\n    DX[\"AWS Direct Connect<br/>開通は数週間〜数か月・帯域と品質は安定\"]:::alt\n    PEER[\"VPC ピアリング<br/>VPC 同士の接続でオンプレとはつなげない\"]:::alt\n    PL[\"AWS PrivateLink<br/>特定サービスを個別に公開する仕組み\"]:::alt\n\n    REQ --> J\n    J -->|\"待てない\"| VPN\n    VPN --> NET\n    J -.->|\"数か月待てる\"| DX\n    REQ -.->|\"対象が違う\"| PEER\n    REQ -.->|\"対象が違う\"| PL"
+}

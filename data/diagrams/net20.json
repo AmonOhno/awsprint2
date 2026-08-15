@@ -1,0 +1,41 @@
+{
+  "question_id": "net20",
+  "purpose": "Zone Apex に CNAME を置けないという DNS の制約と、それを回避する Route 53 のエイリアスレコードを 1 枚で結び付ける。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、サブドメインの CNAME と Zone Apex を同じ感覚で扱ってしまう人。",
+  "message": "Zone Apex を AWS リソースへ向けるなら、CNAME ではなくエイリアスレコードを使う。",
+  "source_summary": "example.com という Zone Apex(ネイキッドドメイン)を ALB に向けたい。DNS の仕様上 Zone Apex に CNAME は設定できない。Route 53 のエイリアスレコードは ALB・CloudFront・S3 静的サイトなどの AWS リソースを Apex でも指せる独自拡張で、クエリ料金も無料、対象の IP 変動にも自動追従する。「Apex + AWS リソース = エイリアス」は頻出。",
+  "elements": [
+    { "id": "REQ", "label": "example.com(Zone Apex)を ALB に向けたい", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "Zone Apex に置けるレコードか?", "type": "process", "priority": "primary" },
+    { "id": "ALIAS", "label": "エイリアス(Alias)レコード(Apex から AWS リソースを指せる)", "type": "artifact", "priority": "primary" },
+    { "id": "MERIT", "label": "クエリ料金は無料、対象の IP 変動にも自動追従", "type": "artifact", "priority": "secondary" },
+    { "id": "CNAME", "label": "CNAME レコード(DNS の仕様上 Zone Apex には設定できない)", "type": "artifact", "priority": "secondary" },
+    { "id": "MX", "label": "MX レコード", "type": "artifact", "priority": "support" },
+    { "id": "TXT", "label": "TXT レコード", "type": "artifact", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "J", "verb": "要件を判断軸に置き換える", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "ALIAS", "verb": "Apex に置ける", "direction": "one-way", "kind": "flow" },
+    { "from": "ALIAS", "to": "MERIT", "verb": "付随する利点を示す", "direction": "one-way", "kind": "flow" },
+    { "from": "J", "to": "CNAME", "verb": "Apex には置けない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "MX", "verb": "用途が違う(メール配送先)", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "TXT", "verb": "用途が違う(検証用の文字列)", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「Zone Apex に置けるレコードか」の1問からエイリアスと CNAME に分け、用途違いの 2 択を脇に置く",
+    "対比(可否表): 4 種のレコードについて「Apex に置けるか」「AWS リソースを指せるか」の 2 列で可否を並べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。可否表は 4 種を一望できるが、MX と TXT は可否以前に用途が違うため、表に並べると同じ土俵の比較に見えてしまう。1 つの問い(Apex に置けるか)で本命 2 つを振り分け、用途違いの 2 つは要件から直接脇に流す形にすると、判断の順序どおりに読める。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=この要件では使えない/用途が違うレコード、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "エイリアスが指せる対象は解説にある ALB・CloudFront・S3 静的サイトに限って書いている(指定可能なリソースの全一覧は解説の範囲外)。",
+    "サブドメインなら CNAME で足りるという対比は、問題の要件が Apex 固定のため図には入れていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"example.com(Zone Apex / ネイキッドドメイン)を<br/>ALB に向けたい\"]:::req\n    J{\"Zone Apex に<br/>置けるレコードか?\"}:::judge\n    ALIAS[\"エイリアス(Alias)レコード<br/>Apex から ALB・CloudFront・S3 静的サイトを指せる\"]:::best\n    MERIT[\"クエリ料金は無料・対象の IP 変動にも自動追従\"]:::svc\n    CNAME[\"CNAME レコード<br/>DNS の仕様上 Zone Apex には設定できない\"]:::alt\n    MX[\"MX レコード<br/>メールの配送先を指定するもの\"]:::alt\n    TXT[\"TXT レコード<br/>検証用の文字列を置くもの\"]:::alt\n\n    REQ --> J\n    J -->|\"置ける\"| ALIAS\n    ALIAS --> MERIT\n    J -.->|\"置けない\"| CNAME\n    REQ -.->|\"用途が違う\"| MX\n    REQ -.->|\"用途が違う\"| TXT"
+}

@@ -1,0 +1,45 @@
+{
+  "question_id": "net15",
+  "purpose": "Direct Connect の冗長化手段の選択が「可用性にいくらかけられるか」で決まり、コスト効率を取るなら VPN バックアップになることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、DX の冗長化といえば DX の 2 本化しか思い浮かばない人。",
+  "message": "コスト効率よく専用線障害に備えるなら、サイト間 VPN をバックアップ経路にして BGP でフェイルオーバーさせる。",
+  "source_summary": "Direct Connect の障害時も接続を維持したい。正解はサイト間 VPN をバックアップ経路として構成することで、専用線障害時に BGP 経路が VPN 側へフェイルオーバーし接続を維持できる。最高レベルの可用性が必要なら DX を 2 拠点に冗長化するがコストは大きく増える。「コスト効率の良い DX 冗長化 = VPN バックアップ」が定番の解答。",
+  "elements": [
+    { "id": "REQ", "label": "Direct Connect 障害時も接続を維持したい(コスト効率も重視)", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "冗長化にどこまでコストをかけられるか?", "type": "process", "priority": "primary" },
+    { "id": "DX", "label": "通常時は Direct Connect が主経路", "type": "artifact", "priority": "secondary" },
+    { "id": "VPN", "label": "サイト間 VPN をバックアップ経路に構成", "type": "artifact", "priority": "primary" },
+    { "id": "BGP", "label": "障害時に BGP 経路が VPN 側へフェイルオーバー", "type": "artifact", "priority": "secondary" },
+    { "id": "DX2", "label": "Direct Connect を 2 拠点に冗長化", "type": "artifact", "priority": "secondary" },
+    { "id": "NONE", "label": "何もしない", "type": "artifact", "priority": "support" },
+    { "id": "PEER", "label": "VPC ピアリングを追加", "type": "artifact", "priority": "support" },
+    { "id": "NAT", "label": "NAT ゲートウェイを別 AZ に追加", "type": "artifact", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "J", "verb": "要件を判断軸に置き換える", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "VPN", "verb": "抑えたいなら VPN バックアップ", "direction": "one-way", "kind": "flow" },
+    { "from": "DX", "to": "VPN", "verb": "障害時に経路が移る", "direction": "one-way", "kind": "flow" },
+    { "from": "VPN", "to": "BGP", "verb": "切り替えの仕組みを示す", "direction": "one-way", "kind": "flow" },
+    { "from": "J", "to": "DX2", "verb": "最高可用性ならコスト増を許容", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "NONE", "verb": "要件を満たさない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "PEER", "verb": "論点が違う(VPC 間の接続)", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "NAT", "verb": "論点が違う(VPC 内のアウトバウンド)", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「冗長化にどこまでコストをかけられるか」の1問から VPN バックアップと DX 2 拠点へ分け、主経路から VPN への切り替えを実線で描き足す",
+    "状態遷移: 「通常時 = DX 経由」と「障害時 = VPN 経由」の 2 状態を並べ、切り替えの矢印だけで見せる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。状態遷移は切り替えの動きが鮮明だが、誤答 3 つ(何もしない・ピアリング・NAT)を置く場所がなく、なぜ選ばないかを示せない。判断フローを土台にして主経路から VPN へ向かう実線を 1 本足せば、選択の理由と切り替えの動きを両方 1 枚に収められる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=要件に合わない選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "DX 2 拠点構成はグレー(alt)だが、可用性としては上位の構成。ラベルに「可用性は最高だがコストは大きく増える」と書き、劣った案という誤読を防いでいる。",
+    "VPN 側の帯域が DX より細くなる点は解説に無いため図に書いていない(フェイルオーバー後の性能低下には触れていない)。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"Direct Connect 障害時も接続を維持したい<br/>コスト効率も重視する\"]:::req\n    J{\"冗長化にどこまで<br/>コストをかけられるか?\"}:::judge\n    DX[\"通常時の主経路 = Direct Connect\"]:::svc\n    VPN[\"サイト間 VPN をバックアップ経路に構成\"]:::best\n    BGP[\"BGP 経路が VPN 側へフェイルオーバーする\"]:::svc\n    DX2[\"Direct Connect を 2 拠点に冗長化<br/>可用性は最高だがコストは大きく増える\"]:::alt\n    NONE[\"何もしない<br/>専用線障害でそのまま接続が途切れる\"]:::alt\n    PEER[\"VPC ピアリングを追加<br/>VPC 間の接続でオンプレ経路は冗長化されない\"]:::alt\n    NAT[\"NAT ゲートウェイを別 AZ に追加<br/>VPC 内アウトバウンドの可用性の話\"]:::alt\n\n    REQ --> J\n    J -->|\"抑えたい\"| VPN\n    DX -->|\"障害時\"| VPN\n    VPN --> BGP\n    J -.->|\"最高可用性\"| DX2\n    REQ -.->|\"要件未達\"| NONE\n    REQ -.->|\"論点が違う\"| PEER\n    REQ -.->|\"論点が違う\"| NAT"
+}

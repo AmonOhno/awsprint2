@@ -1,0 +1,43 @@
+{
+  "question_id": "net19",
+  "purpose": "法規制で配信元の地域を固定する要件では、速さで選ぶレイテンシーベースではなく発信元の地域で選ぶ位置情報ルーティングになることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、レイテンシーベースと位置情報ルーティングを「近いほうへ送る」と一括りにしてしまう人。",
+  "message": "規制で配信元の地域を確実に固定するなら、クエリ発信元の国・大陸で決める位置情報ルーティング。",
+  "source_summary": "法規制により EU のユーザーには EU 域内のサーバーからのみ配信する必要がある。正解は位置情報(Geolocation)ルーティングで、DNS クエリの発信元の国・大陸に基づいて返すレコードを決めるためコンプライアンス要件に対応できる。レイテンシーベースは速さ優先のため規制上の確実な地域分離には使えない。マッチしない地域用のデフォルトレコードを必ず用意する。",
+  "elements": [
+    { "id": "REQ", "label": "法規制により EU のユーザーには EU 域内のサーバーからのみ配信したい", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "配信先は何で決まるべきか?", "type": "process", "priority": "primary" },
+    { "id": "GEO", "label": "位置情報ルーティング(クエリ発信元の国・大陸で決める)", "type": "artifact", "priority": "primary" },
+    { "id": "EU", "label": "EU のユーザーには EU のエンドポイントを返す", "type": "artifact", "priority": "secondary" },
+    { "id": "DEF", "label": "どの地域にも一致しない場合のデフォルトレコードを必ず用意する", "type": "other", "priority": "support" },
+    { "id": "LAT", "label": "レイテンシーベースルーティング(速さ優先)", "type": "artifact", "priority": "secondary" },
+    { "id": "W", "label": "加重ルーティング(比率分配)", "type": "artifact", "priority": "secondary" },
+    { "id": "FO", "label": "フェイルオーバールーティング(障害時の切り替え)", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "J", "verb": "要件を判断軸に置き換える", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "GEO", "verb": "発信元の地域で決める", "direction": "one-way", "kind": "flow" },
+    { "from": "GEO", "to": "EU", "verb": "地域を固定して返す", "direction": "one-way", "kind": "flow" },
+    { "from": "GEO", "to": "DEF", "verb": "設定漏れを防ぐ前提を補う", "direction": "none", "kind": "other" },
+    { "from": "J", "to": "LAT", "verb": "速さで決まるため地域を保証できない", "direction": "one-way", "kind": "contrast" },
+    { "from": "J", "to": "W", "verb": "比率で決まり地域を判定しない", "direction": "one-way", "kind": "contrast" },
+    { "from": "J", "to": "FO", "verb": "障害時の切り替え用", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「配信先は何で決まるべきか」の1問から 4 つのポリシーへ枝を伸ばし、枝のラベルに決定要因を書く",
+    "対比(2 択の並置): 「速さ優先 = レイテンシー」と「地域を確実に固定 = 位置情報」を左右に並べ、規制要件では後者しかないことを見せる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。2 択の対比はこの問題の混同ポイントに直撃するが、加重とフェイルオーバーの誤答を消去できない。判断フローで枝のラベルを決定要因(発信元の地域 / 速さ / 比率 / 障害時切替)に統一すれば、混同する 2 つも同じ軸の上で並び、違いは枝のラベルだけで読み取れる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=用途が異なるポリシー、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "地理的近接性(Geoproximity)ルーティングは選択肢にも解説にも無いため描いていない。位置情報との違いを問う問題を追加する場合は別図が必要。",
+    "判定が DNS クエリの発信元(多くはリゾルバの位置)に基づく点は解説の表現どおりに留め、リゾルバとエンドユーザーの位置がずれる可能性には触れていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"法規制により EU のユーザーには<br/>EU 域内のサーバーからのみ配信する必要がある\"]:::req\n    J{\"配信先は<br/>何で決まるべきか?\"}:::judge\n    GEO[\"位置情報(Geolocation)ルーティング<br/>DNS クエリ発信元の国・大陸で返すレコードを決める\"]:::best\n    EU[\"EU のユーザーには EU のエンドポイントを返す\"]:::svc\n    DEF[\"どの地域にも一致しない場合の<br/>デフォルトレコードを必ず用意する\"]:::note\n    LAT[\"レイテンシーベースルーティング<br/>速さ優先のため地域を確実に分離できない\"]:::alt\n    W[\"加重ルーティング<br/>比率分配であり地域を判定しない\"]:::alt\n    FO[\"フェイルオーバールーティング<br/>障害時の切り替え用\"]:::alt\n\n    REQ --> J\n    J -->|\"発信元の地域\"| GEO\n    GEO --> EU\n    GEO -.- DEF\n    J -.->|\"速さ\"| LAT\n    J -.->|\"比率\"| W\n    J -.->|\"障害時切替\"| FO"
+}

@@ -1,0 +1,45 @@
+{
+  "question_id": "net16",
+  "purpose": "フェイルオーバールーティングが「ヘルスチェックの結果で返すレコードを変える」仕組みであることを、正常時と異常時の 2 経路で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、ポリシー名は覚えたが自動切り替えの前提(ヘルスチェック)が抜けやすい人。",
+  "message": "ヘルスチェックで異常を検知して自動的に切り替えられるのは、フェイルオーバールーティングだけ。",
+  "source_summary": "プライマリの障害時に自動的に DR サイトへ DNS を切り替えたい。正解はフェイルオーバールーティングで、ヘルスチェックでプライマリの異常を検知するとセカンダリのレコードへ自動で切り替えるアクティブ/パッシブ構成用のポリシー。セカンダリを S3 静的サイトや別リージョンの環境にする DR パターンが頻出。ヘルスチェックの設定が前提条件。",
+  "elements": [
+    { "id": "REQ", "label": "プライマリ障害時に DR サイトへ自動で DNS を切り替えたい", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "切り替えのきっかけは何か?", "type": "process", "priority": "primary" },
+    { "id": "FO", "label": "フェイルオーバールーティング(アクティブ/パッシブ構成)", "type": "artifact", "priority": "primary" },
+    { "id": "HC", "label": "ヘルスチェック(設定が前提条件)", "type": "artifact", "priority": "primary" },
+    { "id": "PRI", "label": "正常時はプライマリのレコードを返す", "type": "artifact", "priority": "secondary" },
+    { "id": "SEC", "label": "異常時はセカンダリ(DR サイト)のレコードを返す", "type": "artifact", "priority": "secondary" },
+    { "id": "SIMPLE", "label": "シンプルルーティング", "type": "artifact", "priority": "secondary" },
+    { "id": "GEO", "label": "位置情報ルーティング", "type": "artifact", "priority": "secondary" },
+    { "id": "W", "label": "加重ルーティング", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "J", "verb": "要件を判断軸に置き換える", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "FO", "verb": "異常の検知で切り替える", "direction": "one-way", "kind": "flow" },
+    { "from": "FO", "to": "HC", "verb": "前提となる仕組み", "direction": "one-way", "kind": "flow" },
+    { "from": "HC", "to": "PRI", "verb": "正常なら主系へ", "direction": "one-way", "kind": "flow" },
+    { "from": "HC", "to": "SEC", "verb": "異常なら副系へ", "direction": "one-way", "kind": "flow" },
+    { "from": "J", "to": "SIMPLE", "verb": "切り替えの概念がない", "direction": "one-way", "kind": "contrast" },
+    { "from": "J", "to": "GEO", "verb": "場所で選ぶポリシー", "direction": "one-way", "kind": "contrast" },
+    { "from": "J", "to": "W", "verb": "割合で分配するポリシー", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー)+ 動作の枝: 「切り替えのきっかけは何か」から正解を選び、その先でヘルスチェックの正常/異常の 2 経路を描く",
+    "対応表: 4 つのポリシーとユースケースを 2 列に並べ、該当行を強調する"
+  ],
+  "selected_pattern": "分岐(判断フロー)+ 動作の枝。対応表は 4 ポリシーを一望できるが、この問題の要である「ヘルスチェックが前提」という条件が表の 1 セルに埋もれる。判断で正解に到達したあと、ヘルスチェックから正常/異常の 2 本を伸ばす形にすれば、選ぶ理由と動く仕組みが同じ 1 枚で読める。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=用途が異なるポリシー、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "同じフェイルオーバールーティングを扱う net05 と主メッセージが近い。net05 は 4 ポリシーの用途対応に重心を置き、本図はヘルスチェックによる切り替えの動作に重心を置いて描き分けた。",
+    "セカンダリの実体(S3 静的サイト・別リージョン)は解説に例として挙がるが、本問の要件は「DR サイト」までなので具体名は書いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"プライマリサイトの障害時に<br/>DR サイトへ自動で DNS を切り替えたい\"]:::req\n    J{\"切り替えの<br/>きっかけは何か?\"}:::judge\n    FO[\"フェイルオーバールーティング<br/>アクティブ / パッシブ構成のポリシー\"]:::best\n    HC[\"ヘルスチェック(設定が前提条件)\"]:::svc\n    PRI[\"プライマリのレコードを返す\"]:::svc\n    SEC[\"セカンダリ(DR サイト)のレコードを返す\"]:::svc\n    SIMPLE[\"シンプルルーティング<br/>常に同じレコードを返すだけ\"]:::alt\n    GEO[\"位置情報ルーティング<br/>ユーザーの場所で出し分ける\"]:::alt\n    W[\"加重ルーティング<br/>設定した比率で分配する\"]:::alt\n\n    REQ --> J\n    J -->|\"異常の検知\"| FO\n    FO --> HC\n    HC -->|\"正常\"| PRI\n    HC -->|\"異常\"| SEC\n    J -.->|\"切替なし\"| SIMPLE\n    J -.->|\"場所で選ぶ\"| GEO\n    J -.->|\"割合で分配\"| W"
+}

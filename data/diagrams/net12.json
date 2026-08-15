@@ -1,0 +1,45 @@
+{
+  "question_id": "net12",
+  "purpose": "VPC ピアリングの「非推移的」という性質を、A-B と B-C をつないだときに A-C が通らないという具体例で確定させる。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、ピアリングは知っているが「推移的かどうか」を毎回迷う人。",
+  "message": "VPC ピアリングは 1 対 1 の非推移的な接続で、通信したい VPC 同士を直接つながないと届かない。",
+  "source_summary": "VPC ピアリングは 1 対 1 の非推移的な接続で、A-B と B-C をつないでも A から C へは通信できない。クロスリージョン・クロスアカウント接続は可能だが CIDR の重複は不可。多数の VPC を推移的につなぎたい場合は Transit Gateway を使う。",
+  "elements": [
+    { "id": "J", "label": "ピアリングの接続はどこまで届くか?", "type": "process", "priority": "primary" },
+    { "id": "ANS", "label": "非推移的 = 1 対 1(直接つないだ相手にだけ届く)", "type": "artifact", "priority": "primary" },
+    { "id": "EX", "label": "A-B と B-C をつないだ場合", "type": "other", "priority": "primary" },
+    { "id": "A", "label": "VPC A", "type": "artifact", "priority": "secondary" },
+    { "id": "B", "label": "VPC B", "type": "artifact", "priority": "secondary" },
+    { "id": "C", "label": "VPC C", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "クロスリージョン・クロスアカウントは可、CIDR の重複は不可", "type": "other", "priority": "support" },
+    { "id": "TGW", "label": "Transit Gateway(多数の VPC を束ねる場合)", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "J", "to": "ANS", "verb": "答えは非推移", "direction": "one-way", "kind": "flow" },
+    { "from": "ANS", "to": "EX", "verb": "具体例で確かめる", "direction": "one-way", "kind": "sequence" },
+    { "from": "A", "to": "B", "verb": "ピアリングでつながる", "direction": "two-way", "kind": "flow" },
+    { "from": "B", "to": "C", "verb": "ピアリングでつながる", "direction": "two-way", "kind": "flow" },
+    { "from": "A", "to": "C", "verb": "経由しては届かない", "direction": "one-way", "kind": "contrast" },
+    { "from": "ANS", "to": "NOTE", "verb": "できること・できないことを補う", "direction": "none", "kind": "other" },
+    { "from": "J", "to": "TGW", "verb": "多数を束ねるなら別のサービス", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [
+    { "id": "EX", "label": "A-B と B-C をつないだ場合", "members": ["A", "B", "C"] }
+  ],
+  "candidate_patterns": [
+    "関係図(3 要素の具体例): A-B、B-C を実線でつなぎ、A-C を「届かない」破線で示して非推移性を目に見せる",
+    "対比(性質表): ピアリングと Transit Gateway の性質(推移性・接続数・CIDR)を 2 列で並べる"
+  ],
+  "selected_pattern": "関係図(3 要素の具体例)。性質表は情報量が多いぶん「非推移的」という言葉の意味そのものは伝わらない。A-B-C の 3 ノードで、つながっている線と届かない線を描き分ければ、用語を知らなくても一目で正誤が判定できる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=正しい理解、グレー=この要件では選ばないサービス、青=判断軸、薄黄=補足注釈。",
+    "line_semantics": "実線=実際に成立する接続、破線矢印=成立しない/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "誤答「CIDR が重複していても接続できる」は独立ノードにせず、注釈ノードで「CIDR の重複は不可」と正しい側を書いて否定している。誤った記述をそのまま図に載せると図だけを見た人が誤読しうるため。",
+    "クロスリージョン・クロスアカウントの可否も同じ注釈にまとめている。分量が増えるなら別図に分ける余地がある。"
+  ],
+  "mermaid": "flowchart TD\n    J{\"ピアリングの接続は<br/>どこまで届くか?\"}:::judge\n    ANS[\"非推移的 = 1 対 1<br/>通信したい VPC 同士を直接つなぐ必要がある\"]:::best\n    subgraph EX[\"A-B と B-C をつないだ場合\"]\n        A[\"VPC A\"]:::svc\n        B[\"VPC B\"]:::svc\n        C[\"VPC C\"]:::svc\n        A ---|\"ピアリング\"| B\n        B ---|\"ピアリング\"| C\n        A -.->|\"届かない\"| C\n    end\n    NOTE[\"クロスリージョン・クロスアカウントは可<br/>CIDR の重複は不可\"]:::note\n    TGW[\"多数の VPC を推移的につなぐなら<br/>Transit Gateway\"]:::alt\n\n    J --> ANS\n    ANS --> EX\n    ANS -.- NOTE\n    J -.->|\"多数の VPC\"| TGW"
+}

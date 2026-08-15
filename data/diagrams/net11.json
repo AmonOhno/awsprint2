@@ -1,0 +1,43 @@
+{
+  "question_id": "net11",
+  "purpose": "多数の VPC を相互接続する手段の選択が「つなぐ拠点がいくつか」の1点で決まることを、接続本数の差とともに示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、ピアリングと Transit Gateway の名前は知っているが使い分けの境目が曖昧な人。",
+  "message": "つなぐ VPC が多数なら、フルメッシュのピアリングではなくハブ&スポークの Transit Gateway で一元接続する。",
+  "source_summary": "50 個の VPC とオンプレミス拠点を相互接続したい。正解は Transit Gateway で、ハブ&スポーク型により数千の VPC・VPN・Direct Connect を一元接続し、ルートテーブルで通信可否も集中管理できる。ピアリングは推移的ルーティングが不可で 50 VPC では約 1,200 本の接続が必要になり非現実的。「VPC が多数 = TGW、2〜3 個 = ピアリング」で判断する。",
+  "elements": [
+    { "id": "REQ", "label": "50 個の VPC とオンプレミス拠点を相互接続したい(フルメッシュ管理は避けたい)", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "つなぐ拠点はいくつか?", "type": "process", "priority": "primary" },
+    { "id": "TGW", "label": "AWS Transit Gateway(ハブ&スポークで一元接続)", "type": "artifact", "priority": "primary" },
+    { "id": "RT", "label": "ルートテーブルで通信可否も集中管理", "type": "artifact", "priority": "secondary" },
+    { "id": "PEER", "label": "VPC ピアリング(2〜3 個向け・推移的ルーティング不可)", "type": "artifact", "priority": "secondary" },
+    { "id": "MESH", "label": "50 VPC では約 1,200 本の接続が必要", "type": "other", "priority": "support" },
+    { "id": "VPN", "label": "各 VPC に個別の VPN 接続", "type": "artifact", "priority": "secondary" },
+    { "id": "CF", "label": "CloudFront", "type": "artifact", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "J", "verb": "要件を判断軸に置き換える", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "TGW", "verb": "多数ならハブ&スポーク", "direction": "one-way", "kind": "flow" },
+    { "from": "TGW", "to": "RT", "verb": "通信可否も同じ場所で管理する", "direction": "one-way", "kind": "flow" },
+    { "from": "J", "to": "PEER", "verb": "2〜3 個ならピアリング", "direction": "one-way", "kind": "contrast" },
+    { "from": "PEER", "to": "MESH", "verb": "多数だと本数が爆発する", "direction": "none", "kind": "other" },
+    { "from": "J", "to": "VPN", "verb": "個別接続では本数が減らない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "CF", "verb": "用途が違う(コンテンツ配信)", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「つなぐ拠点はいくつか」の1問から TGW とピアリングへ分け、ピアリング側に接続本数の注釈を付ける",
+    "対比(構成図の並置): 左にフルメッシュのピアリング図、右にハブ&スポークの TGW 図を描いて線の本数の差を見せる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。構成図の並置は本数の差を直感的に見せられるが、50 VPC 分の線は 1 枚に描けず象徴的な省略が必要で、他の図と読み方も揃わない。1 つの問いから枝を伸ばし、ピアリング側に「約 1,200 本」という解説どおりの数値を注釈で添えれば、判断軸と非現実さの理由を同時に伝えられる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=要件に合わない選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「約 1,200 本」は解説の記述をそのまま注釈にしている。n(n-1)/2 という算出根拠は解説に無いため図には書いていない。",
+    "オンプレミス拠点の接続(VPN / Direct Connect)は TGW ノードのラベル内に留め、独立ノードにはしていない。判断軸は VPC 側の数だけで決まるため。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"50 個の VPC とオンプレミス拠点を相互接続したい<br/>ピアリングのフルメッシュ管理は避けたい\"]:::req\n    J{\"つなぐ拠点は<br/>いくつか?\"}:::judge\n    TGW[\"AWS Transit Gateway<br/>ハブとスポークで VPC・VPN・Direct Connect を一元接続\"]:::best\n    RT[\"ルートテーブルで通信可否も集中管理\"]:::svc\n    PEER[\"VPC ピアリング<br/>推移的ルーティング不可(2〜3 個向け)\"]:::alt\n    MESH[\"50 VPC では約 1,200 本の接続が必要\"]:::note\n    VPN[\"各 VPC に個別の VPN 接続<br/>接続本数も管理対象も減らない\"]:::alt\n    CF[\"CloudFront<br/>コンテンツ配信であり VPC 間接続ではない\"]:::alt\n\n    REQ --> J\n    J -->|\"多数\"| TGW\n    TGW --> RT\n    J -.->|\"2〜3 個\"| PEER\n    PEER -.- MESH\n    J -.->|\"個別接続\"| VPN\n    REQ -.->|\"用途が違う\"| CF"
+}

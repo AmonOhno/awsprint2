@@ -1,0 +1,45 @@
+{
+  "question_id": "net18",
+  "purpose": "カナリアリリースが Route 53 の加重ルーティングで実現できることを、重み 90 / 10 の分配として具体的に示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、「一部だけ流す」という要件をどのポリシーに結び付けるか迷う人。",
+  "message": "トラフィックを比率で分けたいなら、レコードごとに重みを設定できる加重ルーティング。",
+  "source_summary": "新バージョンへトラフィックの 10% だけを流して検証したい(カナリアリリース)。正解は加重ルーティングで、レコードごとに重みを設定してトラフィックを比率分配できる。旧環境 90・新環境 10 のように設定して A/B テストやカナリアリリースを行い、問題なければ徐々に比率を上げる。重み 0 にすれば特定環境を切り離せる。",
+  "elements": [
+    { "id": "REQ", "label": "新バージョンへ 10% だけ流して検証したい(カナリアリリース)", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "トラフィックをどう配分するか?", "type": "process", "priority": "primary" },
+    { "id": "W", "label": "加重ルーティング(レコードごとに重みを設定)", "type": "artifact", "priority": "primary" },
+    { "id": "OLD", "label": "旧環境 重み 90", "type": "artifact", "priority": "secondary" },
+    { "id": "NEW", "label": "新環境 重み 10", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "問題なければ比率を上げる / 重み 0 で切り離せる", "type": "other", "priority": "support" },
+    { "id": "FO", "label": "フェイルオーバールーティング", "type": "artifact", "priority": "secondary" },
+    { "id": "GEO", "label": "位置情報ルーティング", "type": "artifact", "priority": "secondary" },
+    { "id": "SIMPLE", "label": "シンプルルーティング", "type": "artifact", "priority": "secondary" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "J", "verb": "要件を判断軸に置き換える", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "W", "verb": "比率で分配する", "direction": "one-way", "kind": "flow" },
+    { "from": "W", "to": "OLD", "verb": "大半を現行へ流す", "direction": "one-way", "kind": "flow" },
+    { "from": "W", "to": "NEW", "verb": "一部を新版へ流す", "direction": "one-way", "kind": "flow" },
+    { "from": "W", "to": "NOTE", "verb": "運用時の使い方を補う", "direction": "none", "kind": "other" },
+    { "from": "J", "to": "FO", "verb": "障害時の切り替え用", "direction": "one-way", "kind": "contrast" },
+    { "from": "J", "to": "GEO", "verb": "場所で出し分ける", "direction": "one-way", "kind": "contrast" },
+    { "from": "J", "to": "SIMPLE", "verb": "比率を指定できない", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー)+ 分配の枝: 「トラフィックをどう配分するか」で正解を選び、その先で重み 90 / 10 の 2 本に分ける",
+    "対応表: 4 つのポリシーとユースケースを 2 列に並べ、カナリアリリースの行を強調する"
+  ],
+  "selected_pattern": "分岐(判断フロー)+ 分配の枝。対応表では「10% だけ流す」がどう実現されるかが名前の暗記に留まる。正解の先に重み 90 / 10 の 2 本を描けば、加重ルーティングが何を設定するものかまで一目で分かり、比率を上げていく運用も注釈で続けられる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=用途が異なるポリシー、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "重みは解説の例に合わせて 90 / 10 とした。重みの合計に対する比で決まる(合計 100 である必要はない)点は解説に無いため書いていない。",
+    "DNS キャッシュにより実際の配分が重みどおりにならない場合がある点も解説の範囲外のため触れていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"新バージョンへトラフィックの 10% だけを流して<br/>問題がないか検証したい(カナリアリリース)\"]:::req\n    J{\"トラフィックを<br/>どう配分するか?\"}:::judge\n    W[\"加重ルーティング<br/>レコードごとに重みを設定して比率分配\"]:::best\n    OLD[\"旧環境 重み 90\"]:::svc\n    NEW[\"新環境 重み 10\"]:::svc\n    NOTE[\"問題なければ比率を徐々に上げる<br/>重み 0 にすれば特定環境を切り離せる\"]:::note\n    FO[\"フェイルオーバールーティング<br/>障害時の切り替え用\"]:::alt\n    GEO[\"位置情報ルーティング<br/>ユーザーの場所で出し分ける\"]:::alt\n    SIMPLE[\"シンプルルーティング<br/>比率を指定できない\"]:::alt\n\n    REQ --> J\n    J -->|\"比率で分配\"| W\n    W -->|\"90\"| OLD\n    W -->|\"10\"| NEW\n    W -.- NOTE\n    J -.->|\"障害時切替\"| FO\n    J -.->|\"場所で選ぶ\"| GEO\n    J -.->|\"分配なし\"| SIMPLE"
+}

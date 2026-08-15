@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 143 問 / 全 400 問
+収録: 153 問 / 全 400 問
 
 ---
 
@@ -7254,3 +7254,464 @@ flowchart TD
 **解説**: PrivateLink はサービス側の NLB をエンドポイントサービスとして公開し、利用側 VPC にはインターフェイスエンドポイント(ENI)だけが現れる一方向のプライベート接続です。ルーティング統合が不要なため CIDR 重複でも問題なく、数千の消費者にスケールします。ピアリングや TGW はネットワーク全体をつなぐため CIDR 重複不可で、SaaS 提供には過剰です。
 
 **確認事項**: 解説の「数千の消費者にスケールする」は注釈に置いた。問題文の「数百の顧客 VPC」との数の違いは解説の記述をそのまま引いたもので、図では規模感の主張として扱っている。 / エンドポイントサービスの承認フローや プライベート DNS 名は解説の範囲外なので描いていない。
+
+---
+
+## net11 — ネットワーク / level 2
+
+**問題**: 50 個の VPC とオンプレミス拠点を相互接続したい。ピアリングのフルメッシュ管理は避けたい。どのサービスが適切か?
+
+**正解**: AWS Transit Gateway
+
+**他の選択肢**: VPC ピアリングをすべての組で作成 / 各 VPC に個別の VPN 接続 / CloudFront
+
+**図解の主メッセージ**: つなぐ VPC が多数なら、フルメッシュのピアリングではなくハブ&スポークの Transit Gateway で一元接続する。
+
+**採用パターン**: 分岐(判断フロー)。構成図の並置は本数の差を直感的に見せられるが、50 VPC 分の線は 1 枚に描けず象徴的な省略が必要で、他の図と読み方も揃わない。1 つの問いから枝を伸ばし、ピアリング側に「約 1,200 本」という解説どおりの数値を注釈で添えれば、判断軸と非現実さの理由を同時に伝えられる。(候補: 分岐(判断フロー): 「つなぐ拠点はいくつか」の1問から TGW とピアリングへ分け、ピアリング側に接続本数の注釈を付ける / 対比(構成図の並置): 左にフルメッシュのピアリング図、右にハブ&スポークの TGW 図を描いて線の本数の差を見せる)
+
+```mermaid
+flowchart TD
+    REQ["50 個の VPC とオンプレミス拠点を相互接続したい<br/>ピアリングのフルメッシュ管理は避けたい"]:::req
+    J{"つなぐ拠点は<br/>いくつか?"}:::judge
+    TGW["AWS Transit Gateway<br/>ハブとスポークで VPC・VPN・Direct Connect を一元接続"]:::best
+    RT["ルートテーブルで通信可否も集中管理"]:::svc
+    PEER["VPC ピアリング<br/>推移的ルーティング不可(2〜3 個向け)"]:::alt
+    MESH["50 VPC では約 1,200 本の接続が必要"]:::note
+    VPN["各 VPC に個別の VPN 接続<br/>接続本数も管理対象も減らない"]:::alt
+    CF["CloudFront<br/>コンテンツ配信であり VPC 間接続ではない"]:::alt
+
+    REQ --> J
+    J -->|"多数"| TGW
+    TGW --> RT
+    J -.->|"2〜3 個"| PEER
+    PEER -.- MESH
+    J -.->|"個別接続"| VPN
+    REQ -.->|"用途が違う"| CF
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net11.svg`](../../web/diagrams/net11.svg)
+
+**解説**: Transit Gateway はハブ&スポーク型で数千の VPC・VPN・Direct Connect を一元接続でき、ルートテーブルで通信可否も集中管理できます。ピアリングは推移的ルーティング不可のため 50 VPC では約 1,200 本の接続が必要になり非現実的です。「VPC が多数 = TGW、2〜3 個 = ピアリング」で判断します。
+
+**確認事項**: 「約 1,200 本」は解説の記述をそのまま注釈にしている。n(n-1)/2 という算出根拠は解説に無いため図には書いていない。 / オンプレミス拠点の接続(VPN / Direct Connect)は TGW ノードのラベル内に留め、独立ノードにはしていない。判断軸は VPC 側の数だけで決まるため。
+
+---
+
+## net12 — ネットワーク / level 1
+
+**問題**: VPC ピアリングの特徴として正しいものはどれか?
+
+**正解**: 接続は非推移的であり、通信したい VPC 同士を直接つなぐ必要がある
+
+**他の選択肢**: 接続は推移的であり、A-B、B-C がつながれば A-C も通信できる / 同一リージョンの VPC としか接続できない / CIDR が重複していても接続できる
+
+**図解の主メッセージ**: VPC ピアリングは 1 対 1 の非推移的な接続で、通信したい VPC 同士を直接つながないと届かない。
+
+**採用パターン**: 関係図(3 要素の具体例)。性質表は情報量が多いぶん「非推移的」という言葉の意味そのものは伝わらない。A-B-C の 3 ノードで、つながっている線と届かない線を描き分ければ、用語を知らなくても一目で正誤が判定できる。(候補: 関係図(3 要素の具体例): A-B、B-C を実線でつなぎ、A-C を「届かない」破線で示して非推移性を目に見せる / 対比(性質表): ピアリングと Transit Gateway の性質(推移性・接続数・CIDR)を 2 列で並べる)
+
+```mermaid
+flowchart TD
+    J{"ピアリングの接続は<br/>どこまで届くか?"}:::judge
+    ANS["非推移的 = 1 対 1<br/>通信したい VPC 同士を直接つなぐ必要がある"]:::best
+    subgraph EX["A-B と B-C をつないだ場合"]
+        A["VPC A"]:::svc
+        B["VPC B"]:::svc
+        C["VPC C"]:::svc
+        A ---|"ピアリング"| B
+        B ---|"ピアリング"| C
+        A -.->|"届かない"| C
+    end
+    NOTE["クロスリージョン・クロスアカウントは可<br/>CIDR の重複は不可"]:::note
+    TGW["多数の VPC を推移的につなぐなら<br/>Transit Gateway"]:::alt
+
+    J --> ANS
+    ANS --> EX
+    ANS -.- NOTE
+    J -.->|"多数の VPC"| TGW
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net12.svg`](../../web/diagrams/net12.svg)
+
+**解説**: VPC ピアリングは 1 対 1 の非推移的な接続で、A-B と B-C をつないでも A から C へは通信できません。クロスリージョン・クロスアカウント接続は可能ですが、CIDR の重複は不可です。多数の VPC を推移的につなぎたい場合は Transit Gateway を使います。
+
+**確認事項**: 誤答「CIDR が重複していても接続できる」は独立ノードにせず、注釈ノードで「CIDR の重複は不可」と正しい側を書いて否定している。誤った記述をそのまま図に載せると図だけを見た人が誤読しうるため。 / クロスリージョン・クロスアカウントの可否も同じ注釈にまとめている。分量が増えるなら別図に分ける余地がある。
+
+---
+
+## net13 — ネットワーク / level 2
+
+**問題**: オンプレミスと VPC を今週中に暗号化された経路で接続する必要がある。専用線の敷設を待つ時間はない。どの選択肢が適切か?
+
+**正解**: サイト間 VPN(Site-to-Site VPN)
+
+**他の選択肢**: AWS Direct Connect / VPC ピアリング / AWS PrivateLink
+
+**図解の主メッセージ**: 今週中という納期が制約なら、数時間〜数日で開通して常時暗号化されるサイト間 VPN を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。タイムラインは時間差そのものは鮮明だが、対象違いの誤答 2 つ(ピアリング・PrivateLink)を同じ軸に置けず、図が 2 つに割れる。1 つの問いから枝を伸ばす形なら、時間の差はノードのラベルに書くだけで足り、4 択すべてを 1 枚に収められる。(候補: 分岐(判断フロー): 「開通までどれだけ待てるか」の1問から VPN と Direct Connect へ分け、残り 2 択は対象違いとして脇に置く / タイムライン: 横軸を経過時間にして VPN(数時間〜数日)と Direct Connect(数週間〜数か月)の開通時点を並べる)
+
+```mermaid
+flowchart TD
+    REQ["今週中にオンプレミスと VPC を<br/>暗号化された経路で接続したい"]:::req
+    J{"開通までに<br/>どれだけ待てるか?"}:::judge
+    VPN["サイト間 VPN<br/>数時間〜数日で開通・常時暗号化"]:::best
+    NET["インターネット上に IPsec トンネルを張る"]:::svc
+    DX["AWS Direct Connect<br/>開通は数週間〜数か月・帯域と品質は安定"]:::alt
+    PEER["VPC ピアリング<br/>VPC 同士の接続でオンプレとはつなげない"]:::alt
+    PL["AWS PrivateLink<br/>特定サービスを個別に公開する仕組み"]:::alt
+
+    REQ --> J
+    J -->|"待てない"| VPN
+    VPN --> NET
+    J -.->|"数か月待てる"| DX
+    REQ -.->|"対象が違う"| PEER
+    REQ -.->|"対象が違う"| PL
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net13.svg`](../../web/diagrams/net13.svg)
+
+**解説**: サイト間 VPN はインターネット上に IPsec トンネルを張る方式で、数時間〜数日で開通でき、常時暗号化されます。Direct Connect は専用線のため開通に数週間〜数か月かかりますが、帯域と品質が安定します。「すぐ・安く・暗号化 = VPN、安定・大容量 = Direct Connect」の対比が頻出です。
+
+**確認事項**: Direct Connect はグレー(alt)だが「劣った選択肢」ではなく納期要件に合わないだけ。ラベルに「帯域と品質は安定」と併記して優劣の誤読を防いでいる。 / 解説にある「安く」という観点は判断軸に採っていない。今回の問題文の制約は納期だけで、コスト比較は解説の一般論に留まるため。
+
+---
+
+## net14 — ネットワーク / level 2
+
+**問題**: オンプレミスから AWS へ大量データを日常的に転送しており、インターネット経由では帯域が不安定で困っている。一貫した帯域と低レイテンシーを得るには?
+
+**正解**: AWS Direct Connect を導入する
+
+**他の選択肢**: サイト間 VPN を増設する / S3 Transfer Acceleration を使う / NAT ゲートウェイを増やす
+
+**図解の主メッセージ**: 一貫した帯域と低レイテンシーが要件なら、インターネットを経由しない専用線の Direct Connect を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。経路図の対比は「インターネットを通るか否か」を直接見せられるが、Transfer Acceleration と NAT ゲートウェイの誤答は経路図の中に置き場所がなく、なぜ違うのかを示せない。判断フローなら 4 択すべてを同じ軸の上で比較でき、暗号化の注意点も注釈として添えられる。(候補: 分岐(判断フロー): 「経路にインターネットを挟んでよいか」の1問から Direct Connect と VPN 増設へ分け、論点違いの 2 択を脇に置く / 対比(経路図): 上段にインターネット経由の経路、下段に専用線の経路を描いて経路そのものの違いを見せる)
+
+```mermaid
+flowchart TD
+    REQ["オンプレミスから AWS へ大量データを日常転送<br/>インターネット経由では帯域が不安定"]:::req
+    J{"経路にインターネットを<br/>挟んでよいか?"}:::judge
+    DX["AWS Direct Connect<br/>専用線で一貫した帯域と低レイテンシー"]:::best
+    COST["データ転送料金もインターネット経由より安価"]:::svc
+    NOTE["デフォルトでは暗号化されない<br/>要件があれば DX 上に VPN を重ねるか MACsec"]:::note
+    VPN["サイト間 VPN を増設<br/>経路はインターネットのままで不安定さが残る"]:::alt
+    TA["S3 Transfer Acceleration<br/>S3 へのアップロード高速化でオンプレ回線は変わらない"]:::alt
+    NAT["NAT ゲートウェイを増やす<br/>VPC のアウトバウンド経路の話"]:::alt
+
+    REQ --> J
+    J -->|"挟まない"| DX
+    DX --> COST
+    DX -.- NOTE
+    J -.->|"挟む"| VPN
+    REQ -.->|"論点が違う"| TA
+    REQ -.->|"論点が違う"| NAT
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net14.svg`](../../web/diagrams/net14.svg)
+
+**解説**: Direct Connect はオンプレミスと AWS を専用線で結び、インターネットを経由しない一貫した帯域(最大 100Gbps 超)と低レイテンシーを提供します。データ転送料金もインターネット経由より安価です。デフォルトでは暗号化されないため、暗号化要件がある場合は DX 上に VPN を重ねるか MACsec を使います。
+
+**確認事項**: 「最大 100Gbps 超」という数値は解説にあるが図には書いていない。判断軸は帯域の一貫性であって上限値ではなく、数値があると上限の暗記に誘導しかねないため。 / 暗号化の注意点(MACsec / DX 上の VPN)は net13 と重なる論点。両問を続けて解くと重複感が出る可能性がある。
+
+---
+
+## net15 — ネットワーク / level 2
+
+**問題**: Direct Connect でオンプレミスと接続しているが、専用線障害時にも接続を維持したい。コスト効率の良い冗長化構成はどれか?
+
+**正解**: サイト間 VPN をバックアップ経路として構成する
+
+**他の選択肢**: 何もしない(DX は冗長化不要) / VPC ピアリングを追加する / NAT ゲートウェイを別 AZ に追加する
+
+**図解の主メッセージ**: コスト効率よく専用線障害に備えるなら、サイト間 VPN をバックアップ経路にして BGP でフェイルオーバーさせる。
+
+**採用パターン**: 分岐(判断フロー)。状態遷移は切り替えの動きが鮮明だが、誤答 3 つ(何もしない・ピアリング・NAT)を置く場所がなく、なぜ選ばないかを示せない。判断フローを土台にして主経路から VPN へ向かう実線を 1 本足せば、選択の理由と切り替えの動きを両方 1 枚に収められる。(候補: 分岐(判断フロー): 「冗長化にどこまでコストをかけられるか」の1問から VPN バックアップと DX 2 拠点へ分け、主経路から VPN への切り替えを実線で描き足す / 状態遷移: 「通常時 = DX 経由」と「障害時 = VPN 経由」の 2 状態を並べ、切り替えの矢印だけで見せる)
+
+```mermaid
+flowchart TD
+    REQ["Direct Connect 障害時も接続を維持したい<br/>コスト効率も重視する"]:::req
+    J{"冗長化にどこまで<br/>コストをかけられるか?"}:::judge
+    DX["通常時の主経路 = Direct Connect"]:::svc
+    VPN["サイト間 VPN をバックアップ経路に構成"]:::best
+    BGP["BGP 経路が VPN 側へフェイルオーバーする"]:::svc
+    DX2["Direct Connect を 2 拠点に冗長化<br/>可用性は最高だがコストは大きく増える"]:::alt
+    NONE["何もしない<br/>専用線障害でそのまま接続が途切れる"]:::alt
+    PEER["VPC ピアリングを追加<br/>VPC 間の接続でオンプレ経路は冗長化されない"]:::alt
+    NAT["NAT ゲートウェイを別 AZ に追加<br/>VPC 内アウトバウンドの可用性の話"]:::alt
+
+    REQ --> J
+    J -->|"抑えたい"| VPN
+    DX -->|"障害時"| VPN
+    VPN --> BGP
+    J -.->|"最高可用性"| DX2
+    REQ -.->|"要件未達"| NONE
+    REQ -.->|"論点が違う"| PEER
+    REQ -.->|"論点が違う"| NAT
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net15.svg`](../../web/diagrams/net15.svg)
+
+**解説**: Direct Connect のバックアップとしてサイト間 VPN を構成すると、専用線障害時に BGP 経路が VPN 側へフェイルオーバーし接続を維持できます。最高レベルの可用性が必要なら DX を 2 拠点に冗長化しますがコストは大きく増えます。「コスト効率の良い DX 冗長化 = VPN バックアップ」が定番の解答です。
+
+**確認事項**: DX 2 拠点構成はグレー(alt)だが、可用性としては上位の構成。ラベルに「可用性は最高だがコストは大きく増える」と書き、劣った案という誤読を防いでいる。 / VPN 側の帯域が DX より細くなる点は解説に無いため図に書いていない(フェイルオーバー後の性能低下には触れていない)。
+
+---
+
+## net16 — ネットワーク / level 1
+
+**問題**: Route 53 で、プライマリサイトの障害時に自動的に DR サイトへ DNS を切り替えたい。どのルーティングポリシーを使うか?
+
+**正解**: フェイルオーバールーティング
+
+**他の選択肢**: シンプルルーティング / 位置情報ルーティング / 加重ルーティング
+
+**図解の主メッセージ**: ヘルスチェックで異常を検知して自動的に切り替えられるのは、フェイルオーバールーティングだけ。
+
+**採用パターン**: 分岐(判断フロー)+ 動作の枝。対応表は 4 ポリシーを一望できるが、この問題の要である「ヘルスチェックが前提」という条件が表の 1 セルに埋もれる。判断で正解に到達したあと、ヘルスチェックから正常/異常の 2 本を伸ばす形にすれば、選ぶ理由と動く仕組みが同じ 1 枚で読める。(候補: 分岐(判断フロー)+ 動作の枝: 「切り替えのきっかけは何か」から正解を選び、その先でヘルスチェックの正常/異常の 2 経路を描く / 対応表: 4 つのポリシーとユースケースを 2 列に並べ、該当行を強調する)
+
+```mermaid
+flowchart TD
+    REQ["プライマリサイトの障害時に<br/>DR サイトへ自動で DNS を切り替えたい"]:::req
+    J{"切り替えの<br/>きっかけは何か?"}:::judge
+    FO["フェイルオーバールーティング<br/>アクティブ / パッシブ構成のポリシー"]:::best
+    HC["ヘルスチェック(設定が前提条件)"]:::svc
+    PRI["プライマリのレコードを返す"]:::svc
+    SEC["セカンダリ(DR サイト)のレコードを返す"]:::svc
+    SIMPLE["シンプルルーティング<br/>常に同じレコードを返すだけ"]:::alt
+    GEO["位置情報ルーティング<br/>ユーザーの場所で出し分ける"]:::alt
+    W["加重ルーティング<br/>設定した比率で分配する"]:::alt
+
+    REQ --> J
+    J -->|"異常の検知"| FO
+    FO --> HC
+    HC -->|"正常"| PRI
+    HC -->|"異常"| SEC
+    J -.->|"切替なし"| SIMPLE
+    J -.->|"場所で選ぶ"| GEO
+    J -.->|"割合で分配"| W
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net16.svg`](../../web/diagrams/net16.svg)
+
+**解説**: フェイルオーバールーティングは、ヘルスチェックでプライマリの異常を検知するとセカンダリのレコードへ自動で切り替えるアクティブ/パッシブ構成用のポリシーです。セカンダリを S3 静的サイトや別リージョンの環境にする DR パターンが頻出です。ヘルスチェックの設定が前提条件です。
+
+**確認事項**: 同じフェイルオーバールーティングを扱う net05 と主メッセージが近い。net05 は 4 ポリシーの用途対応に重心を置き、本図はヘルスチェックによる切り替えの動作に重心を置いて描き分けた。 / セカンダリの実体(S3 静的サイト・別リージョン)は解説に例として挙がるが、本問の要件は「DR サイト」までなので具体名は書いていない。
+
+---
+
+## net17 — ネットワーク / level 2
+
+**問題**: アプリを複数リージョンに展開している。世界中のユーザーをそれぞれ応答が最も速いリージョンへ誘導したい。Route 53 のどのポリシーを使うか?
+
+**正解**: レイテンシーベースルーティング
+
+**他の選択肢**: 位置情報ルーティング / 加重ルーティング / 複数値回答ルーティング
+
+**図解の主メッセージ**: ユーザーごとに最も応答が速いリージョンへ誘導したいなら、測定レイテンシーで返すレイテンシーベースルーティング。
+
+**採用パターン**: 分岐(判断フロー)。2 択の対比は取り違えの核心だけを見せられるが、残る 2 つの誤答(加重・複数値回答)が図から消えて選択肢の消去ができない。判断フローなら枝のラベル自体が選択基準になり、4 択すべてを同じ軸で並べたうえで、取り違えやすい「速さ / 場所」の対だけ注釈で念押しできる。(候補: 分岐(判断フロー): 「エンドポイントを何で選ぶか」の1問から 4 つのポリシーへ枝を伸ばし、枝のラベルに選択基準を書く / 対比(2 択の並置): レイテンシーベースと位置情報だけを左右に並べ、「速さ」対「場所」の違いに絞って見せる)
+
+```mermaid
+flowchart TD
+    REQ["アプリを複数リージョンに展開<br/>世界中のユーザーを最速のリージョンへ誘導したい"]:::req
+    J{"エンドポイントを<br/>何で選ぶか?"}:::judge
+    LAT["レイテンシーベースルーティング<br/>測定レイテンシーで最速のエンドポイントを返す"]:::best
+    GEO["位置情報ルーティング<br/>ユーザーの国・地域で選ぶ(規制・ローカライズ用)"]:::alt
+    W["加重ルーティング<br/>設定した比率で分配する"]:::alt
+    MV["複数値回答ルーティング<br/>複数のレコードをまとめて返す"]:::alt
+    NOTE["「速さ」= レイテンシー<br/>「場所」= 位置情報 で使い分ける"]:::note
+
+    REQ --> J
+    J -->|"速さ"| LAT
+    J -.->|"場所"| GEO
+    J -.->|"割合"| W
+    J -.->|"複数返す"| MV
+    LAT -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net17.svg`](../../web/diagrams/net17.svg)
+
+**解説**: レイテンシーベースルーティングは、ユーザーと各リージョン間の測定レイテンシーに基づき最速のエンドポイントを返します。「速さ」で選ぶのがレイテンシー、「ユーザーの場所(国・地域)」で選ぶのが位置情報ルーティングです。位置情報はコンテンツ規制やローカライズ用途で使い分けます。
+
+**確認事項**: 誤答 3 つはいずれも実在する正当なポリシーで、この要件に合わないだけ。ラベルに用途を併記して「間違ったサービス」という誤読を防いでいる。 / レイテンシーの測定主体や測定間隔は解説に無いため書いていない。「測定レイテンシーに基づく」という解説の表現に留めた。
+
+---
+
+## net18 — ネットワーク / level 2
+
+**問題**: 新バージョンのアプリへトラフィックの 10% だけを流して問題がないか検証したい(カナリアリリース)。Route 53 のどのポリシーが適切か?
+
+**正解**: 加重ルーティング
+
+**他の選択肢**: フェイルオーバールーティング / 位置情報ルーティング / シンプルルーティング
+
+**図解の主メッセージ**: トラフィックを比率で分けたいなら、レコードごとに重みを設定できる加重ルーティング。
+
+**採用パターン**: 分岐(判断フロー)+ 分配の枝。対応表では「10% だけ流す」がどう実現されるかが名前の暗記に留まる。正解の先に重み 90 / 10 の 2 本を描けば、加重ルーティングが何を設定するものかまで一目で分かり、比率を上げていく運用も注釈で続けられる。(候補: 分岐(判断フロー)+ 分配の枝: 「トラフィックをどう配分するか」で正解を選び、その先で重み 90 / 10 の 2 本に分ける / 対応表: 4 つのポリシーとユースケースを 2 列に並べ、カナリアリリースの行を強調する)
+
+```mermaid
+flowchart TD
+    REQ["新バージョンへトラフィックの 10% だけを流して<br/>問題がないか検証したい(カナリアリリース)"]:::req
+    J{"トラフィックを<br/>どう配分するか?"}:::judge
+    W["加重ルーティング<br/>レコードごとに重みを設定して比率分配"]:::best
+    OLD["旧環境 重み 90"]:::svc
+    NEW["新環境 重み 10"]:::svc
+    NOTE["問題なければ比率を徐々に上げる<br/>重み 0 にすれば特定環境を切り離せる"]:::note
+    FO["フェイルオーバールーティング<br/>障害時の切り替え用"]:::alt
+    GEO["位置情報ルーティング<br/>ユーザーの場所で出し分ける"]:::alt
+    SIMPLE["シンプルルーティング<br/>比率を指定できない"]:::alt
+
+    REQ --> J
+    J -->|"比率で分配"| W
+    W -->|"90"| OLD
+    W -->|"10"| NEW
+    W -.- NOTE
+    J -.->|"障害時切替"| FO
+    J -.->|"場所で選ぶ"| GEO
+    J -.->|"分配なし"| SIMPLE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net18.svg`](../../web/diagrams/net18.svg)
+
+**解説**: 加重ルーティングはレコードごとに重みを設定してトラフィックを比率分配できます。旧環境 90・新環境 10 のように設定してカナリアリリースや A/B テストを行い、問題なければ徐々に比率を上げます。重み 0 にすれば特定環境を切り離すこともできます。
+
+**確認事項**: 重みは解説の例に合わせて 90 / 10 とした。重みの合計に対する比で決まる(合計 100 である必要はない)点は解説に無いため書いていない。 / DNS キャッシュにより実際の配分が重みどおりにならない場合がある点も解説の範囲外のため触れていない。
+
+---
+
+## net19 — ネットワーク / level 2
+
+**問題**: 法規制により、EU のユーザーには EU 域内のサーバーからのみコンテンツを配信する必要がある。Route 53 のどのポリシーを使うか?
+
+**正解**: 位置情報(Geolocation)ルーティング
+
+**他の選択肢**: レイテンシーベースルーティング / 加重ルーティング / フェイルオーバールーティング
+
+**図解の主メッセージ**: 規制で配信元の地域を確実に固定するなら、クエリ発信元の国・大陸で決める位置情報ルーティング。
+
+**採用パターン**: 分岐(判断フロー)。2 択の対比はこの問題の混同ポイントに直撃するが、加重とフェイルオーバーの誤答を消去できない。判断フローで枝のラベルを決定要因(発信元の地域 / 速さ / 比率 / 障害時切替)に統一すれば、混同する 2 つも同じ軸の上で並び、違いは枝のラベルだけで読み取れる。(候補: 分岐(判断フロー): 「配信先は何で決まるべきか」の1問から 4 つのポリシーへ枝を伸ばし、枝のラベルに決定要因を書く / 対比(2 択の並置): 「速さ優先 = レイテンシー」と「地域を確実に固定 = 位置情報」を左右に並べ、規制要件では後者しかないことを見せる)
+
+```mermaid
+flowchart TD
+    REQ["法規制により EU のユーザーには<br/>EU 域内のサーバーからのみ配信する必要がある"]:::req
+    J{"配信先は<br/>何で決まるべきか?"}:::judge
+    GEO["位置情報(Geolocation)ルーティング<br/>DNS クエリ発信元の国・大陸で返すレコードを決める"]:::best
+    EU["EU のユーザーには EU のエンドポイントを返す"]:::svc
+    DEF["どの地域にも一致しない場合の<br/>デフォルトレコードを必ず用意する"]:::note
+    LAT["レイテンシーベースルーティング<br/>速さ優先のため地域を確実に分離できない"]:::alt
+    W["加重ルーティング<br/>比率分配であり地域を判定しない"]:::alt
+    FO["フェイルオーバールーティング<br/>障害時の切り替え用"]:::alt
+
+    REQ --> J
+    J -->|"発信元の地域"| GEO
+    GEO --> EU
+    GEO -.- DEF
+    J -.->|"速さ"| LAT
+    J -.->|"比率"| W
+    J -.->|"障害時切替"| FO
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net19.svg`](../../web/diagrams/net19.svg)
+
+**解説**: 位置情報ルーティングは DNS クエリの発信元の国・大陸に基づいて返すレコードを決めるため、「EU のユーザーは EU のエンドポイントへ」といったコンプライアンス要件に対応できます。レイテンシーベースは速さ優先のため、規制上の確実な地域分離には使えません。マッチしない地域用にデフォルトレコードを必ず用意します。
+
+**確認事項**: 地理的近接性(Geoproximity)ルーティングは選択肢にも解説にも無いため描いていない。位置情報との違いを問う問題を追加する場合は別図が必要。 / 判定が DNS クエリの発信元(多くはリゾルバの位置)に基づく点は解説の表現どおりに留め、リゾルバとエンドユーザーの位置がずれる可能性には触れていない。
+
+---
+
+## net20 — ネットワーク / level 1
+
+**問題**: example.com という Zone Apex(ネイキッドドメイン)を ALB に向けたい。Route 53 で使うべきレコードはどれか?
+
+**正解**: エイリアス(Alias)レコード
+
+**他の選択肢**: CNAME レコード / MX レコード / TXT レコード
+
+**図解の主メッセージ**: Zone Apex を AWS リソースへ向けるなら、CNAME ではなくエイリアスレコードを使う。
+
+**採用パターン**: 分岐(判断フロー)。可否表は 4 種を一望できるが、MX と TXT は可否以前に用途が違うため、表に並べると同じ土俵の比較に見えてしまう。1 つの問い(Apex に置けるか)で本命 2 つを振り分け、用途違いの 2 つは要件から直接脇に流す形にすると、判断の順序どおりに読める。(候補: 分岐(判断フロー): 「Zone Apex に置けるレコードか」の1問からエイリアスと CNAME に分け、用途違いの 2 択を脇に置く / 対比(可否表): 4 種のレコードについて「Apex に置けるか」「AWS リソースを指せるか」の 2 列で可否を並べる)
+
+```mermaid
+flowchart TD
+    REQ["example.com(Zone Apex / ネイキッドドメイン)を<br/>ALB に向けたい"]:::req
+    J{"Zone Apex に<br/>置けるレコードか?"}:::judge
+    ALIAS["エイリアス(Alias)レコード<br/>Apex から ALB・CloudFront・S3 静的サイトを指せる"]:::best
+    MERIT["クエリ料金は無料・対象の IP 変動にも自動追従"]:::svc
+    CNAME["CNAME レコード<br/>DNS の仕様上 Zone Apex には設定できない"]:::alt
+    MX["MX レコード<br/>メールの配送先を指定するもの"]:::alt
+    TXT["TXT レコード<br/>検証用の文字列を置くもの"]:::alt
+
+    REQ --> J
+    J -->|"置ける"| ALIAS
+    ALIAS --> MERIT
+    J -.->|"置けない"| CNAME
+    REQ -.->|"用途が違う"| MX
+    REQ -.->|"用途が違う"| TXT
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net20.svg`](../../web/diagrams/net20.svg)
+
+**解説**: DNS の仕様上、Zone Apex に CNAME は設定できません。Route 53 のエイリアスレコードは ALB・CloudFront・S3 静的サイトなどの AWS リソースを Apex でも指せる独自拡張で、クエリ料金も無料です。対象の IP 変動にも自動追従します。「Apex + AWS リソース = エイリアス」は頻出です。
+
+**確認事項**: エイリアスが指せる対象は解説にある ALB・CloudFront・S3 静的サイトに限って書いている(指定可能なリソースの全一覧は解説の範囲外)。 / サブドメインなら CNAME で足りるという対比は、問題の要件が Apex 固定のため図には入れていない。
