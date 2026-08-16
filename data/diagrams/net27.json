@@ -1,0 +1,39 @@
+{
+  "question_id": "net27",
+  "purpose": "IPv4 の NAT ゲートウェイと IPv6 の Egress-Only IGW が「外向きのみ許可」という同じ役割の対応関係にあることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、IPv4 の NAT ゲートウェイは理解しているが、IPv6 で同じことをする方法が結び付いていない人。",
+  "message": "IPv6 には NAT の概念がないので、外向きだけ許すには Egress-Only インターネットゲートウェイを使う。",
+  "source_summary": "IPv6 のみを使うプライベートなインスタンスから、アウトバウンドのインターネット通信だけを許可し外部からの着信は拒否したい。正解は Egress-Only インターネットゲートウェイ。IPv6 アドレスはすべてグローバルアドレスのため NAT の概念がなく、代わりに Egress-Only IGW が「外向きのみ許可・内向き拒否」を実現する。IPv4 における NAT ゲートウェイの役割の IPv6 版と覚える。通常の IGW を使うと外部からの着信も可能になってしまう。",
+  "elements": [
+    { "id": "REQ", "label": "IPv6 のみのプライベートインスタンスで外向きだけ許可し着信は拒否したい", "type": "state", "priority": "primary" },
+    { "id": "NAT", "label": "IPv4 の場合: NAT ゲートウェイ", "type": "artifact", "priority": "secondary" },
+    { "id": "EIGW", "label": "IPv6 の場合(本問): Egress-Only インターネットゲートウェイ", "type": "artifact", "priority": "primary" },
+    { "id": "REASON", "label": "IPv6 アドレスはすべてグローバルアドレスで NAT の概念がない", "type": "other", "priority": "support" },
+    { "id": "IGW", "label": "インターネットゲートウェイ", "type": "artifact", "priority": "secondary" },
+    { "id": "PEER", "label": "VPC ピアリング", "type": "artifact", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "EIGW", "verb": "外向きのみ許可を実現する", "direction": "one-way", "kind": "flow" },
+    { "from": "NAT", "to": "EIGW", "verb": "同じ役割の IPv6 版", "direction": "one-way", "kind": "contrast" },
+    { "from": "EIGW", "to": "REASON", "verb": "NAT が使えない理由を補う", "direction": "none", "kind": "other" },
+    { "from": "REQ", "to": "IGW", "verb": "外部からの着信も通してしまう", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "PEER", "verb": "用途が違う", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "対比(役割の対応): IPv4 の NAT ゲートウェイと IPv6 の Egress-Only IGW を並べ、「IPv6 版」と書いた対応矢印で結ぶ",
+    "分岐(判断フロー): 「使うのは IPv4 か IPv6 か」の 1 問で NAT ゲートウェイと Egress-Only IGW に振り分ける"
+  ],
+  "selected_pattern": "対比(役割の対応)。分岐でも同じ振り分けはできるが、解説が示す覚え方は「IPv4 の NAT ゲートウェイの IPv6 版」という対応そのもので、分岐にすると 2 つが別々の結論として離れて置かれ、その対応が絵に残らない。2 つを横に並べて対応矢印 1 本で結ぶ方が、覚え方の形をそのまま図にできる。なお前提(IPv4 / IPv6 のどちらの場合か)は subgraph の枠ではなくノードラベルの 1 行目で示した。枠にすると枠のタイトルと対応矢印のラベルが重なり、線の交差も増えて読みにくくなったため。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、矩形(緑)=正解につながる構成要素、矩形(グレー)=本問の要件を満たさない/前提が違う選択肢、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=本問(IPv6)での正解、グレー=前提が違う・要件を満たさない選択肢、青=要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=主たる流れ、破線矢印=条件付き/対比の弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "NAT ゲートウェイをグレー(alt)にしているのは「本問の IPv6 では使えない」という意味で、IPv4 で誤りという意味ではない。ノードラベルの 1 行目(IPv4 の場合)で読み分けさせているが、色だけを見ると誤答に見える余地は残る。",
+    "Egress-Only IGW のルートテーブル設定は解説の範囲外のため図に入れていない。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"IPv6 のみを使うプライベートなインスタンス<br/>アウトバウンドの通信だけ許可し、外部からの着信は拒否したい\"]:::req\n    NAT[\"IPv4 の場合<br/>NAT ゲートウェイ(外向きのみ許可する役割)\"]:::alt\n    EIGW[\"IPv6 の場合(本問)<br/>Egress-Only インターネットゲートウェイ<br/>外向きのみ許可・内向き拒否\"]:::best\n    REASON[\"IPv6 アドレスはすべてグローバルアドレス<br/>NAT の概念がない\"]:::note\n    IGW[\"インターネットゲートウェイ<br/>外部からの着信も可能になってしまう\"]:::alt\n    PEER[\"VPC ピアリング<br/>VPC 同士をつなぐもの\"]:::alt\n\n    REQ --> EIGW\n    NAT -.->|\"IPv6 版\"| EIGW\n    EIGW -.- REASON\n    REQ -.->|\"着信も通る\"| IGW\n    REQ -.->|\"用途が違う\"| PEER"
+}

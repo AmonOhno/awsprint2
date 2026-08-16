@@ -1,0 +1,45 @@
+{
+  "question_id": "net26",
+  "purpose": "「何の記録が欲しいのか(通信か、API 呼び出しか)」という 1 問で VPC フローログと CloudTrail が分かれることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、AWS のログ機能が複数あることは知っているが、それぞれ何を記録するのかが混ざっている人。",
+  "message": "「どの IP からどの IP へ、許可か拒否か」を残したいなら、API 記録の CloudTrail ではなく VPC フローログを有効にする。",
+  "source_summary": "VPC 内の通信について「どの IP からどの IP へ、許可/拒否どちらだったか」を記録して通信トラブルやセキュリティ調査に使いたい。正解は VPC フローログ。ENI を通過するトラフィックのメタデータ(送信元/宛先 IP・ポート・ACCEPT/REJECT など)を CloudWatch Logs や S3 へ記録する。セキュリティグループ/NACL の設定ミス調査や不審通信の検出に使う。パケットの中身(ペイロード)は記録されない。CloudTrail は API 呼び出しの記録であり通信記録ではない。",
+  "elements": [
+    { "id": "REQ", "label": "VPC 内の通信を記録して通信トラブルやセキュリティ調査に使いたい", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "記録したいのは通信か、API 呼び出しか?", "type": "process", "priority": "primary" },
+    { "id": "FLOW", "label": "VPC フローログ", "type": "artifact", "priority": "primary" },
+    { "id": "FIELDS", "label": "送信元/宛先 IP・ポート・ACCEPT/REJECT を CloudWatch Logs や S3 へ出力", "type": "artifact", "priority": "primary" },
+    { "id": "USE", "label": "セキュリティグループ / NACL の設定ミス調査・不審通信の検出", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "パケットの中身(ペイロード)は記録されない", "type": "other", "priority": "support" },
+    { "id": "CT", "label": "CloudTrail", "type": "artifact", "priority": "secondary" },
+    { "id": "CWM", "label": "CloudWatch メトリクス", "type": "artifact", "priority": "support" },
+    { "id": "R53Q", "label": "Route 53 クエリログ", "type": "artifact", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "J", "verb": "要件を判断軸に置き換える", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "FLOW", "verb": "通信→フローログ", "direction": "one-way", "kind": "flow" },
+    { "from": "FLOW", "to": "FIELDS", "verb": "記録する項目と出力先", "direction": "one-way", "kind": "flow" },
+    { "from": "FIELDS", "to": "USE", "verb": "調査に使える", "direction": "one-way", "kind": "flow" },
+    { "from": "FLOW", "to": "NOTE", "verb": "記録されない範囲を補う", "direction": "none", "kind": "other" },
+    { "from": "J", "to": "CT", "verb": "API 呼び出しならこちら", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "CWM", "verb": "個別の通信は残らない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "R53Q", "verb": "記録の対象が違う", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「記録したいのは通信か、API 呼び出しか」の 1 問でフローログと CloudTrail を分ける",
+    "レイヤー: 通信レイヤー / API レイヤー / メトリクス / DNS の 4 層を積み、それぞれに対応するログ機能を置く"
+  ],
+  "selected_pattern": "分岐(判断フロー)。レイヤー図は 4 つのログ機能の守備範囲を一望できるが、層という概念を読み解く手間が増えるうえ、本問が問うのは「通信かAPIか」の 1 点だけ。混同の中心である CloudTrail との分かれ目を菱形 1 つに置く方が、余計な解読なしに主メッセージが伝わる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=記録の対象が違う選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "CloudWatch メトリクスと Route 53 クエリログは解説に個別の説明がないため、名称から読み取れる範囲(数値の時系列 / DNS クエリの記録)だけを書いた。",
+    "フローログを有効にできる単位(VPC・サブネット・ENI)は解説が ENI 単位の通過にしか触れていないため、図では出力の粒度を明示していない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"VPC 内の通信を記録し<br/>通信トラブルやセキュリティ調査に使いたい\"]:::req\n    J{\"記録したいのは<br/>通信か、API 呼び出しか?\"}:::judge\n    FLOW[\"VPC フローログ<br/>ENI を通過するトラフィックのメタデータを記録\"]:::best\n    FIELDS[\"送信元 / 宛先 IP・ポート・ACCEPT / REJECT を<br/>CloudWatch Logs や S3 へ出力\"]:::svc\n    USE[\"セキュリティグループ / NACL の設定ミス調査<br/>不審通信の検出\"]:::svc\n    NOTE[\"パケットの中身(ペイロード)は<br/>記録されない\"]:::note\n    CT[\"CloudTrail<br/>API 呼び出しの記録であり通信記録ではない\"]:::alt\n    CWM[\"CloudWatch メトリクス<br/>数値の時系列で個別の通信は残らない\"]:::alt\n    R53Q[\"Route 53 クエリログ<br/>DNS クエリの記録\"]:::alt\n\n    REQ --> J\n    J -->|\"通信\"| FLOW\n    FLOW --> FIELDS\n    FIELDS --> USE\n    FLOW -.- NOTE\n    J -.->|\"API 呼び出し\"| CT\n    REQ -.->|\"個別通信なし\"| CWM\n    REQ -.->|\"対象が違う\"| R53Q"
+}

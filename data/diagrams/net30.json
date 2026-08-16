@@ -1,0 +1,44 @@
+{
+  "question_id": "net30",
+  "purpose": "セキュリティグループと NACL の 3 つの性質が 1 対 1 で裏返しになっていること、そして本問の誤答 3 つがすべて NACL 側の性質であることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、セキュリティグループと NACL の性質がどちらのものか混ざってしまう人。",
+  "message": "セキュリティグループはインスタンス(ENI)単位のステートフルな許可専用ファイアウォールで、残る 3 つの記述はすべて NACL の性質。",
+  "source_summary": "セキュリティグループの特性として正しいのは「ステートフルであり、許可した通信の戻りトラフィックは自動的に許可される」。セキュリティグループはインスタンス(ENI)単位で適用されるステートフルなファイアウォールで、記述できるのは許可ルールのみ。対して NACL はサブネット単位・ステートレス・許可と拒否の両方を記述可能、という対比表を丸ごと覚えるのが試験対策の定石。",
+  "elements": [
+    { "id": "REQ", "label": "セキュリティグループの特性として正しいものはどれか", "type": "state", "priority": "primary" },
+    { "id": "SGST", "label": "ステートフル(許可した通信の戻りは自動的に許可)", "type": "artifact", "priority": "primary" },
+    { "id": "SGUNIT", "label": "インスタンス(ENI)単位で適用される", "type": "artifact", "priority": "secondary" },
+    { "id": "SGRULE", "label": "記述できるのは許可ルールのみ", "type": "artifact", "priority": "secondary" },
+    { "id": "NAST", "label": "ステートレス(戻りのトラフィックも明示的に許可が必要)", "type": "artifact", "priority": "secondary" },
+    { "id": "NAUNIT", "label": "サブネット単位で適用される", "type": "artifact", "priority": "secondary" },
+    { "id": "NADENY", "label": "許可と拒否の両方を記述できる", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "誤答の 3 つはいずれも NACL 側の性質", "type": "other", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "SGST", "verb": "正解はこれ", "direction": "one-way", "kind": "flow" },
+    { "from": "SGST", "to": "NAST", "verb": "裏返しの関係", "direction": "one-way", "kind": "contrast" },
+    { "from": "SGUNIT", "to": "NAUNIT", "verb": "裏返しの関係", "direction": "one-way", "kind": "contrast" },
+    { "from": "SGRULE", "to": "NADENY", "verb": "裏返しの関係", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "NOTE", "verb": "誤答の出どころを補う", "direction": "none", "kind": "other" }
+  ],
+  "groups": [
+    { "id": "SGG", "label": "セキュリティグループ", "members": ["SGST", "SGUNIT", "SGRULE"] },
+    { "id": "NAG", "label": "ネットワーク ACL(NACL)", "members": ["NAST", "NAUNIT", "NADENY"] }
+  ],
+  "candidate_patterns": [
+    "対比(2 枠の対応表): セキュリティグループと NACL の枠を並べ、ステートの扱い・適用単位・書けるルールの 3 行を同じ高さに置いて裏返しの関係を見せる",
+    "分岐(判断フロー): 「ステートフルか?」の 1 問でセキュリティグループと NACL に振り分ける"
+  ],
+  "selected_pattern": "対比(2 枠の対応表)。本問は 4 択のうち 3 つが NACL の性質という構造で、分岐にすると 1 つの軸(ステートの扱い)しか描けず、残る 2 つの誤答が図の外に落ちる。3 行を同じ高さに並べて裏返しの線で結ぶと、解説が「丸ごと覚える」と言う対比表そのものが図になり、誤答がどこから来ているかも同時に読める。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=問い、矩形(緑)=正解の記述、矩形(白)=セキュリティグループ側のその他の性質、矩形(グレー)=NACL 側の性質(本問では誤答)、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=正解の記述、白=正解と同じ側(セキュリティグループ)の性質、グレー=本問では誤答となる NACL 側の性質、青=問い、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=問いから正解への流れ、破線矢印=裏返しの対応関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "NACL 側をグレー(alt)で塗っているのは「本問では誤答」という意味で、NACL 自体が劣るという意味ではない。枠のラベルで読み分けさせているが、色だけを見ると NACL が悪い選択肢に見える余地は残る。",
+    "セキュリティグループと NACL の評価順序(NACL が先に効く)は解説に記載がないため図に入れていない。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"セキュリティグループの特性として<br/>正しいものはどれか\"]:::req\n\n    subgraph SGG[\"セキュリティグループ\"]\n        SGST[\"ステートフル<br/>許可した通信の戻りは自動的に許可される\"]:::best\n        SGUNIT[\"インスタンス(ENI)単位で適用される\"]:::svc\n        SGRULE[\"記述できるのは許可ルールのみ\"]:::svc\n    end\n\n    subgraph NAG[\"ネットワーク ACL(NACL)\"]\n        NAST[\"ステートレス<br/>戻りのトラフィックも明示的に許可が必要\"]:::alt\n        NAUNIT[\"サブネット単位で適用される\"]:::alt\n        NADENY[\"許可と拒否の両方を記述できる\"]:::alt\n    end\n\n    NOTE[\"誤答の 3 つはいずれも NACL 側の性質<br/>この対比を丸ごと覚えるのが定石\"]:::note\n\n    REQ --> SGST\n    SGST -.->|\"裏返し\"| NAST\n    SGUNIT -.->|\"裏返し\"| NAUNIT\n    SGRULE -.->|\"裏返し\"| NADENY\n    REQ -.- NOTE"
+}

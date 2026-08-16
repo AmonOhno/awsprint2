@@ -1,0 +1,45 @@
+{
+  "question_id": "net29",
+  "purpose": "管理アクセス手段の選択が「インバウンドポートを開けずに入れるか」という 1 問で決まり、それが踏み台と SSH 鍵の運用をまとめて消すことを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、プライベートサブネットへの管理アクセスといえば踏み台サーバーしか思い浮かばない人。",
+  "message": "踏み台も SSH ポート開放もなくして操作ログも残すなら、Systems Manager Session Manager を使う。",
+  "source_summary": "プライベートサブネットの EC2 へ管理アクセスしたい。踏み台サーバーの運用や SSH ポート開放をなくし、操作ログも残す方法は Systems Manager Session Manager。SSM エージェントと IAM 認証によりブラウザ/CLI からシェルアクセスを提供し、インバウンドポートの開放・踏み台・SSH 鍵管理が一切不要になる。操作ログは CloudWatch Logs や S3 へ保存でき監査にも対応する。インターネットに出せない環境では SSM 用の VPC エンドポイントを設置する。",
+  "elements": [
+    { "id": "REQ", "label": "プライベートサブネットの EC2 へ管理アクセスし、踏み台と SSH ポート開放をなくし操作ログも残したい", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "インバウンドポートを開けずに入れるか?", "type": "process", "priority": "primary" },
+    { "id": "SSM", "label": "Systems Manager Session Manager", "type": "artifact", "priority": "primary" },
+    { "id": "NOOPEN", "label": "インバウンド開放・踏み台・SSH 鍵管理が一切不要", "type": "artifact", "priority": "primary" },
+    { "id": "LOG", "label": "操作ログを CloudWatch Logs や S3 へ保存し監査に対応", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "インターネットに出せない環境では SSM 用の VPC エンドポイントを設置する", "type": "other", "priority": "support" },
+    { "id": "PUBIP", "label": "パブリック IP を付与して SSH 接続", "type": "artifact", "priority": "secondary" },
+    { "id": "BASTION", "label": "踏み台 EC2 を増強して経由接続", "type": "artifact", "priority": "secondary" },
+    { "id": "CV", "label": "Client VPN + SSH のみが唯一の方法", "type": "artifact", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "J", "verb": "要件を判断軸に置き換える", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "SSM", "verb": "開けずに入れる→Session Manager", "direction": "one-way", "kind": "flow" },
+    { "from": "SSM", "to": "NOOPEN", "verb": "運用がまとめて消える", "direction": "one-way", "kind": "flow" },
+    { "from": "SSM", "to": "LOG", "verb": "監査要件も満たす", "direction": "one-way", "kind": "flow" },
+    { "from": "SSM", "to": "NOTE", "verb": "閉域での前提を補う", "direction": "none", "kind": "other" },
+    { "from": "J", "to": "PUBIP", "verb": "ポート開放が要る側", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "BASTION", "verb": "踏み台の運用が残る", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "CV", "verb": "SSH 鍵の管理が残る", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「インバウンドポートを開けずに入れるか」の 1 問で Session Manager と SSH 系の手段を分ける",
+    "対比(要件の充足表): 4 つの手段について「ポート開放なし」「踏み台なし」「操作ログ」の 3 条件の可否を並べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。充足表は 3 条件すべてを満たすのが Session Manager だけだと一望できて説得力があるが、可否のマス目を 12 個読ませることになり 1 枚での即読性を損なう。ポート開放の要否という 1 点で分け、消える運用(踏み台・SSH 鍵)を正解の先にまとめて置く方が、同じ結論に短い経路で届く。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=なくしたい運用が残る選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「Client VPN + SSH のみが唯一の方法」という選択肢は解説に個別の説明がないため、選択肢の文面から読み取れる範囲(SSH 鍵の管理が残る)だけを書いた。",
+    "Session Manager が要求する IAM ロール(SSM エージェントに付与するインスタンスプロファイル)の具体は解説の範囲外のため図に入れていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"プライベートサブネットの EC2 へ管理アクセスしたい<br/>踏み台の運用と SSH ポート開放をなくし、操作ログも残す\"]:::req\n    J{\"インバウンドポートを<br/>開けずに入れるか?\"}:::judge\n    SSM[\"Systems Manager Session Manager<br/>SSM エージェント + IAM 認証でブラウザ / CLI からシェル\"]:::best\n    NOOPEN[\"インバウンドポートの開放・踏み台・<br/>SSH 鍵管理が一切不要になる\"]:::svc\n    LOG[\"操作ログは CloudWatch Logs や S3 へ保存<br/>監査にも対応\"]:::svc\n    NOTE[\"インターネットに出せない環境では<br/>SSM 用の VPC エンドポイントを設置する\"]:::note\n    PUBIP[\"パブリック IP を付与して SSH 接続<br/>ポート開放が必要になる\"]:::alt\n    BASTION[\"踏み台 EC2 を増強して経由接続<br/>踏み台の運用が残る\"]:::alt\n    CV[\"Client VPN + SSH のみが唯一の方法<br/>SSH 鍵の管理が残る\"]:::alt\n\n    REQ --> J\n    J -->|\"開けずに入れる\"| SSM\n    SSM --> NOOPEN\n    SSM --> LOG\n    SSM -.- NOTE\n    J -.->|\"開放が要る\"| PUBIP\n    REQ -.->|\"運用が残る\"| BASTION\n    REQ -.->|\"鍵管理が残る\"| CV"
+}

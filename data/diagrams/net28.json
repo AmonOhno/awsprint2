@@ -1,0 +1,43 @@
+{
+  "question_id": "net28",
+  "purpose": "VPN の選び分けが「接続元が個人の端末か、拠点ネットワークか」の 1 問で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、サイト間 VPN と Client VPN の名前は知っているが、どちらを使う場面かを取り違える人。",
+  "message": "接続元が個人の端末なら、拠点同士をつなぐサイト間 VPN ではなく AWS Client VPN を使う。",
+  "source_summary": "在宅勤務の社員数百人が個人の PC から VPC 内のプライベートリソースへ安全に接続できるようにしたい。正解は AWS Client VPN。個々の端末から OpenVPN ベースの TLS 接続でリソースへアクセスするマネージド VPN で、Active Directory や SAML との認証連携、スケーリングも自動。サイト間 VPN は「拠点(ネットワーク)同士」の接続であり、個人端末からのリモートアクセスには Client VPN を使う、という対比が頻出。",
+  "elements": [
+    { "id": "REQ", "label": "在宅勤務の社員数百人が個人の PC から VPC 内のリソースへ接続したい", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "接続元は個人の端末か、拠点ネットワークか?", "type": "process", "priority": "primary" },
+    { "id": "CVPN", "label": "AWS Client VPN", "type": "artifact", "priority": "primary" },
+    { "id": "AUTH", "label": "Active Directory や SAML との認証連携", "type": "artifact", "priority": "secondary" },
+    { "id": "SCALE", "label": "マネージドでスケーリングも自動", "type": "artifact", "priority": "secondary" },
+    { "id": "S2S", "label": "サイト間 VPN", "type": "artifact", "priority": "secondary" },
+    { "id": "DX", "label": "Direct Connect", "type": "artifact", "priority": "support" },
+    { "id": "PEER", "label": "VPC ピアリング", "type": "artifact", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "J", "verb": "要件を判断軸に置き換える", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "CVPN", "verb": "個人の端末→Client VPN", "direction": "one-way", "kind": "flow" },
+    { "from": "CVPN", "to": "AUTH", "verb": "認証をつなげる", "direction": "one-way", "kind": "flow" },
+    { "from": "CVPN", "to": "SCALE", "verb": "数百人でも運用が増えない", "direction": "one-way", "kind": "flow" },
+    { "from": "J", "to": "S2S", "verb": "拠点同士ならこちら", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "DX", "verb": "拠点と AWS を結ぶもの", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "PEER", "verb": "VPC 同士を結ぶもの", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「接続元は個人の端末か、拠点ネットワークか」の 1 問で Client VPN とサイト間 VPN を分ける",
+    "包含(接続元の粒度): 端末 / 拠点 / VPC という 3 つの入れ子で、それぞれをつなぐサービスを対応させる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。粒度の入れ子は 4 択すべてを 1 つの構造に収められるが、入れ子の読み解きが要るうえ、解説が頻出と呼ぶのは「個人端末か拠点か」の 2 択の対比。その 1 問を菱形に置き、残る 2 つは要件から脇に流す方が、本番で使う判断の形に近い。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=接続元の単位が違う選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Direct Connect と VPC ピアリングは解説に個別の説明がないため、名称から読み取れる接続の単位(拠点と AWS / VPC 同士)だけを書き、専用線の帯域やコストには触れていない。",
+    "Client VPN のエンドポイント関連付けやクライアント CIDR の設計は解説の範囲外のため図に入れていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"在宅勤務の社員数百人が<br/>個人の PC から VPC 内のプライベートリソースへ<br/>安全に接続できるようにしたい\"]:::req\n    J{\"接続元は個人の端末か<br/>拠点ネットワークか?\"}:::judge\n    CVPN[\"AWS Client VPN<br/>個々の端末から OpenVPN ベースの TLS 接続\"]:::best\n    AUTH[\"Active Directory や SAML との認証連携\"]:::svc\n    SCALE[\"マネージドでスケーリングも自動\"]:::svc\n    S2S[\"サイト間 VPN<br/>拠点(ネットワーク)同士の接続\"]:::alt\n    DX[\"Direct Connect<br/>拠点と AWS を結ぶもの\"]:::alt\n    PEER[\"VPC ピアリング<br/>VPC 同士を結ぶもの\"]:::alt\n\n    REQ --> J\n    J -->|\"個人の端末\"| CVPN\n    CVPN --> AUTH\n    CVPN --> SCALE\n    J -.->|\"拠点同士\"| S2S\n    REQ -.->|\"単位が違う\"| DX\n    REQ -.->|\"単位が違う\"| PEER"
+}

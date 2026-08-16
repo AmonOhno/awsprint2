@@ -1,0 +1,45 @@
+{
+  "question_id": "net22",
+  "purpose": "「世界中へ低レイテンシー配信」という要件が、ユーザーの近くにコンテンツを置けるか(キャッシュできるか)という 1 つの問いで CloudFront に決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、CloudFront・Global Accelerator・Route 53 が同じ「配信を速くするもの」に見えている人。",
+  "message": "静的コンテンツを世界中へ低レイテンシーで届けるなら、ユーザーに最も近いエッジにキャッシュする CloudFront を使う。",
+  "source_summary": "世界中のユーザーへ画像・動画などの静的コンテンツを低レイテンシーで配信したい。正解は Amazon CloudFront。世界数百のエッジロケーションにコンテンツをキャッシュする CDN で、ユーザーに最も近いエッジから配信してレイテンシーとオリジン負荷を削減する。S3・ALB・任意の HTTP サーバーをオリジンにできる。動的コンテンツでも AWS バックボーン経由の接続最適化効果がある。",
+  "elements": [
+    { "id": "REQ", "label": "世界中のユーザーへ静的コンテンツを低レイテンシー配信したい", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "ユーザーの近くにコンテンツを置けるか?", "type": "process", "priority": "primary" },
+    { "id": "CF", "label": "Amazon CloudFront", "type": "artifact", "priority": "primary" },
+    { "id": "EDGE", "label": "最も近いエッジから配信し、レイテンシーとオリジン負荷を削減", "type": "artifact", "priority": "primary" },
+    { "id": "ORIGIN", "label": "オリジンは S3・ALB・任意の HTTP サーバー", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "動的コンテンツでも AWS バックボーン経由の接続最適化効果がある", "type": "other", "priority": "support" },
+    { "id": "GA", "label": "AWS Global Accelerator", "type": "artifact", "priority": "secondary" },
+    { "id": "CRR", "label": "S3 クロスリージョンレプリケーション", "type": "artifact", "priority": "support" },
+    { "id": "R53", "label": "Route 53 のみ", "type": "artifact", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "J", "verb": "要件を判断軸に置き換える", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "CF", "verb": "置ける→CDN", "direction": "one-way", "kind": "flow" },
+    { "from": "CF", "to": "EDGE", "verb": "効果を示す", "direction": "one-way", "kind": "flow" },
+    { "from": "ORIGIN", "to": "CF", "verb": "配信元になる", "direction": "one-way", "kind": "flow" },
+    { "from": "CF", "to": "NOTE", "verb": "補足を添える", "direction": "none", "kind": "other" },
+    { "from": "J", "to": "GA", "verb": "キャッシュしない側の選択肢", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "CRR", "verb": "目的が違う", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "R53", "verb": "目的が違う", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「ユーザーの近くにコンテンツを置けるか」の 1 問で CloudFront と残りを振り分ける",
+    "中心放射: CloudFront を中心に置き、エッジ・オリジン・効果を周囲に配置する"
+  ],
+  "selected_pattern": "分岐(判断フロー)。中心放射は CloudFront の機能一覧としては読みやすいが、「なぜ他の 3 つではないのか」が絵に出ない。キャッシュを置けるかどうかという 1 問を頂点に置くと、正解の理由と誤答の外れ方が同じ 1 本の流れで読める。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=この要件では目的が違う選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Global Accelerator を「経路の最適化(キャッシュはしない)」と書いたのは net25 の解説にある対比に合わせたもの。net22 の解説そのものには他選択肢の説明がない。",
+    "キャッシュの TTL や無効化(invalidation)の運用は解説の範囲外のため図に入れていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"世界中のユーザーへ<br/>画像・動画などの静的コンテンツを低レイテンシー配信したい\"]:::req\n    J{\"ユーザーの近くに<br/>コンテンツを置けるか?\"}:::judge\n    CF[\"Amazon CloudFront<br/>世界数百のエッジロケーションにキャッシュする CDN\"]:::best\n    EDGE[\"最も近いエッジから配信<br/>レイテンシーとオリジン負荷を削減\"]:::svc\n    ORIGIN[\"オリジンは S3・ALB・任意の HTTP サーバー\"]:::svc\n    NOTE[\"動的コンテンツでも<br/>AWS バックボーン経由の接続最適化効果がある\"]:::note\n    GA[\"AWS Global Accelerator<br/>経路の最適化(キャッシュはしない)\"]:::alt\n    CRR[\"S3 クロスリージョンレプリケーション<br/>バケット間の複製の仕組み\"]:::alt\n    R53[\"Route 53 のみ<br/>名前解決だけでコンテンツは配信しない\"]:::alt\n\n    REQ --> J\n    J -->|\"置ける\"| CF\n    CF --> EDGE\n    ORIGIN -->|\"配信元\"| CF\n    CF -.- NOTE\n    J -.->|\"置かない\"| GA\n    REQ -.->|\"目的が違う\"| CRR\n    REQ -.->|\"目的が違う\"| R53"
+}

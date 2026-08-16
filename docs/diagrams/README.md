@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 153 問 / 全 400 問
+収録: 163 問 / 全 400 問
 
 ---
 
@@ -7715,3 +7715,474 @@ flowchart TD
 **解説**: DNS の仕様上、Zone Apex に CNAME は設定できません。Route 53 のエイリアスレコードは ALB・CloudFront・S3 静的サイトなどの AWS リソースを Apex でも指せる独自拡張で、クエリ料金も無料です。対象の IP 変動にも自動追従します。「Apex + AWS リソース = エイリアス」は頻出です。
 
 **確認事項**: エイリアスが指せる対象は解説にある ALB・CloudFront・S3 静的サイトに限って書いている(指定可能なリソースの全一覧は解説の範囲外)。 / サブドメインなら CNAME で足りるという対比は、問題の要件が Apex 固定のため図には入れていない。
+
+---
+
+## net21 — ネットワーク / level 2
+
+**問題**: 本番サイトの完全障害時に、Route 53 から「メンテナンス中」の静的ページへ自動で切り替わる、最も低コストなフォールバック先はどれか?
+
+**正解**: S3 の静的ウェブサイトホスティング
+
+**他の選択肢**: 別リージョンの EC2 常時稼働環境 / オンプレミスの予備サーバー / 2 台目の ALB
+
+**図解の主メッセージ**: 障害時に出すのが静的な告知ページだけなら、フェイルオーバー先はサーバーレスの S3 静的ウェブサイトにする。
+
+**採用パターン**: 分岐(判断フロー)。コスト順の並置は安さは伝わるが「なぜ静的ページなら安く済むのか」という判断軸が絵に残らない。要件から Route 53 のフェイルオーバー、そこから「セカンダリで動かすものはあるか」という 1 問へ落とす形にすると、S3 が選ばれる理由そのものが図の骨格になる。(候補: 分岐(判断フロー): 「セカンダリで動かすものはあるか」の 1 問で S3 と常時稼働環境に振り分ける / 対比(コスト順の並置): 4 つのフォールバック先をコストの高い順に横に並べ、最も安い S3 を強調する)
+
+```mermaid
+flowchart TD
+    REQ["本番サイトの完全障害時に<br/>「メンテナンス中」の静的ページへ自動切替<br/>最も低コストに"]:::req
+    R53["Route 53 フェイルオーバールーティング<br/>プライマリ障害時にセカンダリへ切り替える"]:::svc
+    J{"セカンダリで<br/>動かすものはあるか?"}:::judge
+    S3["S3 静的ウェブサイトホスティング<br/>サーバーレスでほぼ無料の障害時ページ"]:::best
+    NOTE["バケット名をドメイン名と<br/>一致させる必要がある"]:::note
+    EC2["別リージョンの EC2 常時稼働環境<br/>静的な告知ページ用途には過剰・常時課金"]:::alt
+    ONP["オンプレミスの予備サーバー<br/>設備と運用を自前で抱える"]:::alt
+    ALB2["2 台目の ALB<br/>それ自体は静的ページを持たない"]:::alt
+
+    REQ --> R53
+    R53 --> J
+    J -->|"静的ページだけ"| S3
+    S3 -.- NOTE
+    J -.->|"サーバーが要る"| EC2
+    REQ -.->|"過剰"| ONP
+    REQ -.->|"過剰"| ALB2
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net21.svg`](../../web/diagrams/net21.svg)
+
+**解説**: フェイルオーバールーティングのセカンダリとして S3 静的ウェブサイトを指定すると、サーバーレスでほぼ無料の障害時ページを実現できます。バケット名をドメイン名と一致させる必要がある点に注意します。EC2 予備環境の常時稼働はコストが高く、静的な告知ページ用途では過剰です。
+
+**確認事項**: オンプレミス予備サーバーと 2 台目の ALB は解説がコストに言及していないため、性質(自前運用が必要 / それ自体は静的ページを持たない)だけを書き、コスト比較の断定は避けた。 / フェイルオーバールーティングのヘルスチェック設定は解説の範囲外のため図に入れていない。
+
+---
+
+## net22 — ネットワーク / level 1
+
+**問題**: 世界中のユーザーに画像・動画などの静的コンテンツを低レイテンシーで配信したい。どのサービスを使うか?
+
+**正解**: Amazon CloudFront
+
+**他の選択肢**: AWS Global Accelerator / S3 クロスリージョンレプリケーション / Route 53 のみ
+
+**図解の主メッセージ**: 静的コンテンツを世界中へ低レイテンシーで届けるなら、ユーザーに最も近いエッジにキャッシュする CloudFront を使う。
+
+**採用パターン**: 分岐(判断フロー)。中心放射は CloudFront の機能一覧としては読みやすいが、「なぜ他の 3 つではないのか」が絵に出ない。キャッシュを置けるかどうかという 1 問を頂点に置くと、正解の理由と誤答の外れ方が同じ 1 本の流れで読める。(候補: 分岐(判断フロー): 「ユーザーの近くにコンテンツを置けるか」の 1 問で CloudFront と残りを振り分ける / 中心放射: CloudFront を中心に置き、エッジ・オリジン・効果を周囲に配置する)
+
+```mermaid
+flowchart TD
+    REQ["世界中のユーザーへ<br/>画像・動画などの静的コンテンツを低レイテンシー配信したい"]:::req
+    J{"ユーザーの近くに<br/>コンテンツを置けるか?"}:::judge
+    CF["Amazon CloudFront<br/>世界数百のエッジロケーションにキャッシュする CDN"]:::best
+    EDGE["最も近いエッジから配信<br/>レイテンシーとオリジン負荷を削減"]:::svc
+    ORIGIN["オリジンは S3・ALB・任意の HTTP サーバー"]:::svc
+    NOTE["動的コンテンツでも<br/>AWS バックボーン経由の接続最適化効果がある"]:::note
+    GA["AWS Global Accelerator<br/>経路の最適化(キャッシュはしない)"]:::alt
+    CRR["S3 クロスリージョンレプリケーション<br/>バケット間の複製の仕組み"]:::alt
+    R53["Route 53 のみ<br/>名前解決だけでコンテンツは配信しない"]:::alt
+
+    REQ --> J
+    J -->|"置ける"| CF
+    CF --> EDGE
+    ORIGIN -->|"配信元"| CF
+    CF -.- NOTE
+    J -.->|"置かない"| GA
+    REQ -.->|"目的が違う"| CRR
+    REQ -.->|"目的が違う"| R53
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net22.svg`](../../web/diagrams/net22.svg)
+
+**解説**: CloudFront は世界数百のエッジロケーションにコンテンツをキャッシュする CDN で、ユーザーに最も近いエッジから配信してレイテンシーとオリジン負荷を削減します。S3・ALB・任意の HTTP サーバーをオリジンにできます。動的コンテンツでも AWS バックボーン経由の接続最適化効果があります。
+
+**確認事項**: Global Accelerator を「経路の最適化(キャッシュはしない)」と書いたのは net25 の解説にある対比に合わせたもの。net22 の解説そのものには他選択肢の説明がない。 / キャッシュの TTL や無効化(invalidation)の運用は解説の範囲外のため図に入れていない。
+
+---
+
+## net23 — ネットワーク / level 2
+
+**問題**: CloudFront で S3 の静的サイトを配信する際、ユーザーが S3 の URL へ直接アクセスするのを禁止し、CloudFront 経由のみに限定したい。どの機能を使うか?
+
+**正解**: オリジンアクセスコントロール(OAC)
+
+**他の選択肢**: S3 バケットを公開設定にする / 署名付き URL を全員に配布 / NACL で S3 を制限
+
+**図解の主メッセージ**: S3 を非公開のまま CloudFront だけに読ませるなら、オリジンアクセスコントロール(OAC)を使う。
+
+**採用パターン**: 分岐(判断フロー)。経路図は「何が塞がれるか」を絵にできるが、×印という追加の記号を導入することになり、他問と記号の意味が揃わない。判断軸を頂点に置く形なら共通スタイルの 6 クラスだけで表現でき、誤答 3 つの外れ方も同じ形で並べられる。(候補: 分岐(判断フロー): 「非公開のまま CloudFront にだけ読ませられるか」の 1 問で OAC と残りを分ける / 直列(アクセス経路図): ユーザー → CloudFront → S3 の経路を描き、直接アクセスの矢印に×を付ける)
+
+```mermaid
+flowchart TD
+    REQ["CloudFront で S3 の静的サイトを配信<br/>S3 の URL への直接アクセスを禁止し CloudFront 経由のみにしたい"]:::req
+    J{"バケットを非公開のまま<br/>CloudFront にだけ読ませられるか?"}:::judge
+    OAC["オリジンアクセスコントロール(OAC)<br/>CloudFront が SigV4 署名付きで S3 へアクセス"]:::best
+    POLICY["バケットポリシー<br/>「このディストリビューションからのみ許可」と書ける"]:::svc
+    MERIT["直接アクセスを塞ぐことで<br/>キャッシュ制御や WAF も一元化できる"]:::svc
+    NOTE["旧方式 OAI の後継<br/>現在は OAC が推奨"]:::note
+    PUB["S3 バケットを公開設定にする<br/>直接アクセスを許してしまう"]:::alt
+    SIGN["署名付き URL を全員に配布<br/>全員に配れば制限にならない"]:::alt
+    NACL["NACL で S3 を制限<br/>VPC のサブネットに対する制御"]:::alt
+
+    REQ --> J
+    J -->|"できる"| OAC
+    OAC --> POLICY
+    POLICY --> MERIT
+    OAC -.- NOTE
+    REQ -.->|"逆になる"| PUB
+    REQ -.->|"制限にならず"| SIGN
+    REQ -.->|"層が違う"| NACL
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net23.svg`](../../web/diagrams/net23.svg)
+
+**解説**: OAC を設定すると、CloudFront が SigV4 署名付きで S3 へアクセスし、バケットポリシーで「この CloudFront ディストリビューションからのみ許可」と記述できるため、バケットを非公開のまま配信できます。旧方式の OAI の後継で、現在は OAC が推奨です。直接アクセスを塞ぐことでキャッシュ制御や WAF も一元化できます。
+
+**確認事項**: 「署名付き URL を全員に配布」は解説に言及がないため、選択肢の文面そのものから読み取れる範囲(全員に配れば制限にならない)だけを書いた。 / OAI から OAC への移行手順は解説の範囲外のため図に入れていない。
+
+---
+
+## net24 — ネットワーク / level 2
+
+**問題**: 有料会員だけが動画コンテンツをダウンロードできるよう、CloudFront 配信へのアクセスを制限したい。どの機能が適切か?
+
+**正解**: 署名付き URL / 署名付き Cookie
+
+**他の選択肢**: S3 バケットの公開設定 / Route 53 位置情報ルーティング / セキュリティグループ
+
+**図解の主メッセージ**: 会員だけに配信したいなら、期限付きの署名付き URL / 署名付き Cookie でアクセス権を発行する。
+
+**採用パターン**: 分岐(判断フロー)。並置は制限手段のカタログとしては有用だが、本問が問うているのは「会員単位で絞れるのはどれか」の 1 点で、粒度の一覧は主メッセージより広い。2 段の分岐にすると、まず署名付き方式に決まる理由、次に URL と Cookie の使い分け、という試験で問われる順序どおりに読める。(候補: 分岐(判断フロー): 判断軸で署名付き方式に絞り、その下で対象ファイル数によって URL と Cookie に分ける 2 段の分岐 / 対比(制限手段の並置): 署名付き URL / 地理的制限 / OAC を横に並べ、制限の粒度で比較する)
+
+```mermaid
+flowchart TD
+    REQ["有料会員だけが動画コンテンツをダウンロードできるよう<br/>CloudFront 配信へのアクセスを制限したい"]:::req
+    J{"誰に・いつまで許すかを<br/>個別に決めるか?"}:::judge
+    SIGNED["署名付き URL / 署名付き Cookie<br/>信頼されたキーペアで署名した期限付きアクセス権"]:::best
+    ONE["個別ファイルなら<br/>署名付き URL"]:::svc
+    MANY["複数ファイルへまとめて許可なら<br/>署名付き Cookie"]:::svc
+    NOTE["地域単位の制限だけでよいなら<br/>地理的制限(Geo Restriction)機能もある"]:::note
+    PUB["S3 バケットの公開設定<br/>誰でも取得できてしまう"]:::alt
+    GEO["Route 53 位置情報ルーティング<br/>宛先を地域で振り分けるもの"]:::alt
+    SG["セキュリティグループ<br/>VPC 内のインスタンスに対する制御"]:::alt
+
+    REQ --> J
+    J -->|"個別に決める"| SIGNED
+    SIGNED --> ONE
+    SIGNED --> MANY
+    SIGNED -.- NOTE
+    REQ -.->|"制限にならず"| PUB
+    REQ -.->|"地域単位のみ"| GEO
+    REQ -.->|"層が違う"| SG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net24.svg`](../../web/diagrams/net24.svg)
+
+**解説**: CloudFront の署名付き URL・署名付き Cookie は、信頼されたキーペアで署名した期限付きアクセス権を発行し、会員限定コンテンツの配信制御に使います。個別ファイルなら署名付き URL、複数ファイルへのまとめて許可なら署名付き Cookie が便利です。地域単位の制限だけなら地理的制限(Geo Restriction)機能もあります。
+
+**確認事項**: 署名に使う信頼されたキーペアの作成・管理手順は解説の範囲外のため図に入れていない。 / Route 53 位置情報ルーティングとセキュリティグループは解説に言及がないため、選択肢の名称から読み取れる性質(地域単位の振り分け / VPC 内の制御)だけを書いた。
+
+---
+
+## net25 — ネットワーク / level 2
+
+**問題**: 世界中のユーザーが利用する TCP ベースのゲームサーバーで、固定の静的 IP 2 つを入口として提供し、AWS バックボーン経由で最寄りリージョンへ高速に到達させたい。どのサービスが適切か?
+
+**正解**: AWS Global Accelerator
+
+**他の選択肢**: Amazon CloudFront / Route 53 レイテンシーベースルーティング / Elastic IP を各リージョンで取得
+
+**図解の主メッセージ**: 固定の静的 IP を入口に AWS バックボーンで最寄りリージョンへ届けるなら、CloudFront ではなく Global Accelerator を使う。
+
+**採用パターン**: 分岐(判断フロー)。2 列表は 2 サービスの違いを網羅できるが、4 択のうち Route 53 と Elastic IP が表に収まらず別枠になり、図が 2 つの構造に割れる。解説が示す判断軸(キャッシュ配信か、経路最適化+固定 IP か)を菱形 1 つに置けば、4 択すべてを同じ流れの中に並べられる。(候補: 分岐(判断フロー): 「キャッシュ配信か、経路最適化+固定 IP か」の 1 問で Global Accelerator と CloudFront を左右に分ける / 対比(2 列表): CloudFront と Global Accelerator について、キャッシュ・入口 IP・対応プロトコルの 3 行を並べて比べる)
+
+```mermaid
+flowchart TD
+    REQ["世界中のユーザーが使う TCP ベースのゲームサーバー<br/>固定の静的 IP 2 つを入口にし<br/>最寄りリージョンへ高速に到達させたい"]:::req
+    J{"必要なのはキャッシュ配信か<br/>経路最適化+固定 IP か?"}:::judge
+    GA["AWS Global Accelerator<br/>2 つの静的エニーキャスト IP を提供"]:::best
+    PATH["最寄りのエッジから AWS バックボーンに乗せ<br/>最適リージョンの ALB / NLB / EC2 へ転送"]:::svc
+    MERIT["TCP/UDP の非 HTTP ワークロード<br/>即時のリージョン間フェイルオーバー・固定 IP 要件に強い"]:::svc
+    CF["Amazon CloudFront<br/>キャッシュ配信が主目的"]:::alt
+    R53["Route 53 レイテンシーベースルーティング<br/>名前解決で寄せるもので固定 IP は提供しない"]:::alt
+    EIP["Elastic IP を各リージョンで取得<br/>入口の IP がリージョンごとに分かれる"]:::alt
+
+    REQ --> J
+    J -->|"経路+固定 IP"| GA
+    GA --> PATH
+    PATH --> MERIT
+    J -.->|"キャッシュ配信"| CF
+    REQ -.->|"固定 IP でない"| R53
+    REQ -.->|"入口が分散"| EIP
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net25.svg`](../../web/diagrams/net25.svg)
+
+**解説**: Global Accelerator は 2 つの静的エニーキャスト IP を提供し、ユーザーを最寄りのエッジから AWS バックボーンに乗せて最適リージョンの ALB/NLB/EC2 へ転送します。TCP/UDP の非 HTTP ワークロードや、即時のリージョン間フェイルオーバー・固定 IP 要件に強いのが特徴です。「キャッシュ配信 = CloudFront、経路最適化+固定 IP = Global Accelerator」で区別します。
+
+**確認事項**: Route 53 レイテンシーベースルーティングと Elastic IP は解説に個別の説明がないため、選択肢の文面から読み取れる範囲(名前解決で寄せる / IP がリージョンごとに分かれる)だけを書き、性能面の比較は書いていない。 / エニーキャスト IP の仕組みそのものは解説の範囲外のため、図では「2 つの静的エニーキャスト IP を提供する」という事実にとどめた。
+
+---
+
+## net26 — ネットワーク / level 1
+
+**問題**: VPC 内の通信について「どの IP からどの IP へ、許可/拒否どちらだったか」を記録して通信トラブルやセキュリティ調査に使いたい。どの機能を有効にするか?
+
+**正解**: VPC フローログ
+
+**他の選択肢**: CloudTrail / CloudWatch メトリクス / Route 53 クエリログ
+
+**図解の主メッセージ**: 「どの IP からどの IP へ、許可か拒否か」を残したいなら、API 記録の CloudTrail ではなく VPC フローログを有効にする。
+
+**採用パターン**: 分岐(判断フロー)。レイヤー図は 4 つのログ機能の守備範囲を一望できるが、層という概念を読み解く手間が増えるうえ、本問が問うのは「通信かAPIか」の 1 点だけ。混同の中心である CloudTrail との分かれ目を菱形 1 つに置く方が、余計な解読なしに主メッセージが伝わる。(候補: 分岐(判断フロー): 「記録したいのは通信か、API 呼び出しか」の 1 問でフローログと CloudTrail を分ける / レイヤー: 通信レイヤー / API レイヤー / メトリクス / DNS の 4 層を積み、それぞれに対応するログ機能を置く)
+
+```mermaid
+flowchart TD
+    REQ["VPC 内の通信を記録し<br/>通信トラブルやセキュリティ調査に使いたい"]:::req
+    J{"記録したいのは<br/>通信か、API 呼び出しか?"}:::judge
+    FLOW["VPC フローログ<br/>ENI を通過するトラフィックのメタデータを記録"]:::best
+    FIELDS["送信元 / 宛先 IP・ポート・ACCEPT / REJECT を<br/>CloudWatch Logs や S3 へ出力"]:::svc
+    USE["セキュリティグループ / NACL の設定ミス調査<br/>不審通信の検出"]:::svc
+    NOTE["パケットの中身(ペイロード)は<br/>記録されない"]:::note
+    CT["CloudTrail<br/>API 呼び出しの記録であり通信記録ではない"]:::alt
+    CWM["CloudWatch メトリクス<br/>数値の時系列で個別の通信は残らない"]:::alt
+    R53Q["Route 53 クエリログ<br/>DNS クエリの記録"]:::alt
+
+    REQ --> J
+    J -->|"通信"| FLOW
+    FLOW --> FIELDS
+    FIELDS --> USE
+    FLOW -.- NOTE
+    J -.->|"API 呼び出し"| CT
+    REQ -.->|"個別通信なし"| CWM
+    REQ -.->|"対象が違う"| R53Q
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net26.svg`](../../web/diagrams/net26.svg)
+
+**解説**: VPC フローログは ENI を通過するトラフィックのメタデータ(送信元/宛先 IP・ポート・ACCEPT/REJECT など)を CloudWatch Logs や S3 へ記録します。セキュリティグループ/NACL の設定ミス調査や不審通信の検出に使います。パケットの中身(ペイロード)は記録されない点に注意します。CloudTrail は API 呼び出しの記録であり通信記録ではありません。
+
+**確認事項**: CloudWatch メトリクスと Route 53 クエリログは解説に個別の説明がないため、名称から読み取れる範囲(数値の時系列 / DNS クエリの記録)だけを書いた。 / フローログを有効にできる単位(VPC・サブネット・ENI)は解説が ENI 単位の通過にしか触れていないため、図では出力の粒度を明示していない。
+
+---
+
+## net27 — ネットワーク / level 2
+
+**問題**: IPv6 のみを使うプライベートなインスタンスから、アウトバウンドのインターネット通信だけを許可し、外部からの着信は拒否したい。何を使うか?
+
+**正解**: Egress-Only インターネットゲートウェイ
+
+**他の選択肢**: NAT ゲートウェイ / インターネットゲートウェイ / VPC ピアリング
+
+**図解の主メッセージ**: IPv6 には NAT の概念がないので、外向きだけ許すには Egress-Only インターネットゲートウェイを使う。
+
+**採用パターン**: 対比(役割の対応)。分岐でも同じ振り分けはできるが、解説が示す覚え方は「IPv4 の NAT ゲートウェイの IPv6 版」という対応そのもので、分岐にすると 2 つが別々の結論として離れて置かれ、その対応が絵に残らない。2 つを横に並べて対応矢印 1 本で結ぶ方が、覚え方の形をそのまま図にできる。なお前提(IPv4 / IPv6 のどちらの場合か)は subgraph の枠ではなくノードラベルの 1 行目で示した。枠にすると枠のタイトルと対応矢印のラベルが重なり、線の交差も増えて読みにくくなったため。(候補: 対比(役割の対応): IPv4 の NAT ゲートウェイと IPv6 の Egress-Only IGW を並べ、「IPv6 版」と書いた対応矢印で結ぶ / 分岐(判断フロー): 「使うのは IPv4 か IPv6 か」の 1 問で NAT ゲートウェイと Egress-Only IGW に振り分ける)
+
+```mermaid
+flowchart TB
+    REQ["IPv6 のみを使うプライベートなインスタンス<br/>アウトバウンドの通信だけ許可し、外部からの着信は拒否したい"]:::req
+    NAT["IPv4 の場合<br/>NAT ゲートウェイ(外向きのみ許可する役割)"]:::alt
+    EIGW["IPv6 の場合(本問)<br/>Egress-Only インターネットゲートウェイ<br/>外向きのみ許可・内向き拒否"]:::best
+    REASON["IPv6 アドレスはすべてグローバルアドレス<br/>NAT の概念がない"]:::note
+    IGW["インターネットゲートウェイ<br/>外部からの着信も可能になってしまう"]:::alt
+    PEER["VPC ピアリング<br/>VPC 同士をつなぐもの"]:::alt
+
+    REQ --> EIGW
+    NAT -.->|"IPv6 版"| EIGW
+    EIGW -.- REASON
+    REQ -.->|"着信も通る"| IGW
+    REQ -.->|"用途が違う"| PEER
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net27.svg`](../../web/diagrams/net27.svg)
+
+**解説**: IPv6 アドレスはすべてグローバルアドレスのため NAT の概念がなく、代わりに Egress-Only IGW が「外向きのみ許可・内向き拒否」を実現します。IPv4 における NAT ゲートウェイの役割の IPv6 版と覚えます。通常の IGW を使うと外部からの着信も可能になってしまいます。
+
+**確認事項**: NAT ゲートウェイをグレー(alt)にしているのは「本問の IPv6 では使えない」という意味で、IPv4 で誤りという意味ではない。ノードラベルの 1 行目(IPv4 の場合)で読み分けさせているが、色だけを見ると誤答に見える余地は残る。 / Egress-Only IGW のルートテーブル設定は解説の範囲外のため図に入れていない。
+
+---
+
+## net28 — ネットワーク / level 2
+
+**問題**: 在宅勤務の社員数百人が、個人の PC から VPC 内のプライベートリソースへ安全に接続できるようにしたい。どのサービスが適切か?
+
+**正解**: AWS Client VPN
+
+**他の選択肢**: サイト間 VPN / Direct Connect / VPC ピアリング
+
+**図解の主メッセージ**: 接続元が個人の端末なら、拠点同士をつなぐサイト間 VPN ではなく AWS Client VPN を使う。
+
+**採用パターン**: 分岐(判断フロー)。粒度の入れ子は 4 択すべてを 1 つの構造に収められるが、入れ子の読み解きが要るうえ、解説が頻出と呼ぶのは「個人端末か拠点か」の 2 択の対比。その 1 問を菱形に置き、残る 2 つは要件から脇に流す方が、本番で使う判断の形に近い。(候補: 分岐(判断フロー): 「接続元は個人の端末か、拠点ネットワークか」の 1 問で Client VPN とサイト間 VPN を分ける / 包含(接続元の粒度): 端末 / 拠点 / VPC という 3 つの入れ子で、それぞれをつなぐサービスを対応させる)
+
+```mermaid
+flowchart TD
+    REQ["在宅勤務の社員数百人が<br/>個人の PC から VPC 内のプライベートリソースへ<br/>安全に接続できるようにしたい"]:::req
+    J{"接続元は個人の端末か<br/>拠点ネットワークか?"}:::judge
+    CVPN["AWS Client VPN<br/>個々の端末から OpenVPN ベースの TLS 接続"]:::best
+    AUTH["Active Directory や SAML との認証連携"]:::svc
+    SCALE["マネージドでスケーリングも自動"]:::svc
+    S2S["サイト間 VPN<br/>拠点(ネットワーク)同士の接続"]:::alt
+    DX["Direct Connect<br/>拠点と AWS を結ぶもの"]:::alt
+    PEER["VPC ピアリング<br/>VPC 同士を結ぶもの"]:::alt
+
+    REQ --> J
+    J -->|"個人の端末"| CVPN
+    CVPN --> AUTH
+    CVPN --> SCALE
+    J -.->|"拠点同士"| S2S
+    REQ -.->|"単位が違う"| DX
+    REQ -.->|"単位が違う"| PEER
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net28.svg`](../../web/diagrams/net28.svg)
+
+**解説**: Client VPN は個々の端末から OpenVPN ベースの TLS 接続でリソースへアクセスするマネージド VPN で、Active Directory や SAML との認証連携、スケーリングも自動です。サイト間 VPN は「拠点(ネットワーク)同士」の接続であり、個人端末からのリモートアクセスには Client VPN を使う、という対比が頻出です。
+
+**確認事項**: Direct Connect と VPC ピアリングは解説に個別の説明がないため、名称から読み取れる接続の単位(拠点と AWS / VPC 同士)だけを書き、専用線の帯域やコストには触れていない。 / Client VPN のエンドポイント関連付けやクライアント CIDR の設計は解説の範囲外のため図に入れていない。
+
+---
+
+## net29 — ネットワーク / level 2
+
+**問題**: プライベートサブネットの EC2 へ管理アクセスしたい。踏み台サーバーの運用や SSH ポート開放をなくし、操作ログも残す方法はどれか?
+
+**正解**: Systems Manager Session Manager を使う
+
+**他の選択肢**: パブリック IP を付与して SSH 接続 / 踏み台 EC2 を増強して経由接続 / Client VPN + SSH のみが唯一の方法
+
+**図解の主メッセージ**: 踏み台も SSH ポート開放もなくして操作ログも残すなら、Systems Manager Session Manager を使う。
+
+**採用パターン**: 分岐(判断フロー)。充足表は 3 条件すべてを満たすのが Session Manager だけだと一望できて説得力があるが、可否のマス目を 12 個読ませることになり 1 枚での即読性を損なう。ポート開放の要否という 1 点で分け、消える運用(踏み台・SSH 鍵)を正解の先にまとめて置く方が、同じ結論に短い経路で届く。(候補: 分岐(判断フロー): 「インバウンドポートを開けずに入れるか」の 1 問で Session Manager と SSH 系の手段を分ける / 対比(要件の充足表): 4 つの手段について「ポート開放なし」「踏み台なし」「操作ログ」の 3 条件の可否を並べる)
+
+```mermaid
+flowchart TD
+    REQ["プライベートサブネットの EC2 へ管理アクセスしたい<br/>踏み台の運用と SSH ポート開放をなくし、操作ログも残す"]:::req
+    J{"インバウンドポートを<br/>開けずに入れるか?"}:::judge
+    SSM["Systems Manager Session Manager<br/>SSM エージェント + IAM 認証でブラウザ / CLI からシェル"]:::best
+    NOOPEN["インバウンドポートの開放・踏み台・<br/>SSH 鍵管理が一切不要になる"]:::svc
+    LOG["操作ログは CloudWatch Logs や S3 へ保存<br/>監査にも対応"]:::svc
+    NOTE["インターネットに出せない環境では<br/>SSM 用の VPC エンドポイントを設置する"]:::note
+    PUBIP["パブリック IP を付与して SSH 接続<br/>ポート開放が必要になる"]:::alt
+    BASTION["踏み台 EC2 を増強して経由接続<br/>踏み台の運用が残る"]:::alt
+    CV["Client VPN + SSH のみが唯一の方法<br/>SSH 鍵の管理が残る"]:::alt
+
+    REQ --> J
+    J -->|"開けずに入れる"| SSM
+    SSM --> NOOPEN
+    SSM --> LOG
+    SSM -.- NOTE
+    J -.->|"開放が要る"| PUBIP
+    REQ -.->|"運用が残る"| BASTION
+    REQ -.->|"鍵管理が残る"| CV
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net29.svg`](../../web/diagrams/net29.svg)
+
+**解説**: Session Manager は SSM エージェントと IAM 認証によりブラウザ/CLI からシェルアクセスを提供し、インバウンドポートの開放・踏み台・SSH 鍵管理が一切不要になります。操作ログは CloudWatch Logs や S3 へ保存でき監査にも対応します。インターネットに出せない環境では SSM 用の VPC エンドポイントを設置します。
+
+**確認事項**: 「Client VPN + SSH のみが唯一の方法」という選択肢は解説に個別の説明がないため、選択肢の文面から読み取れる範囲(SSH 鍵の管理が残る)だけを書いた。 / Session Manager が要求する IAM ロール(SSM エージェントに付与するインスタンスプロファイル)の具体は解説の範囲外のため図に入れていない。
+
+---
+
+## net30 — ネットワーク / level 1
+
+**問題**: セキュリティグループの特性として正しいものはどれか?
+
+**正解**: ステートフルであり、許可した通信の戻りトラフィックは自動的に許可される
+
+**他の選択肢**: ステートレスであり、戻りのトラフィックも明示的に許可が必要 / サブネット単位で適用される / 拒否ルールを記述できる
+
+**図解の主メッセージ**: セキュリティグループはインスタンス(ENI)単位のステートフルな許可専用ファイアウォールで、残る 3 つの記述はすべて NACL の性質。
+
+**採用パターン**: 対比(2 枠の対応表)。本問は 4 択のうち 3 つが NACL の性質という構造で、分岐にすると 1 つの軸(ステートの扱い)しか描けず、残る 2 つの誤答が図の外に落ちる。3 行を同じ高さに並べて裏返しの線で結ぶと、解説が「丸ごと覚える」と言う対比表そのものが図になり、誤答がどこから来ているかも同時に読める。(候補: 対比(2 枠の対応表): セキュリティグループと NACL の枠を並べ、ステートの扱い・適用単位・書けるルールの 3 行を同じ高さに置いて裏返しの関係を見せる / 分岐(判断フロー): 「ステートフルか?」の 1 問でセキュリティグループと NACL に振り分ける)
+
+```mermaid
+flowchart TB
+    REQ["セキュリティグループの特性として<br/>正しいものはどれか"]:::req
+
+    subgraph SGG["セキュリティグループ"]
+        SGST["ステートフル<br/>許可した通信の戻りは自動的に許可される"]:::best
+        SGUNIT["インスタンス(ENI)単位で適用される"]:::svc
+        SGRULE["記述できるのは許可ルールのみ"]:::svc
+    end
+
+    subgraph NAG["ネットワーク ACL(NACL)"]
+        NAST["ステートレス<br/>戻りのトラフィックも明示的に許可が必要"]:::alt
+        NAUNIT["サブネット単位で適用される"]:::alt
+        NADENY["許可と拒否の両方を記述できる"]:::alt
+    end
+
+    NOTE["誤答の 3 つはいずれも NACL 側の性質<br/>この対比を丸ごと覚えるのが定石"]:::note
+
+    REQ --> SGST
+    SGST -.->|"裏返し"| NAST
+    SGUNIT -.->|"裏返し"| NAUNIT
+    SGRULE -.->|"裏返し"| NADENY
+    REQ -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net30.svg`](../../web/diagrams/net30.svg)
+
+**解説**: セキュリティグループはインスタンス(ENI)単位で適用されるステートフルなファイアウォールで、インバウンドを許可すればその応答は自動で通ります。記述できるのは許可ルールのみです。対して NACL はサブネット単位・ステートレス・許可と拒否の両方を記述可能、という対比表を丸ごと覚えるのが試験対策の定石です。
+
+**確認事項**: NACL 側をグレー(alt)で塗っているのは「本問では誤答」という意味で、NACL 自体が劣るという意味ではない。枠のラベルで読み分けさせているが、色だけを見ると NACL が悪い選択肢に見える余地は残る。 / セキュリティグループと NACL の評価順序(NACL が先に効く)は解説に記載がないため図に入れていない。

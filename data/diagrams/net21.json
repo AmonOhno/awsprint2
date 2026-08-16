@@ -1,0 +1,43 @@
+{
+  "question_id": "net21",
+  "purpose": "障害時のフォールバック先の選択が「そこで動かすものがサーバーか、静的ファイルの配信だけか」で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Route 53 のフェイルオーバールーティングは知っているが、セカンダリに何を置けばよいかまで結び付いていない人。",
+  "message": "障害時に出すのが静的な告知ページだけなら、フェイルオーバー先はサーバーレスの S3 静的ウェブサイトにする。",
+  "source_summary": "本番サイトの完全障害時に「メンテナンス中」の静的ページへ自動で切り替えたい。最も低コストなフォールバック先は S3 の静的ウェブサイトホスティング。Route 53 のフェイルオーバールーティングのセカンダリとして指定すると、サーバーレスでほぼ無料の障害時ページになる。バケット名をドメイン名と一致させる必要がある。EC2 予備環境の常時稼働はコストが高く、静的な告知ページ用途では過剰。",
+  "elements": [
+    { "id": "REQ", "label": "本番障害時に「メンテナンス中」の静的ページへ自動切替・低コスト最優先", "type": "state", "priority": "primary" },
+    { "id": "R53", "label": "Route 53 フェイルオーバールーティング", "type": "artifact", "priority": "primary" },
+    { "id": "J", "label": "セカンダリで動かすものはあるか?", "type": "process", "priority": "primary" },
+    { "id": "S3", "label": "S3 静的ウェブサイトホスティング", "type": "artifact", "priority": "primary" },
+    { "id": "NOTE", "label": "バケット名をドメイン名と一致させる必要がある", "type": "other", "priority": "support" },
+    { "id": "EC2", "label": "別リージョンの EC2 常時稼働環境", "type": "artifact", "priority": "secondary" },
+    { "id": "ONP", "label": "オンプレミスの予備サーバー", "type": "artifact", "priority": "support" },
+    { "id": "ALB2", "label": "2 台目の ALB", "type": "artifact", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "R53", "verb": "切替の仕組みを置く", "direction": "one-way", "kind": "sequence" },
+    { "from": "R53", "to": "J", "verb": "セカンダリの中身を問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "S3", "verb": "静的ページだけなら S3", "direction": "one-way", "kind": "flow" },
+    { "from": "S3", "to": "NOTE", "verb": "設定上の前提を補う", "direction": "none", "kind": "other" },
+    { "from": "J", "to": "EC2", "verb": "サーバーが要る場合の選択肢", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "ONP", "verb": "告知ページ用途には過剰", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "ALB2", "verb": "告知ページ用途には過剰", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「セカンダリで動かすものはあるか」の 1 問で S3 と常時稼働環境に振り分ける",
+    "対比(コスト順の並置): 4 つのフォールバック先をコストの高い順に横に並べ、最も安い S3 を強調する"
+  ],
+  "selected_pattern": "分岐(判断フロー)。コスト順の並置は安さは伝わるが「なぜ静的ページなら安く済むのか」という判断軸が絵に残らない。要件から Route 53 のフェイルオーバー、そこから「セカンダリで動かすものはあるか」という 1 問へ落とす形にすると、S3 が選ばれる理由そのものが図の骨格になる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=この要件では過剰・不適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "オンプレミス予備サーバーと 2 台目の ALB は解説がコストに言及していないため、性質(自前運用が必要 / それ自体は静的ページを持たない)だけを書き、コスト比較の断定は避けた。",
+    "フェイルオーバールーティングのヘルスチェック設定は解説の範囲外のため図に入れていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"本番サイトの完全障害時に<br/>「メンテナンス中」の静的ページへ自動切替<br/>最も低コストに\"]:::req\n    R53[\"Route 53 フェイルオーバールーティング<br/>プライマリ障害時にセカンダリへ切り替える\"]:::svc\n    J{\"セカンダリで<br/>動かすものはあるか?\"}:::judge\n    S3[\"S3 静的ウェブサイトホスティング<br/>サーバーレスでほぼ無料の障害時ページ\"]:::best\n    NOTE[\"バケット名をドメイン名と<br/>一致させる必要がある\"]:::note\n    EC2[\"別リージョンの EC2 常時稼働環境<br/>静的な告知ページ用途には過剰・常時課金\"]:::alt\n    ONP[\"オンプレミスの予備サーバー<br/>設備と運用を自前で抱える\"]:::alt\n    ALB2[\"2 台目の ALB<br/>それ自体は静的ページを持たない\"]:::alt\n\n    REQ --> R53\n    R53 --> J\n    J -->|\"静的ページだけ\"| S3\n    S3 -.- NOTE\n    J -.->|\"サーバーが要る\"| EC2\n    REQ -.->|\"過剰\"| ONP\n    REQ -.->|\"過剰\"| ALB2"
+}

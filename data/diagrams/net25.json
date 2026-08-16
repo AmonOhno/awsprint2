@@ -1,0 +1,43 @@
+{
+  "question_id": "net25",
+  "purpose": "エッジを使う 2 サービスの選び分けが「キャッシュ配信か、経路最適化+固定 IP か」の 1 問で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、CloudFront と Global Accelerator がどちらも「エッジで速くするもの」に見えて区別できていない人。",
+  "message": "固定の静的 IP を入口に AWS バックボーンで最寄りリージョンへ届けるなら、CloudFront ではなく Global Accelerator を使う。",
+  "source_summary": "世界中のユーザーが利用する TCP ベースのゲームサーバーで、固定の静的 IP 2 つを入口として提供し、AWS バックボーン経由で最寄りリージョンへ高速に到達させたい。正解は AWS Global Accelerator。2 つの静的エニーキャスト IP を提供し、ユーザーを最寄りのエッジから AWS バックボーンに乗せて最適リージョンの ALB/NLB/EC2 へ転送する。TCP/UDP の非 HTTP ワークロードや、即時のリージョン間フェイルオーバー・固定 IP 要件に強い。「キャッシュ配信 = CloudFront、経路最適化+固定 IP = Global Accelerator」で区別する。",
+  "elements": [
+    { "id": "REQ", "label": "TCP のゲームサーバーを固定の静的 IP 2 つで公開し最寄りリージョンへ高速到達させたい", "type": "state", "priority": "primary" },
+    { "id": "J", "label": "必要なのはキャッシュ配信か、経路最適化+固定 IP か?", "type": "process", "priority": "primary" },
+    { "id": "GA", "label": "AWS Global Accelerator", "type": "artifact", "priority": "primary" },
+    { "id": "PATH", "label": "最寄りエッジから AWS バックボーンに乗せ、最適リージョンの ALB/NLB/EC2 へ転送", "type": "artifact", "priority": "primary" },
+    { "id": "MERIT", "label": "TCP/UDP の非 HTTP・即時のリージョン間フェイルオーバー・固定 IP 要件に強い", "type": "artifact", "priority": "secondary" },
+    { "id": "CF", "label": "Amazon CloudFront", "type": "artifact", "priority": "secondary" },
+    { "id": "R53", "label": "Route 53 レイテンシーベースルーティング", "type": "artifact", "priority": "support" },
+    { "id": "EIP", "label": "Elastic IP を各リージョンで取得", "type": "artifact", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "J", "verb": "要件を判断軸に置き換える", "direction": "one-way", "kind": "sequence" },
+    { "from": "J", "to": "GA", "verb": "経路最適化+固定 IP", "direction": "one-way", "kind": "flow" },
+    { "from": "GA", "to": "PATH", "verb": "経路を示す", "direction": "one-way", "kind": "flow" },
+    { "from": "PATH", "to": "MERIT", "verb": "得意分野を示す", "direction": "one-way", "kind": "flow" },
+    { "from": "J", "to": "CF", "verb": "キャッシュ配信ならこちら", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "R53", "verb": "固定 IP を提供しない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "EIP", "verb": "入口の IP が分散する", "direction": "one-way", "kind": "contrast" }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「キャッシュ配信か、経路最適化+固定 IP か」の 1 問で Global Accelerator と CloudFront を左右に分ける",
+    "対比(2 列表): CloudFront と Global Accelerator について、キャッシュ・入口 IP・対応プロトコルの 3 行を並べて比べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。2 列表は 2 サービスの違いを網羅できるが、4 択のうち Route 53 と Elastic IP が表に収まらず別枠になり、図が 2 つの構造に割れる。解説が示す判断軸(キャッシュ配信か、経路最適化+固定 IP か)を菱形 1 つに置けば、4 択すべてを同じ流れの中に並べられる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=この要件を満たさない選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Route 53 レイテンシーベースルーティングと Elastic IP は解説に個別の説明がないため、選択肢の文面から読み取れる範囲(名前解決で寄せる / IP がリージョンごとに分かれる)だけを書き、性能面の比較は書いていない。",
+    "エニーキャスト IP の仕組みそのものは解説の範囲外のため、図では「2 つの静的エニーキャスト IP を提供する」という事実にとどめた。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"世界中のユーザーが使う TCP ベースのゲームサーバー<br/>固定の静的 IP 2 つを入口にし<br/>最寄りリージョンへ高速に到達させたい\"]:::req\n    J{\"必要なのはキャッシュ配信か<br/>経路最適化+固定 IP か?\"}:::judge\n    GA[\"AWS Global Accelerator<br/>2 つの静的エニーキャスト IP を提供\"]:::best\n    PATH[\"最寄りのエッジから AWS バックボーンに乗せ<br/>最適リージョンの ALB / NLB / EC2 へ転送\"]:::svc\n    MERIT[\"TCP/UDP の非 HTTP ワークロード<br/>即時のリージョン間フェイルオーバー・固定 IP 要件に強い\"]:::svc\n    CF[\"Amazon CloudFront<br/>キャッシュ配信が主目的\"]:::alt\n    R53[\"Route 53 レイテンシーベースルーティング<br/>名前解決で寄せるもので固定 IP は提供しない\"]:::alt\n    EIP[\"Elastic IP を各リージョンで取得<br/>入口の IP がリージョンごとに分かれる\"]:::alt\n\n    REQ --> J\n    J -->|\"経路+固定 IP\"| GA\n    GA --> PATH\n    PATH --> MERIT\n    J -.->|\"キャッシュ配信\"| CF\n    REQ -.->|\"固定 IP でない\"| R53\n    REQ -.->|\"入口が分散\"| EIP"
+}
