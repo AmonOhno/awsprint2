@@ -1,0 +1,193 @@
+{
+  "question_id": "net40",
+  "purpose": "Route 53 Resolver のエンドポイントが「名前解決の向きごとに 1 つずつ要る」ことを、双方向の構成図 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、ハイブリッド DNS の構成(インバウンド / アウトバウンドの区別)が覚えられない人。",
+  "message": "VPC からオンプレへはアウトバウンドエンドポイント + 転送ルール、オンプレから AWS へはインバウンドエンドポイントで、向きごとに用意する。",
+  "source_summary": "VPC 内の EC2 からオンプレミス DNS で解決する社内ドメイン(corp.example.local)と AWS 側のプライベートホストゾーンの両方を名前解決したく、オンプレミスからも AWS のプライベートホストゾーンを解決させたい。Route 53 Resolver のアウトバウンドエンドポイント + 転送ルールで特定ドメインのクエリをオンプレミス DNS へ条件付き転送し、インバウンドエンドポイントでオンプレミスから VPC 内の名前解決を受け付ける。DHCP オプションでオンプレ DNS のみを指定すると AWS のプライベートホストゾーンや VPC エンドポイントの名前が解決できなくなり、社内名をパブリックホストゾーンに置くのは情報漏えいの観点で不適切。",
+  "elements": [
+    {
+      "id": "EC2",
+      "label": "VPC 内の EC2",
+      "type": "actor",
+      "priority": "secondary"
+    },
+    {
+      "id": "RSLV",
+      "label": "Route 53 Resolver",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "PHZ",
+      "label": "プライベートホストゾーン(AWS 側の名前)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "OUT",
+      "label": "アウトバウンドエンドポイント + 転送ルール",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "IN",
+      "label": "インバウンドエンドポイント",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ONDNS",
+      "label": "オンプレミス DNS サーバー(corp.example.local)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ONHOST",
+      "label": "オンプレミスのクライアント",
+      "type": "actor",
+      "priority": "secondary"
+    },
+    {
+      "id": "DHCP",
+      "label": "DHCP オプションセットでオンプレ DNS のみを指定する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "RESOLV",
+      "label": "EC2 の /etc/resolv.conf にオンプレ DNS を追記する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "PUBHZ",
+      "label": "社内ドメインをパブリックホストゾーンに登録する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "エンドポイントはクエリの向きごとに要る",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "EC2",
+      "to": "RSLV",
+      "verb": "名前解決を依頼する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "RSLV",
+      "to": "PHZ",
+      "verb": "AWS 側の名前は自分で解決する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "RSLV",
+      "to": "OUT",
+      "verb": "社内ドメインを条件付き転送する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "OUT",
+      "to": "ONDNS",
+      "verb": "オンプレ DNS へ転送する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ONHOST",
+      "to": "IN",
+      "verb": "AWS 側の名前を問い合わせる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "IN",
+      "to": "PHZ",
+      "verb": "VPC 内の名前解決を受け付ける",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "RSLV",
+      "to": "DHCP",
+      "verb": "AWS 側の名前が解決できなくなる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "RSLV",
+      "to": "RESOLV",
+      "verb": "採らない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "RSLV",
+      "to": "PUBHZ",
+      "verb": "情報漏えいの観点で不適切",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "RSLV",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "VPCG",
+      "label": "VPC 側",
+      "members": [
+        "EC2",
+        "RSLV",
+        "PHZ",
+        "OUT",
+        "IN"
+      ]
+    },
+    {
+      "id": "ONP",
+      "label": "オンプレミス側",
+      "members": [
+        "ONDNS",
+        "ONHOST"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "要件を満たさない案",
+      "members": [
+        "DHCP",
+        "RESOLV",
+        "PUBHZ"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "双方向の構成図: VPC 側とオンプレ側を 2 枠に置き、VPC → オンプレ(アウトバウンド)と オンプレ → VPC(インバウンド)の 2 本のクエリの流れを描く",
+    "分岐(判断フロー): 「解決したい名前はどちら側にあるか」を問い、AWS 側 / オンプレ側に振り分ける"
+  ],
+  "selected_pattern": "双方向の構成図。本問は解決したい向きが 2 つあり、その 2 つに別々のエンドポイントが対応するという点が答えの中身。分岐フローだと「VPC 側から見た解決先」しか描けず、オンプレから AWS を解決させるインバウンド側が図の外に落ちる。左右の枠をまたぐ矢印が 2 本あることが、そのままエンドポイントが 2 つ要る理由になる。",
+  "style_rules": {
+    "shape_semantics": "矩形(緑)=正解の構成を成すエンドポイント、矩形(白)=リゾルバ・DNS サーバー・クライアントなどの一般要素、矩形(グレー)=要件を満たさない案、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=向きごとに必要なエンドポイント、白=前提となる構成要素、グレー=要件を満たさない案、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=名前解決クエリの流れ、破線矢印=要件を満たさない案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "転送ルールを Resolver とアウトバウンドエンドポイントのどちらのノードに置くかは迷いどころで、本図では「アウトバウンドエンドポイント + 転送ルール」と 1 ノードにまとめている。ルールの共有(RAM 経由での他 VPC への共有)は解説の範囲外のため描いていない。",
+    "/etc/resolv.conf 追記が不適な理由は解説に明示がないため、グレー枠に置くだけで理由を書いていない。"
+  ],
+  "mermaid": "flowchart TB\n    subgraph VPCG[\"VPC 側\"]\n        EC2[\"VPC 内の EC2\"]:::svc\n        RSLV[\"Route 53 Resolver\"]:::svc\n        PHZ[\"プライベートホストゾーン<br/>AWS 側の名前\"]:::svc\n        OUT[\"アウトバウンドエンドポイント<br/>+ 転送ルール(corp.example.local)\"]:::best\n        IN[\"インバウンドエンドポイント\"]:::best\n    end\n\n    subgraph ONP[\"オンプレミス側\"]\n        ONDNS[\"オンプレミス DNS サーバー<br/>corp.example.local を解決\"]:::svc\n        ONHOST[\"オンプレミスのクライアント\"]:::svc\n    end\n\n    subgraph NG[\"要件を満たさない案\"]\n        DHCP[\"DHCP オプションでオンプレ DNS のみ指定<br/>AWS 側の名前が解決できなくなる\"]:::alt\n        RESOLV[\"EC2 の /etc/resolv.conf に追記\"]:::alt\n        PUBHZ[\"社内名をパブリックホストゾーンに登録<br/>情報漏えいの観点で不適切\"]:::alt\n    end\n\n    NOTE[\"VPC → オンプレ は アウトバウンド<br/>オンプレ → AWS は インバウンド\"]:::note\n\n    EC2 -->|\"名前解決\"| RSLV\n    RSLV -->|\"AWS 側\"| PHZ\n    RSLV -->|\"社内ドメイン\"| OUT\n    OUT -->|\"条件付き転送\"| ONDNS\n    ONHOST -->|\"AWS 側を照会\"| IN\n    IN -->|\"VPC 内を解決\"| PHZ\n    RSLV -.-> NG\n    RSLV -.- NOTE"
+}

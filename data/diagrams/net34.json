@@ -1,0 +1,50 @@
+{
+  "question_id": "net34",
+  "purpose": "CIDR が重複する VPC 同士では「ルーティングで繋ぐ」系の方式がまとめて落ちること、そして PrivateLink だけが別の原理で繋がることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、VPC 間接続の選択肢(ピアリング / TGW / VPN / PrivateLink)を並べて覚えている人。",
+  "message": "CIDR が重複する VPC はルーティングが成立しないので、経路に依存せず ENI でサービスを見せる PrivateLink を使う。",
+  "source_summary": "本番 VPC(10.0.0.0/16)と買収した企業の VPC(10.0.0.0/16)を接続して相互にアプリケーション通信させたいが、IP の再採番はできない。CIDR が重複する VPC 間はルーティングが成立しないため、ピアリング・Transit Gateway・VPN のいずれも利用できない。PrivateLink は NLB のエンドポイントに対してコンシューマー VPC 側に ENI を作る方式で、双方の IP 空間が重複していてもサービス単位の一方向アクセスを実現できる。相互通信が必要な場合は双方向にエンドポイントサービスを構成する(NAT による重複解消も代替案)。",
+  "elements": [
+    { "id": "REQ", "label": "CIDR が重複する 2 つの VPC を接続したい(再採番は不可)", "type": "state", "priority": "primary" },
+    { "id": "Q", "label": "接続方式はルーティングに依存するか?", "type": "process", "priority": "primary" },
+    { "id": "PEER", "label": "VPC ピアリング", "type": "artifact", "priority": "secondary" },
+    { "id": "TGW", "label": "Transit Gateway", "type": "artifact", "priority": "secondary" },
+    { "id": "VPN", "label": "Site-to-Site VPN + BGP", "type": "artifact", "priority": "secondary" },
+    { "id": "PL", "label": "PrivateLink(VPC エンドポイントサービス)", "type": "artifact", "priority": "primary" },
+    { "id": "NLB", "label": "提供側 VPC の NLB(サービスの入口)", "type": "artifact", "priority": "secondary" },
+    { "id": "ENI", "label": "コンシューマー VPC 側に作られる ENI", "type": "artifact", "priority": "secondary" },
+    { "id": "APP", "label": "利用側アプリケーション", "type": "actor", "priority": "support" },
+    { "id": "NOTE", "label": "相互通信は双方向に構成する", "type": "other", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q", "verb": "まず問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q", "to": "PEER", "verb": "経路が成立しない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q", "to": "TGW", "verb": "経路が成立しない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q", "to": "VPN", "verb": "経路が成立しない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q", "to": "PL", "verb": "経路に依存せず接続する", "direction": "one-way", "kind": "flow" },
+    { "from": "NLB", "to": "PL", "verb": "サービスとして公開する", "direction": "one-way", "kind": "flow" },
+    { "from": "PL", "to": "ENI", "verb": "利用側に ENI を作る", "direction": "one-way", "kind": "flow" },
+    { "from": "APP", "to": "ENI", "verb": "ENI 経由で呼び出す", "direction": "one-way", "kind": "flow" },
+    { "from": "PL", "to": "NOTE", "verb": "適用の前提を補う", "direction": "none", "kind": "other" }
+  ],
+  "groups": [
+    { "id": "ROUTED", "label": "ルーティングで繋ぐ方式(重複 CIDR では成立しない)", "members": ["PEER", "TGW", "VPN"] },
+    { "id": "PLG", "label": "PrivateLink — サービス単位で見せる", "members": ["NLB", "PL", "ENI", "APP"] }
+  ],
+  "candidate_patterns": [
+    "分岐 + 構成図: 「ルーティングに依存するか」で 3 つの誤答をまとめて落とし、正解側だけ NLB → エンドポイントサービス → ENI の構成を描く",
+    "対比(左右 2 枠): 重複 CIDR のルーティング図(経路が決まらない様子)と PrivateLink の構成図を並べる"
+  ],
+  "selected_pattern": "分岐 + 構成図。誤答 3 つは「ルーティングで繋ぐ」という同じ理由でまとめて落ちるため、1 回の分岐で処理して図の面積を正解の仕組み(ENI が利用側にできること)に使えるのが利点。対比 2 枠だと重複 CIDR の経路表を描き込む必要があり、主メッセージに要らない情報が増える。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(白)=構成上の一般要素、矩形(グレー)=実在するが要件を満たさない選択肢、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=正解の経路、グレー=重複 CIDR では成立しない方式、白=構成要素、青=要件と判断軸、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行と接続の流れ、破線矢印=成立しない側への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "PrivateLink が一方向アクセスであることは注釈で補っているが、「どちらが提供側か」は問題文に定義がないため図では一般名(提供側 / 利用側)にとどめている。",
+    "解説が代替案として挙げる NAT による重複解消は、構成を描くと図が二本立てになるため注釈にも入れていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"本番 VPC 10.0.0.0/16 と 買収先 VPC 10.0.0.0/16<br/>IP の再採番はできない\"]:::req\n    Q{\"ルーティングに<br/>依存する方式か?\"}:::judge\n\n    subgraph ROUTED[\"ルーティングで繋ぐ方式 — 重複 CIDR では成立しない\"]\n        PEER[\"VPC ピアリング\"]:::alt\n        TGW[\"Transit Gateway\"]:::alt\n        VPN[\"Site-to-Site VPN + BGP\"]:::alt\n    end\n\n    subgraph PLG[\"PrivateLink — サービス単位で見せる\"]\n        NLB[\"提供側 VPC の NLB<br/>サービスの入口\"]:::svc\n        PL[\"VPC エンドポイントサービス\"]:::best\n        ENI[\"コンシューマー VPC 側の ENI\"]:::best\n        APP[\"利用側アプリケーション\"]:::svc\n        NLB --> PL\n        PL --> ENI\n        APP --> ENI\n    end\n\n    NOTE[\"IP 空間が重複していても到達できる<br/>相互通信が必要なら双方向に構成する\"]:::note\n\n    REQ --> Q\n    Q -.->|\"依存する\"| PEER\n    Q -.->|\"依存する\"| TGW\n    Q -.->|\"依存する\"| VPN\n    Q -->|\"依存しない\"| PL\n    PL -.- NOTE"
+}

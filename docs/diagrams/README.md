@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 163 問 / 全 400 問
+収録: 173 問 / 全 400 問
 
 ---
 
@@ -8186,3 +8186,579 @@ flowchart TB
 **解説**: セキュリティグループはインスタンス(ENI)単位で適用されるステートフルなファイアウォールで、インバウンドを許可すればその応答は自動で通ります。記述できるのは許可ルールのみです。対して NACL はサブネット単位・ステートレス・許可と拒否の両方を記述可能、という対比表を丸ごと覚えるのが試験対策の定石です。
 
 **確認事項**: NACL 側をグレー(alt)で塗っているのは「本問では誤答」という意味で、NACL 自体が劣るという意味ではない。枠のラベルで読み分けさせているが、色だけを見ると NACL が悪い選択肢に見える余地は残る。 / セキュリティグループと NACL の評価順序(NACL が先に効く)は解説に記載がないため図に入れていない。
+
+---
+
+## net31 — ネットワーク / level 2
+
+**問題**: 取引先のファイアウォールで許可設定をしてもらうため、API の接続先 IP アドレスを固定したい。ALB を使う構成のままでは IP が変動してしまう。どうすべきか?
+
+**正解**: NLB を前段に置き Elastic IP を割り当てる(または Global Accelerator を使う)
+
+**他の選択肢**: ALB の IP を都度連絡する / Route 53 で TTL を長くする / CloudFront を挟む
+
+**図解の主メッセージ**: 固定 IP 要件を満たせるのは Elastic IP を割り当てられる NLB か、固定エニーキャスト IP を持つ Global Accelerator の 2 つだけ。
+
+**採用パターン**: 分岐(判断フロー)。本問の判断軸は「入口サービスが固定 IP を持てるか」の 1 点しかなく、要件から 1 回分岐させるだけで正解 2 案と誤答 3 案が同時に説明できる。対比 2 枠だと「なぜそちらに分かれるのか」を読む側が補う必要があり、判断軸が図に現れない。(候補: 分岐(判断フロー): 「入口が固定 IP を持てるか」の 1 問で、満たせる 2 案と満たせない 3 案に振り分ける / 対比(左右 2 枠): 「IP が固定される構成」と「IP が変動する構成」を並べて置く)
+
+```mermaid
+flowchart TD
+    REQ["取引先のファイアウォールに登録するため<br/>API の接続先 IP を固定したい"]:::req
+    Q{"入口が<br/>固定 IP を持てるか?"}:::judge
+
+    subgraph OK["固定 IP を提供できる"]
+        NLB["NLB を前段に置く<br/>Elastic IP を割り当てられる"]:::best
+        GA["Global Accelerator<br/>固定エニーキャスト IP"]:::best
+    end
+
+    subgraph NG["固定 IP にはならない"]
+        ALB["ALB のまま使う<br/>IP アドレスは変動する"]:::alt
+        TTL["Route 53 で TTL を長くする"]:::alt
+        CF["CloudFront を挟む"]:::alt
+    end
+
+    NOTE["NLB の背後に ALB をターゲットとして<br/>置く構成も可能"]:::note
+
+    REQ --> Q
+    Q -->|"持てる"| NLB
+    Q -->|"持てる"| GA
+    Q -.->|"持てない"| ALB
+    Q -.->|"持てない"| TTL
+    Q -.->|"持てない"| CF
+    NLB -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net31.svg`](../../web/diagrams/net31.svg)
+
+**解説**: ALB の IP アドレスは変動するため固定 IP 要件を満たせません。静的 IP が必要な場合は、Elastic IP を割り当てられる NLB を入口にする(NLB の背後に ALB をターゲットとして置く構成も可能)か、固定エニーキャスト IP を提供する Global Accelerator を使います。「固定 IP 要件 = NLB か Global Accelerator」と覚えます。
+
+**確認事項**: CloudFront と TTL 延長がなぜ固定 IP にならないかは解説に踏み込んだ記述がないため、図でも「固定 IP にはならない」枠に置くだけにとどめている。 / NLB + Elastic IP と Global Accelerator のどちらを選ぶかの基準(グローバル配信の要否など)は解説の範囲外のため描いていない。
+
+---
+
+## net32 — ネットワーク / level 2
+
+**問題**: ロードバランサーを使わずに、Route 53 だけで複数の正常なサーバー IP をランダムに返して簡易的な負荷分散と冗長化を行いたい。どのポリシーを使うか?
+
+**正解**: 複数値回答(Multivalue Answer)ルーティング
+
+**他の選択肢**: シンプルルーティング / 位置情報ルーティング / フェイルオーバールーティング
+
+**図解の主メッセージ**: ヘルスチェック付きで最大 8 件の正常なレコードを返せるのは複数値回答ルーティングだけなので、LB なしの簡易分散はこれで実現する。
+
+**採用パターン**: 分岐 + 包含。解説が中身まで説明しているのは複数値回答だけで、他の 3 ポリシーの動作は解説の範囲外にある。4 枠を並べる対比にすると 3 枠が空欄同然になるか、解説にない説明を創作することになるため、正解のポリシーだけを展開して「何を返すから要件を満たすのか」を主役にした。(候補: 分岐 + 包含: 要件から 1 問でポリシーを決め、選んだポリシーが返す応答の中身(最大 8 件・ヘルスチェック)を展開する / 対比(4 枠並列): 4 つのルーティングポリシーを横に並べ、それぞれが返す応答を書き比べる)
+
+```mermaid
+flowchart TD
+    REQ["ロードバランサーを使わず<br/>Route 53 だけで簡易的な負荷分散と冗長化"]:::req
+    Q{"DNS 応答に<br/>何を求めるか?"}:::judge
+
+    subgraph MV["複数値回答ルーティングの振る舞い"]
+        MVA["複数値回答(Multivalue Answer)ルーティング"]:::best
+        MANY["最大 8 件の正常なレコードを返す"]:::svc
+        HC["ヘルスチェックで異常な<br/>エンドポイントを応答から除外"]:::svc
+        MVA --> MANY
+        MVA --> HC
+    end
+
+    CLIENT["クライアント<br/>受け取った複数 IP へ接続する"]:::svc
+
+    subgraph OTHERS["本問の要件には届かないポリシー"]
+        SIMPLE["シンプルルーティング"]:::alt
+        GEO["位置情報ルーティング"]:::alt
+        FAILOVER["フェイルオーバールーティング"]:::alt
+    end
+
+    NOTE["分散精度とヘルスチェックの即時性は ELB に劣る<br/>本格的な負荷分散には ELB を使う"]:::note
+
+    REQ --> Q
+    Q -->|"正常な複数IP"| MVA
+    MANY --> CLIENT
+    HC --> CLIENT
+    Q -.->|"届かない"| SIMPLE
+    Q -.->|"届かない"| GEO
+    Q -.->|"届かない"| FAILOVER
+    MVA -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net32.svg`](../../web/diagrams/net32.svg)
+
+**解説**: 複数値回答ルーティングは最大 8 件の正常なレコードをヘルスチェック付きで返し、異常なエンドポイントを応答から自動的に除外します。DNS レベルの簡易負荷分散として使えますが、接続の分散精度やヘルスチェックの即時性は ELB に劣るため、本格的な負荷分散には ELB を使います。
+
+**確認事項**: シンプル / 位置情報 / フェイルオーバーの各ポリシーの動作は解説に説明がないため、名前だけを置いて「要件に届かない」枠にまとめている。ポリシー全体を比較する図が必要になったら別問題の図解として起こすほうがよい。 / 「ランダムに返す」というクライアント側の分散精度の限界は注釈に含めたが、DNS キャッシュの影響には解説が触れていないため描いていない。
+
+---
+
+## net33 — ネットワーク / level 2
+
+**問題**: VPC の境界で、ドメイン名ベースのアウトバウンドフィルタリングや IPS(侵入防止)ルールをマネージドに適用したい。どのサービスが適切か?
+
+**正解**: AWS Network Firewall
+
+**他の選択肢**: セキュリティグループ / ネットワーク ACL / Amazon GuardDuty
+
+**図解の主メッセージ**: ドメイン名フィルタや IPS ルールは IP・ポートしか見ない SG / NACL では書けず、検知専門の GuardDuty は遮断できないので、Network Firewall を使う。
+
+**採用パターン**: 分岐(2 段の判断フロー)。4 候補が落ちる理由は 2 種類(GuardDuty は遮断しない、SG / NACL は見る層が足りない)しかなく、順に問えば一本道で正解に着く。マトリクスは同じ情報を持つが、空きセルの意味を読み手が解釈する手間が増えるため採らない。(候補: 分岐(2 段の判断フロー): 「遮断できるか」→「IP・ポートより上を見られるか」の 2 問で 4 候補を振り分ける / マトリクス: 「遮断できる / できない」×「L3-L4 まで / それより上まで」の 2 軸に 4 候補を配置する)
+
+```mermaid
+flowchart TD
+    REQ["VPC 境界でドメイン名ベースの<br/>アウトバウンドフィルタと IPS ルールを適用したい"]:::req
+    Q1{"通信を<br/>遮断できるか?"}:::judge
+    GD["Amazon GuardDuty<br/>検知専門・通信の遮断は行わない"]:::alt
+    Q2{"IP・ポートより上を<br/>見て判断できるか?"}:::judge
+    SGNACL["セキュリティグループ / ネットワーク ACL<br/>IP・ポートレベルの制御のみ"]:::alt
+
+    subgraph NF["Network Firewall がサポートする機能"]
+        NFW["AWS Network Firewall<br/>VPC にデプロイするマネージド型"]:::best
+        DOM["ドメイン名 / URL フィルタリング"]:::svc
+        IPS["Suricata 互換の IPS ルール"]:::svc
+        STATE["ステートフルインスペクション"]:::svc
+        NFW --> DOM
+        NFW --> IPS
+        NFW --> STATE
+    end
+
+    NOTE["GuardDuty は「検知」まで<br/>遮断が要るなら Network Firewall"]:::note
+
+    REQ --> Q1
+    Q1 -.->|"しない"| GD
+    Q1 -->|"できる"| Q2
+    Q2 -.->|"見えない"| SGNACL
+    Q2 -->|"見える"| NFW
+    Q1 -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net33.svg`](../../web/diagrams/net33.svg)
+
+**解説**: Network Firewall は VPC にデプロイするマネージド型ネットワークファイアウォールで、ステートフルインスペクション・ドメイン名/URL フィルタリング・Suricata 互換の IPS ルールをサポートします。SG/NACL は IP・ポートレベルの制御のみで、ドメイン名フィルタや侵入防止はできません。GuardDuty は「検知」専門で通信の遮断は行いません。
+
+**確認事項**: セキュリティグループとネットワーク ACL は落ちる理由が同じ(IP・ポートレベルのみ)なので 1 ノードにまとめている。両者の差を問う問題(net30)とは粒度が異なる点に注意。 / Network Firewall の配置形態(検査用サブネットとルートテーブルの引き回し)は解説の範囲外のため描いていない。
+
+---
+
+## net34 — ネットワーク / level 3
+
+**問題**: 本番 VPC(10.0.0.0/16)と、買収した企業の VPC(10.0.0.0/16)を接続して相互にアプリケーション通信させる必要がある。IP の再採番は業務影響が大きく実施できない。最も適切な方法はどれか?
+
+**正解**: 各 VPC に PrivateLink(VPC エンドポイントサービス)を構成し、NLB 経由でサービス単位に公開する
+
+**他の選択肢**: VPC ピアリングを設定し、ルートテーブルに相手の CIDR を追加する / Transit Gateway に両 VPC をアタッチし、ルートを伝播させる / 両 VPC 間に Site-to-Site VPN を張り、BGP でルートを交換する
+
+**図解の主メッセージ**: CIDR が重複する VPC はルーティングが成立しないので、経路に依存せず ENI でサービスを見せる PrivateLink を使う。
+
+**採用パターン**: 分岐 + 構成図。誤答 3 つは「ルーティングで繋ぐ」という同じ理由でまとめて落ちるため、1 回の分岐で処理して図の面積を正解の仕組み(ENI が利用側にできること)に使えるのが利点。対比 2 枠だと重複 CIDR の経路表を描き込む必要があり、主メッセージに要らない情報が増える。(候補: 分岐 + 構成図: 「ルーティングに依存するか」で 3 つの誤答をまとめて落とし、正解側だけ NLB → エンドポイントサービス → ENI の構成を描く / 対比(左右 2 枠): 重複 CIDR のルーティング図(経路が決まらない様子)と PrivateLink の構成図を並べる)
+
+```mermaid
+flowchart TD
+    REQ["本番 VPC 10.0.0.0/16 と 買収先 VPC 10.0.0.0/16<br/>IP の再採番はできない"]:::req
+    Q{"ルーティングに<br/>依存する方式か?"}:::judge
+
+    subgraph ROUTED["ルーティングで繋ぐ方式 — 重複 CIDR では成立しない"]
+        PEER["VPC ピアリング"]:::alt
+        TGW["Transit Gateway"]:::alt
+        VPN["Site-to-Site VPN + BGP"]:::alt
+    end
+
+    subgraph PLG["PrivateLink — サービス単位で見せる"]
+        NLB["提供側 VPC の NLB<br/>サービスの入口"]:::svc
+        PL["VPC エンドポイントサービス"]:::best
+        ENI["コンシューマー VPC 側の ENI"]:::best
+        APP["利用側アプリケーション"]:::svc
+        NLB --> PL
+        PL --> ENI
+        APP --> ENI
+    end
+
+    NOTE["IP 空間が重複していても到達できる<br/>相互通信が必要なら双方向に構成する"]:::note
+
+    REQ --> Q
+    Q -.->|"依存する"| PEER
+    Q -.->|"依存する"| TGW
+    Q -.->|"依存する"| VPN
+    Q -->|"依存しない"| PL
+    PL -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net34.svg`](../../web/diagrams/net34.svg)
+
+**解説**: CIDR が重複する VPC 間はルーティングが成立しないため、ピアリング・Transit Gateway・VPN のいずれも利用できません。PrivateLink は NLB のエンドポイントに対してコンシューマー VPC 側に ENI を作る方式で、双方の IP 空間が重複していてもサービス単位の一方向アクセスを実現できます。相互通信が必要な場合は双方向にエンドポイントサービスを構成します(NAT による重複解消も代替案)。
+
+**確認事項**: PrivateLink が一方向アクセスであることは注釈で補っているが、「どちらが提供側か」は問題文に定義がないため図では一般名(提供側 / 利用側)にとどめている。 / 解説が代替案として挙げる NAT による重複解消は、構成を描くと図が二本立てになるため注釈にも入れていない。
+
+---
+
+## net35 — ネットワーク / level 3
+
+**問題**: Transit Gateway に 60 の VPC が接続されている。本番 VPC 群と開発 VPC 群は相互に通信してはならず、いずれも共有サービス VPC とは通信できる必要がある。最も適切な設計はどれか?
+
+**正解**: Transit Gateway ルートテーブルを本番用・開発用・共有用に分け、各アタッチメントの関連付けと伝播を設計して通信を分離する
+
+**他の選択肢**: 各 VPC のセキュリティグループで相手側 CIDR を拒否する / 本番用と開発用に別々の Transit Gateway を作成し、共有サービス VPC を両方にアタッチする / ネットワーク ACL で本番と開発の CIDR を相互に拒否する
+
+**図解の主メッセージ**: TGW は 1 台のまま、アタッチメントごとの関連付けと伝播を分けて設計すれば本番 / 開発 / 共有のドメイン分離ができる。
+
+**採用パターン**: 構造図(包含 + 2 種の線)。可否のマトリクスは「そうなってほしい状態」を示すだけで、本問が問うている「どう設定すればそうなるか」が図に出てこない。関連付けと伝播を線として描き分けると、共有だけが双方に伝播している = 本番と開発は互いを知らない、という仕組みがそのまま読める。(候補: 構造図(包含 + 関連付け / 伝播の 2 種の線): TGW の中に 3 つのルートテーブルを置き、アタッチメントから関連付けと伝播を描き分ける / マトリクス(通信可否の表): 本番 / 開発 / 共有の 3 × 3 で通信の可否を示す)
+
+```mermaid
+flowchart TB
+    REQ["本番と開発は相互に通信不可<br/>いずれも共有サービス VPC とは通信可"]:::req
+
+    PROD["本番 VPC 群<br/>アタッチメント"]:::svc
+    DEV["開発 VPC 群<br/>アタッチメント"]:::svc
+    SHR["共有サービス VPC<br/>アタッチメント"]:::svc
+
+    subgraph TGW["Transit Gateway(1 台)のルートテーブル"]
+        RTP["本番用ルートテーブル"]:::best
+        RTD["開発用ルートテーブル"]:::best
+        RTS["共有用ルートテーブル"]:::best
+    end
+
+    subgraph NG["要件を満たさない代替案"]
+        SG["セキュリティグループで拒否<br/>拒否ルールは書けない(許可のみ)"]:::alt
+        NACL["ネットワーク ACL で相互に拒否<br/>管理が煩雑でスケールしない"]:::alt
+        TWO["TGW を 2 台に分ける<br/>コストと運用が増える"]:::alt
+    end
+
+    NOTE["本番と開発は互いへ経路を伝播しない<br/>= 相手を知らないので到達できない"]:::note
+
+    REQ --> TGW
+    PROD -->|"関連付け"| RTP
+    DEV -->|"関連付け"| RTD
+    SHR -->|"関連付け"| RTS
+    SHR -.->|"伝播"| RTP
+    SHR -.->|"伝播"| RTD
+    PROD -.->|"伝播"| RTS
+    DEV -.->|"伝播"| RTS
+    REQ -.-> NG
+    RTS -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net35.svg`](../../web/diagrams/net35.svg)
+
+**解説**: Transit Gateway は複数のルートテーブルを持て、アタッチメントごとに「どのルートテーブルに関連付けるか(association)」「どのルートテーブルへ経路を伝播するか(propagation)」を分けて設計することで、ドメイン分離(本番/開発/共有)を実現できます。セキュリティグループは相手 CIDR の拒否ルールを持てず(許可のみ)、NACL による拒否は管理が煩雑でスケールしません。TGW を 2 台にするとコストと運用が増えます。
+
+**確認事項**: 60 の VPC は本番群 / 開発群 / 共有の 3 ノードに集約して描いている。実際のアタッチメント数は図の主メッセージに影響しないため省いた。 / 関連付けを実線、伝播を破線で描き分けているが、この使い分けは本図固有で、他問の「破線=弱い関係」とは意味が異なる。凡例的な説明を図中に置くべきか要検討。
+
+---
+
+## net36 — ネットワーク / level 3
+
+**問題**: オンプレミスから VPC へ 10 Gbps の Direct Connect 専用接続を 1 本引いている。障害時の可用性目標は「最大 4 時間の切り替え時間を許容せず、常時冗長」であり、コストは合理的な範囲で許容する。AWS が推奨する構成はどれか?
+
+**正解**: 異なる Direct Connect ロケーションにそれぞれ専用接続を用意し、オンプレ側も別ルーターで終端して BGP で冗長化する
+
+**他の選択肢**: 同一 Direct Connect ロケーション内で 2 本目の専用接続を同じルーターに追加する / Direct Connect 1 本に加えて Site-to-Site VPN をバックアップ経路として構成する / Direct Connect ゲートウェイを 2 つ作成し、同じ接続に紐付ける
+
+**図解の主メッセージ**: 常時冗長が要件なら、DX ロケーション・回線・オンプレ機器をすべて分けて BGP で冗長化する(最大の回復性)構成しかない。
+
+**採用パターン**: 分岐(判断フロー)。はしご型は耐障害レベルの序列を示せるが、VPN バックアップと DX ゲートウェイ複製が落ちる理由は「レベルが 1 段低い」ではなく別種(帯域と一貫性 / そもそも経路が冗長にならない)で、一列に並べると誤読を招く。要件から 1 回分岐させ、落ちる理由は各ノードに書くほうが正確。(候補: 分岐(判断フロー): 「ロケーション障害でも通信が続くか」の 1 問で、最大の回復性と残り 3 案に振り分ける / 段階(耐障害レベルのはしご): 単一接続 → 同一ロケーション 2 本 → VPN バックアップ → 別ロケーション冗長、と耐えられる障害の範囲を積み上げる)
+
+```mermaid
+flowchart TD
+    REQ["最大 4 時間の切り替え時間も許容せず常時冗長<br/>コストは合理的な範囲で許容"]:::req
+    Q{"DX ロケーションの障害でも<br/>通信が続くか?"}:::judge
+
+    subgraph MAXR["最大の回復性(Maximum Resiliency)"]
+        BEST["別々の DX ロケーションに<br/>それぞれ専用接続を用意する"]:::best
+        ROUTER["オンプレ側も別ルーターで終端し<br/>BGP で冗長化する"]:::best
+        BEST --> ROUTER
+    end
+
+    subgraph NG["常時冗長の要件を満たさない"]
+        SAMELOC["同一ロケーション内に 2 本目<br/>ロケーション障害に耐えられない"]:::alt
+        VPNBK["Site-to-Site VPN をバックアップに<br/>帯域と一貫性が落ちる(補助扱い)"]:::alt
+        DXGW["DX ゲートウェイを 2 つ作る<br/>経路の冗長化にはならない"]:::alt
+    end
+
+    NOTE["ロケーション・回線・オンプレ機器を<br/>すべて分けて初めて「常時冗長」"]:::note
+
+    REQ --> Q
+    Q -->|"続く"| BEST
+    Q -.->|"止まる"| SAMELOC
+    Q -.->|"品質が落ちる"| VPNBK
+    Q -.->|"変わらない"| DXGW
+    ROUTER -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net36.svg`](../../web/diagrams/net36.svg)
+
+**解説**: 最大の回復性(Maximum Resiliency)は、複数の Direct Connect ロケーションに separate な専用接続を用意し、オンプレ側も機器・回線を分離して BGP で冗長化する構成です。同一ロケーション内の 2 本目はロケーション障害に耐えられません。VPN バックアップは帯域と一貫性が落ちるため「重要ワークロードの補助」であり、Direct Connect ゲートウェイの複製は経路の冗長化になりません。
+
+**確認事項**: 「最大 4 時間の切り替え時間を許容せず」という文言は AWS の回復性モデルの名称(High Resiliency / Maximum Resiliency)を示唆するが、解説が名前を挙げているのは最大の回復性のみなので、他のレベル名は図に出していない。 / 10 Gbps という帯域は判断軸ではない(冗長性の要件が決め手)ため、要件ノードには含めていない。
+
+---
+
+## net37 — ネットワーク / level 3
+
+**問題**: Direct Connect 経由でオンプレミスから、複数リージョンの複数 VPC(合計 20 個)へアクセスしたい。VPC は今後も増える。プライベート VIF を VPC ごとに作る運用は避けたい。最適な構成はどれか?
+
+**正解**: Direct Connect ゲートウェイを作成し、Transit VIF で各リージョンの Transit Gateway と関連付ける
+
+**他の選択肢**: VPC ごとにプライベート VIF を作成し、仮想プライベートゲートウェイに接続する / パブリック VIF を作成し、各 VPC のパブリック IP 経由でアクセスする / 各リージョンに個別の Direct Connect 接続を新設する
+
+**図解の主メッセージ**: VPC が増えても VIF を増やさずに済ませるには、Transit VIF で DX ゲートウェイと各リージョンの Transit Gateway を関連付ける。
+
+**採用パターン**: 構成図(直列 + 分岐)。本問の答えは構成そのものなので、経路を一本の流れで描くと「どこが VPC 増加を吸収しているのか(TGW 配下)」が位置関係で読める。対比 2 枠は線の本数の差が伝わる一方、正解側の各要素の役割(VIF / DXGW / TGW の分担)を描く余白が減る。(候補: 構成図(直列 + 分岐): オンプレ → 接続 → Transit VIF → DX ゲートウェイ → 各リージョンの TGW → VPC 群、と経路を一本描いてリージョンで分岐させる / 対比(左右 2 枠): 「VPC ごとにプライベート VIF」と「Transit VIF + DXGW + TGW」の 2 構成を並べ、線の本数の差を見せる)
+
+```mermaid
+flowchart TB
+    ONPREM["オンプレミス"]:::svc
+    DX["Direct Connect 専用接続(1 本)"]:::svc
+    TVIF["Transit VIF"]:::best
+    DXGW["Direct Connect ゲートウェイ<br/>グローバルリソース"]:::best
+
+    subgraph RA["リージョン A"]
+        TGWA["Transit Gateway"]:::best
+        VPCA["VPC 群<br/>増えても VIF 追加は不要"]:::svc
+        TGWA --> VPCA
+    end
+
+    subgraph RB["リージョン B"]
+        TGWB["Transit Gateway"]:::best
+        VPCB["VPC 群<br/>増えても VIF 追加は不要"]:::svc
+        TGWB --> VPCB
+    end
+
+    subgraph NG["運用が破綻する / 要件に合わない案"]
+        PVIF["VPC ごとにプライベート VIF<br/>VIF 数の上限と運用負荷"]:::alt
+        PUB["パブリック VIF 経由"]:::alt
+        NEWDX["リージョンごとに DX 接続を新設"]:::alt
+    end
+
+    NOTE["1 DXGW につき TGW 関連付けは最大 3<br/>VGW 関連付けは 20 などの上限あり"]:::note
+
+    ONPREM --> DX --> TVIF --> DXGW
+    DXGW -->|"関連付け"| TGWA
+    DXGW -->|"関連付け"| TGWB
+    DX -.-> NG
+    DXGW -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net37.svg`](../../web/diagrams/net37.svg)
+
+**解説**: Direct Connect ゲートウェイはグローバルなリソースで、1 つの接続から複数リージョンの VGW や Transit Gateway へ接続できます。Transit VIF と Transit Gateway の関連付けを使えば、TGW 配下の VPC が増えても VIF を追加せずに到達性を拡張できます(1 DXGW につき最大 3 つの TGW 関連付け、20 の VGW 関連付けなどの上限あり)。VPC ごとのプライベート VIF は VIF 数の上限と運用負荷の問題があります。
+
+**確認事項**: リージョンは A / B の 2 つに簡略化している。解説の「1 DXGW につき最大 3 つの TGW 関連付け」という上限は注釈に書いたが、図の形としては表現していない。 / パブリック VIF とリージョンごとの DX 新設が不適な理由は解説に個別の記述がないため、グレー枠に置くだけにとどめている。
+
+---
+
+## net38 — ネットワーク / level 3
+
+**問題**: プライベートサブネットの EC2 から、同一リージョンの DynamoDB・S3・Secrets Manager・SQS へアクセスしている。NAT ゲートウェイのデータ処理料金が月額の大きな割合を占めており、削減したい。最も効果的な対応はどれか?
+
+**正解**: S3 と DynamoDB はゲートウェイ型 VPC エンドポイント(無料)を、Secrets Manager と SQS はインターフェース型 VPC エンドポイントを作成し、NAT 経由の通信を減らす
+
+**他の選択肢**: NAT ゲートウェイを NAT インスタンスに置き換える / すべてのサブネットをパブリックサブネットに変更し、インスタンスにパブリック IP を付与する / VPC の CIDR を小さくして NAT ゲートウェイの処理量を減らす
+
+**図解の主メッセージ**: S3 と DynamoDB は無料のゲートウェイ型、その他は インターフェース型のエンドポイントを作り、NAT を経由する通信そのものを減らす。
+
+**採用パターン**: 分岐(判断フロー)。本問の判断は「サービスごとにどちらのエンドポイントを作るか」であり、4 サービスが 2 系統に分かれることが答えの中身そのもの。before / after の対比は削減の効果は示せるが、S3・DynamoDB とそれ以外を分ける基準が図に現れない。(候補: 分岐(判断フロー): 「ゲートウェイ型に対応するサービスか」の 1 問で 2 種のエンドポイントに振り分け、作らない場合の経路として NAT を残す / 経路の対比(before / after): 現状(すべて NAT 経由)と改善後(エンドポイント経由)の 2 枚の経路図を並べる)
+
+```mermaid
+flowchart TD
+    EC2["プライベートサブネットの EC2<br/>NAT のデータ処理料金を削減したい"]:::req
+    Q{"ゲートウェイ型に<br/>対応するサービスか?"}:::judge
+
+    subgraph EPS["VPC エンドポイントで NAT を迂回する"]
+        GWEP["ゲートウェイ型エンドポイント<br/>追加料金なし"]:::best
+        S3DDB["S3 / DynamoDB"]:::svc
+        IFEP["インターフェース型エンドポイント<br/>PrivateLink・時間課金 + データ処理料金"]:::best
+        SMSQS["Secrets Manager / SQS"]:::svc
+        GWEP --> S3DDB
+        IFEP --> SMSQS
+    end
+
+    NAT["NAT ゲートウェイ経由<br/>データ処理料金がかかる"]:::alt
+
+    subgraph NG["コスト削減にならない / 不適切な案"]
+        NATI["NAT インスタンスに置き換える<br/>運用負荷と可用性の低下"]:::alt
+        PUBSN["全サブネットをパブリック化する<br/>セキュリティ上不適切"]:::alt
+        CIDR["VPC の CIDR を小さくする"]:::alt
+    end
+
+    NOTE["インターフェース型の課金は多くの場合<br/>NAT のデータ処理料金より安価"]:::note
+
+    EC2 --> Q
+    Q -->|"対応する"| GWEP
+    Q -->|"対応しない"| IFEP
+    Q -.->|"作らない場合"| NAT
+    NAT -.-> NG
+    IFEP -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net38.svg`](../../web/diagrams/net38.svg)
+
+**解説**: S3 と DynamoDB のゲートウェイエンドポイントは追加料金なしで NAT を経由せずにアクセスでき、その他の多くの AWS サービスはインターフェースエンドポイント(PrivateLink)で VPC 内から直接到達できます。インターフェースエンドポイントには時間課金とデータ処理料金がありますが、多くの場合 NAT のデータ処理料金より安価です。NAT インスタンス化は運用負荷と可用性の低下を招き、パブリック化はセキュリティ上不適切です。
+
+**確認事項**: 「VPC の CIDR を小さくする」が不適な理由は解説に記述がないため、グレー枠に置くだけで理由を書いていない。 / インターフェース型が常に NAT より安いとは限らない点は注釈で「多くの場合」と留保している。実際の損益分岐は解説の範囲外のため図に含めない。
+
+---
+
+## net39 — ネットワーク / level 3
+
+**問題**: マルチ AZ 構成のプライベートサブネットから外部 API を呼ぶワークロードで、NAT ゲートウェイのコストと AZ 障害時の挙動を最適化したい。現在は 1 つの AZ にのみ NAT ゲートウェイを置き、全 AZ のサブネットがそこを向いている。最も適切な改善はどれか?
+
+**正解**: 各 AZ に NAT ゲートウェイを配置し、各 AZ のプライベートサブネットのルートテーブルを同一 AZ の NAT へ向ける
+
+**他の選択肢**: NAT ゲートウェイをもう 1 つ同じ AZ に追加して冗長化する / NAT ゲートウェイを削除し、インターネットゲートウェイへ直接ルーティングする / NAT ゲートウェイの前段に NLB を配置して負荷分散する
+
+**図解の主メッセージ**: NAT ゲートウェイは AZ 単位のリソースなので、各 AZ に置いて同一 AZ のサブネットから使うのが可用性・コストの両面で正解。
+
+**採用パターン**: 対比(現状 / 改善の 2 枠)。本問は「現状のどこが悪いか」が判断軸そのもの(AZ 間転送料金と AZ 障害の巻き込み)なので、悪い構成と直した構成を並べると、AZ をまたぐ 1 本の線が消えることが図の変化として読める。分岐フローは同じ結論に着くが、現状の問題点を図に置く場所がない。(候補: 対比(現状 / 改善の 2 枠): 現状の構成と、そこから生じる 2 つの問題、それを解く改善構成を左右に並べる / 分岐(判断フロー): 「NAT はどの AZ にあるか」を問い、同一 AZ / 他 AZ に振り分ける)
+
+```mermaid
+flowchart TB
+    subgraph NOW["現状 — NAT が 1 つの AZ にしかない"]
+        NOWA["AZ-a のプライベートサブネット"]:::svc
+        NOWB["AZ-b のプライベートサブネット"]:::svc
+        NOWNAT["AZ-a の NAT ゲートウェイ"]:::req
+        COST["AZ 間データ転送料金が発生"]:::req
+        FAIL["AZ-a の障害で全 AZ の外向き通信が停止"]:::req
+        NOWA --> NOWNAT
+        NOWB -->|"AZ をまたぐ"| NOWNAT
+        NOWNAT --> COST
+        NOWNAT --> FAIL
+    end
+
+    RT["各 AZ のルートテーブルを<br/>同一 AZ の NAT へ向ける"]:::judge
+
+    subgraph NEW["改善 — 各 AZ に NAT を置き同一 AZ から使う"]
+        NEWA["AZ-a のサブネット → AZ-a の NAT"]:::best
+        NEWB["AZ-b のサブネット → AZ-b の NAT"]:::best
+    end
+
+    subgraph NG["改善にならない案"]
+        SAMEAZ["同じ AZ に NAT をもう 1 つ追加<br/>AZ 障害には無力"]:::alt
+        IGW["NAT を削除し IGW へ直接ルーティング"]:::alt
+        NLBX["NAT の前段に NLB を置く<br/>サポートされない構成"]:::alt
+    end
+
+    NOTE["NAT ゲートウェイは AZ 単位のリソース<br/>AZ をまたいで使うと料金と障害を共有する"]:::note
+
+    COST --> RT
+    FAIL --> RT
+    RT --> NEWA
+    RT --> NEWB
+    RT -.-> NG
+    RT -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net39.svg`](../../web/diagrams/net39.svg)
+
+**解説**: NAT ゲートウェイは AZ 単位のリソースで、他 AZ から利用すると AZ 間データ転送料金が発生し、その AZ の障害で全 AZ の外向き通信が止まります。各 AZ に NAT を置き、同一 AZ のサブネットから利用する構成が可用性・コストの両面で推奨されます。同一 AZ への追加は AZ 障害に無力で、NAT に NLB を挟む構成はサポートされません。
+
+**確認事項**: AZ は a / b の 2 つに簡略化している(実際の AZ 数は判断軸に影響しない)。 / 「NAT を削除して IGW へ直接ルーティング」が不適な理由は解説に明示がないため、グレー枠に置くだけで理由を書いていない。
+
+---
+
+## net40 — ネットワーク / level 3
+
+**問題**: VPC 内の EC2 から、オンプレミスの DNS サーバーで解決する社内ドメイン(corp.example.local)と、AWS 側のプライベートホストゾーンの両方を名前解決したい。オンプレミスからも AWS のプライベートホストゾーンを解決させたい。最適な構成はどれか?
+
+**正解**: Route 53 Resolver のアウトバウンドエンドポイントと転送ルールで corp.example.local をオンプレ DNS へ転送し、インバウンドエンドポイントでオンプレミスからのクエリを受け付ける
+
+**他の選択肢**: VPC の DHCP オプションセットでオンプレミスの DNS サーバーのみを指定する / EC2 の /etc/resolv.conf にオンプレミス DNS を追記し、プライベートホストゾーンは使わない / Route 53 のパブリックホストゾーンに社内ドメインを登録し、双方から解決する
+
+**図解の主メッセージ**: VPC からオンプレへはアウトバウンドエンドポイント + 転送ルール、オンプレから AWS へはインバウンドエンドポイントで、向きごとに用意する。
+
+**採用パターン**: 双方向の構成図。本問は解決したい向きが 2 つあり、その 2 つに別々のエンドポイントが対応するという点が答えの中身。分岐フローだと「VPC 側から見た解決先」しか描けず、オンプレから AWS を解決させるインバウンド側が図の外に落ちる。左右の枠をまたぐ矢印が 2 本あることが、そのままエンドポイントが 2 つ要る理由になる。(候補: 双方向の構成図: VPC 側とオンプレ側を 2 枠に置き、VPC → オンプレ(アウトバウンド)と オンプレ → VPC(インバウンド)の 2 本のクエリの流れを描く / 分岐(判断フロー): 「解決したい名前はどちら側にあるか」を問い、AWS 側 / オンプレ側に振り分ける)
+
+```mermaid
+flowchart TB
+    subgraph VPCG["VPC 側"]
+        EC2["VPC 内の EC2"]:::svc
+        RSLV["Route 53 Resolver"]:::svc
+        PHZ["プライベートホストゾーン<br/>AWS 側の名前"]:::svc
+        OUT["アウトバウンドエンドポイント<br/>+ 転送ルール(corp.example.local)"]:::best
+        IN["インバウンドエンドポイント"]:::best
+    end
+
+    subgraph ONP["オンプレミス側"]
+        ONDNS["オンプレミス DNS サーバー<br/>corp.example.local を解決"]:::svc
+        ONHOST["オンプレミスのクライアント"]:::svc
+    end
+
+    subgraph NG["要件を満たさない案"]
+        DHCP["DHCP オプションでオンプレ DNS のみ指定<br/>AWS 側の名前が解決できなくなる"]:::alt
+        RESOLV["EC2 の /etc/resolv.conf に追記"]:::alt
+        PUBHZ["社内名をパブリックホストゾーンに登録<br/>情報漏えいの観点で不適切"]:::alt
+    end
+
+    NOTE["VPC → オンプレ は アウトバウンド<br/>オンプレ → AWS は インバウンド"]:::note
+
+    EC2 -->|"名前解決"| RSLV
+    RSLV -->|"AWS 側"| PHZ
+    RSLV -->|"社内ドメイン"| OUT
+    OUT -->|"条件付き転送"| ONDNS
+    ONHOST -->|"AWS 側を照会"| IN
+    IN -->|"VPC 内を解決"| PHZ
+    RSLV -.-> NG
+    RSLV -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net40.svg`](../../web/diagrams/net40.svg)
+
+**解説**: Route 53 Resolver のアウトバウンドエンドポイント+転送ルールで特定ドメインのクエリをオンプレミス DNS へ条件付き転送し、インバウンドエンドポイントでオンプレミスから VPC 内(プライベートホストゾーンや VPC 内リソース)の名前解決を受け付けます。DHCP オプションでオンプレ DNS のみを指定すると AWS のプライベートホストゾーンや VPC エンドポイントの名前が解決できなくなり、社内名をパブリックホストゾーンに置くのは情報漏えいの観点で不適切です。
+
+**確認事項**: 転送ルールを Resolver とアウトバウンドエンドポイントのどちらのノードに置くかは迷いどころで、本図では「アウトバウンドエンドポイント + 転送ルール」と 1 ノードにまとめている。ルールの共有(RAM 経由での他 VPC への共有)は解説の範囲外のため描いていない。 / /etc/resolv.conf 追記が不適な理由は解説に明示がないため、グレー枠に置くだけで理由を書いていない。

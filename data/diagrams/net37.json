@@ -1,0 +1,203 @@
+{
+  "question_id": "net37",
+  "purpose": "Direct Connect ゲートウェイが「1 本の接続を複数リージョン・多数 VPC へ広げる中継点」であることを構成図 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、VIF・DX ゲートウェイ・Transit Gateway の役割分担が整理できていない人。",
+  "message": "VPC が増えても VIF を増やさずに済ませるには、Transit VIF で DX ゲートウェイと各リージョンの Transit Gateway を関連付ける。",
+  "source_summary": "Direct Connect 経由でオンプレミスから複数リージョンの複数 VPC(合計 20 個、今後も増える)へアクセスしたく、プライベート VIF を VPC ごとに作る運用は避けたい。Direct Connect ゲートウェイはグローバルなリソースで、1 つの接続から複数リージョンの VGW や Transit Gateway へ接続できる。Transit VIF と Transit Gateway の関連付けを使えば、TGW 配下の VPC が増えても VIF を追加せずに到達性を拡張できる(1 DXGW につき最大 3 つの TGW 関連付け、20 の VGW 関連付けなどの上限あり)。VPC ごとのプライベート VIF は VIF 数の上限と運用負荷の問題がある。",
+  "elements": [
+    {
+      "id": "ONPREM",
+      "label": "オンプレミス",
+      "type": "actor",
+      "priority": "secondary"
+    },
+    {
+      "id": "DX",
+      "label": "Direct Connect 専用接続(1 本)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "TVIF",
+      "label": "Transit VIF",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "DXGW",
+      "label": "Direct Connect ゲートウェイ(グローバルリソース)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "TGWA",
+      "label": "リージョン A の Transit Gateway",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "TGWB",
+      "label": "リージョン B の Transit Gateway",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "VPCA",
+      "label": "リージョン A の VPC 群",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "VPCB",
+      "label": "リージョン B の VPC 群",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "PVIF",
+      "label": "VPC ごとにプライベート VIF を作る",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "PUB",
+      "label": "パブリック VIF 経由でアクセスする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NEWDX",
+      "label": "リージョンごとに DX 接続を新設する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "VPC が増えても VIF は増やさない",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "ONPREM",
+      "to": "DX",
+      "verb": "接続する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "DX",
+      "to": "TVIF",
+      "verb": "Transit VIF を作る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "TVIF",
+      "to": "DXGW",
+      "verb": "DX ゲートウェイに紐付ける",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "DXGW",
+      "to": "TGWA",
+      "verb": "関連付ける",
+      "direction": "one-way",
+      "kind": "depend"
+    },
+    {
+      "from": "DXGW",
+      "to": "TGWB",
+      "verb": "関連付ける",
+      "direction": "one-way",
+      "kind": "depend"
+    },
+    {
+      "from": "TGWA",
+      "to": "VPCA",
+      "verb": "配下の VPC へ届く",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "TGWB",
+      "to": "VPCB",
+      "verb": "配下の VPC へ届く",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "DX",
+      "to": "PVIF",
+      "verb": "VIF 数の上限と運用負荷",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "DX",
+      "to": "PUB",
+      "verb": "採らない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "DX",
+      "to": "NEWDX",
+      "verb": "採らない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "DXGW",
+      "to": "NOTE",
+      "verb": "拡張性の要点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "RA",
+      "label": "リージョン A",
+      "members": [
+        "TGWA",
+        "VPCA"
+      ]
+    },
+    {
+      "id": "RB",
+      "label": "リージョン B",
+      "members": [
+        "TGWB",
+        "VPCB"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "運用が破綻する / 要件に合わない案",
+      "members": [
+        "PVIF",
+        "PUB",
+        "NEWDX"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "構成図(直列 + 分岐): オンプレ → 接続 → Transit VIF → DX ゲートウェイ → 各リージョンの TGW → VPC 群、と経路を一本描いてリージョンで分岐させる",
+    "対比(左右 2 枠): 「VPC ごとにプライベート VIF」と「Transit VIF + DXGW + TGW」の 2 構成を並べ、線の本数の差を見せる"
+  ],
+  "selected_pattern": "構成図(直列 + 分岐)。本問の答えは構成そのものなので、経路を一本の流れで描くと「どこが VPC 増加を吸収しているのか(TGW 配下)」が位置関係で読める。対比 2 枠は線の本数の差が伝わる一方、正解側の各要素の役割(VIF / DXGW / TGW の分担)を描く余白が減る。",
+  "style_rules": {
+    "shape_semantics": "矩形(緑)=正解の構成を成す要素、矩形(白)=オンプレ・接続・VPC 群などの一般要素、矩形(グレー)=要件に合わない選択肢、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=正解の経路上の要素、白=前提となる構成要素、グレー=採らない案、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=接続と到達の流れ、破線矢印=採らない案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "リージョンは A / B の 2 つに簡略化している。解説の「1 DXGW につき最大 3 つの TGW 関連付け」という上限は注釈に書いたが、図の形としては表現していない。",
+    "パブリック VIF とリージョンごとの DX 新設が不適な理由は解説に個別の記述がないため、グレー枠に置くだけにとどめている。"
+  ],
+  "mermaid": "flowchart TB\n    ONPREM[\"オンプレミス\"]:::svc\n    DX[\"Direct Connect 専用接続(1 本)\"]:::svc\n    TVIF[\"Transit VIF\"]:::best\n    DXGW[\"Direct Connect ゲートウェイ<br/>グローバルリソース\"]:::best\n\n    subgraph RA[\"リージョン A\"]\n        TGWA[\"Transit Gateway\"]:::best\n        VPCA[\"VPC 群<br/>増えても VIF 追加は不要\"]:::svc\n        TGWA --> VPCA\n    end\n\n    subgraph RB[\"リージョン B\"]\n        TGWB[\"Transit Gateway\"]:::best\n        VPCB[\"VPC 群<br/>増えても VIF 追加は不要\"]:::svc\n        TGWB --> VPCB\n    end\n\n    subgraph NG[\"運用が破綻する / 要件に合わない案\"]\n        PVIF[\"VPC ごとにプライベート VIF<br/>VIF 数の上限と運用負荷\"]:::alt\n        PUB[\"パブリック VIF 経由\"]:::alt\n        NEWDX[\"リージョンごとに DX 接続を新設\"]:::alt\n    end\n\n    NOTE[\"1 DXGW につき TGW 関連付けは最大 3<br/>VGW 関連付けは 20 などの上限あり\"]:::note\n\n    ONPREM --> DX --> TVIF --> DXGW\n    DXGW -->|\"関連付け\"| TGWA\n    DXGW -->|\"関連付け\"| TGWB\n    DX -.-> NG\n    DXGW -.- NOTE"
+}

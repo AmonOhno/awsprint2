@@ -1,0 +1,54 @@
+{
+  "question_id": "net35",
+  "purpose": "Transit Gateway のドメイン分離が「関連付け(association)」と「伝播(propagation)」の 2 つの設定でできることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Transit Gateway は使えるが複数ルートテーブルの設計を扱ったことがない人。",
+  "message": "TGW は 1 台のまま、アタッチメントごとの関連付けと伝播を分けて設計すれば本番 / 開発 / 共有のドメイン分離ができる。",
+  "source_summary": "TGW に 60 の VPC が接続されており、本番 VPC 群と開発 VPC 群は相互に通信してはならず、いずれも共有サービス VPC とは通信できる必要がある。Transit Gateway は複数のルートテーブルを持て、アタッチメントごとに「どのルートテーブルに関連付けるか(association)」「どのルートテーブルへ経路を伝播するか(propagation)」を分けて設計することでドメイン分離を実現できる。セキュリティグループは相手 CIDR の拒否ルールを持てず(許可のみ)、NACL による拒否は管理が煩雑でスケールしない。TGW を 2 台にするとコストと運用が増える。",
+  "elements": [
+    { "id": "REQ", "label": "本番と開発は相互に不通、双方とも共有サービス VPC とは通信可", "type": "state", "priority": "primary" },
+    { "id": "RTP", "label": "本番用 TGW ルートテーブル", "type": "artifact", "priority": "primary" },
+    { "id": "RTD", "label": "開発用 TGW ルートテーブル", "type": "artifact", "priority": "primary" },
+    { "id": "RTS", "label": "共有用 TGW ルートテーブル", "type": "artifact", "priority": "primary" },
+    { "id": "PROD", "label": "本番 VPC 群のアタッチメント", "type": "artifact", "priority": "secondary" },
+    { "id": "DEV", "label": "開発 VPC 群のアタッチメント", "type": "artifact", "priority": "secondary" },
+    { "id": "SHR", "label": "共有サービス VPC のアタッチメント", "type": "artifact", "priority": "secondary" },
+    { "id": "SG", "label": "セキュリティグループで相手 CIDR を拒否する", "type": "artifact", "priority": "secondary" },
+    { "id": "NACL", "label": "ネットワーク ACL で相互に拒否する", "type": "artifact", "priority": "secondary" },
+    { "id": "TWO", "label": "本番用と開発用に TGW を 2 台作る", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "経路を伝播しない相手には到達できない", "type": "other", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "RTS", "verb": "ルートテーブルを分けて実現する", "direction": "one-way", "kind": "flow" },
+    { "from": "PROD", "to": "RTP", "verb": "関連付ける", "direction": "one-way", "kind": "depend" },
+    { "from": "DEV", "to": "RTD", "verb": "関連付ける", "direction": "one-way", "kind": "depend" },
+    { "from": "SHR", "to": "RTS", "verb": "関連付ける", "direction": "one-way", "kind": "depend" },
+    { "from": "SHR", "to": "RTP", "verb": "経路を伝播する", "direction": "one-way", "kind": "flow" },
+    { "from": "SHR", "to": "RTD", "verb": "経路を伝播する", "direction": "one-way", "kind": "flow" },
+    { "from": "PROD", "to": "RTS", "verb": "経路を伝播する", "direction": "one-way", "kind": "flow" },
+    { "from": "DEV", "to": "RTS", "verb": "経路を伝播する", "direction": "one-way", "kind": "flow" },
+    { "from": "REQ", "to": "SG", "verb": "拒否ルールを持てない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "NACL", "verb": "管理が煩雑でスケールしない", "direction": "one-way", "kind": "contrast" },
+    { "from": "REQ", "to": "TWO", "verb": "コストと運用が増える", "direction": "one-way", "kind": "contrast" },
+    { "from": "RTS", "to": "NOTE", "verb": "分離の原理を補う", "direction": "none", "kind": "other" }
+  ],
+  "groups": [
+    { "id": "TGW", "label": "Transit Gateway(1 台)のルートテーブル", "members": ["RTP", "RTD", "RTS"] },
+    { "id": "NG", "label": "要件を満たさない代替案", "members": ["SG", "NACL", "TWO"] }
+  ],
+  "candidate_patterns": [
+    "構造図(包含 + 関連付け / 伝播の 2 種の線): TGW の中に 3 つのルートテーブルを置き、アタッチメントから関連付けと伝播を描き分ける",
+    "マトリクス(通信可否の表): 本番 / 開発 / 共有の 3 × 3 で通信の可否を示す"
+  ],
+  "selected_pattern": "構造図(包含 + 2 種の線)。可否のマトリクスは「そうなってほしい状態」を示すだけで、本問が問うている「どう設定すればそうなるか」が図に出てこない。関連付けと伝播を線として描き分けると、共有だけが双方に伝播している = 本番と開発は互いを知らない、という仕組みがそのまま読める。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、矩形(緑)=正解につながる構成要素(TGW ルートテーブル)、矩形(白)=アタッチメント、矩形(グレー)=要件を満たさない代替案、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=分離を成立させるルートテーブル、白=接続元の VPC 群、グレー=不適切な代替案、青=要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=関連付け(どのルートテーブルを使うか)、破線矢印=伝播(どのルートテーブルへ経路を配るか)と不適切な代替案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "60 の VPC は本番群 / 開発群 / 共有の 3 ノードに集約して描いている。実際のアタッチメント数は図の主メッセージに影響しないため省いた。",
+    "関連付けを実線、伝播を破線で描き分けているが、この使い分けは本図固有で、他問の「破線=弱い関係」とは意味が異なる。凡例的な説明を図中に置くべきか要検討。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"本番と開発は相互に通信不可<br/>いずれも共有サービス VPC とは通信可\"]:::req\n\n    PROD[\"本番 VPC 群<br/>アタッチメント\"]:::svc\n    DEV[\"開発 VPC 群<br/>アタッチメント\"]:::svc\n    SHR[\"共有サービス VPC<br/>アタッチメント\"]:::svc\n\n    subgraph TGW[\"Transit Gateway(1 台)のルートテーブル\"]\n        RTP[\"本番用ルートテーブル\"]:::best\n        RTD[\"開発用ルートテーブル\"]:::best\n        RTS[\"共有用ルートテーブル\"]:::best\n    end\n\n    subgraph NG[\"要件を満たさない代替案\"]\n        SG[\"セキュリティグループで拒否<br/>拒否ルールは書けない(許可のみ)\"]:::alt\n        NACL[\"ネットワーク ACL で相互に拒否<br/>管理が煩雑でスケールしない\"]:::alt\n        TWO[\"TGW を 2 台に分ける<br/>コストと運用が増える\"]:::alt\n    end\n\n    NOTE[\"本番と開発は互いへ経路を伝播しない<br/>= 相手を知らないので到達できない\"]:::note\n\n    REQ --> TGW\n    PROD -->|\"関連付け\"| RTP\n    DEV -->|\"関連付け\"| RTD\n    SHR -->|\"関連付け\"| RTS\n    SHR -.->|\"伝播\"| RTP\n    SHR -.->|\"伝播\"| RTD\n    PROD -.->|\"伝播\"| RTS\n    DEV -.->|\"伝播\"| RTS\n    REQ -.-> NG\n    RTS -.- NOTE"
+}

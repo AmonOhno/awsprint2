@@ -1,0 +1,184 @@
+{
+  "question_id": "net38",
+  "purpose": "NAT ゲートウェイのデータ処理料金を減らす判断が「対象サービスがゲートウェイ型に対応するか」の 1 問で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、VPC エンドポイントに 2 種類あることは知っているが使い分けと課金の違いが曖昧な人。",
+  "message": "S3 と DynamoDB は無料のゲートウェイ型、その他は インターフェース型のエンドポイントを作り、NAT を経由する通信そのものを減らす。",
+  "source_summary": "プライベートサブネットの EC2 から同一リージョンの DynamoDB・S3・Secrets Manager・SQS へアクセスしており、NAT ゲートウェイのデータ処理料金を削減したい。S3 と DynamoDB のゲートウェイエンドポイントは追加料金なしで NAT を経由せずにアクセスでき、その他の多くの AWS サービスはインターフェースエンドポイント(PrivateLink)で VPC 内から直接到達できる。インターフェースエンドポイントには時間課金とデータ処理料金があるが、多くの場合 NAT のデータ処理料金より安価。NAT インスタンス化は運用負荷と可用性の低下を招き、パブリック化はセキュリティ上不適切。",
+  "elements": [
+    {
+      "id": "EC2",
+      "label": "プライベートサブネットの EC2",
+      "type": "actor",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "対象はゲートウェイ型に対応するサービスか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "GWEP",
+      "label": "ゲートウェイ型 VPC エンドポイント(追加料金なし)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "S3DDB",
+      "label": "S3 / DynamoDB",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "IFEP",
+      "label": "インターフェース型 VPC エンドポイント(PrivateLink)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "SMSQS",
+      "label": "Secrets Manager / SQS",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NAT",
+      "label": "NAT ゲートウェイ経由(データ処理料金が発生)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NATI",
+      "label": "NAT インスタンスに置き換える",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "PUBSN",
+      "label": "全サブネットをパブリック化しパブリック IP を付与する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CIDR",
+      "label": "VPC の CIDR を小さくする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "インターフェース型の課金と NAT の課金を比べる",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "EC2",
+      "to": "Q",
+      "verb": "アクセス先ごとに問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "GWEP",
+      "verb": "対応する → ゲートウェイ型",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "GWEP",
+      "to": "S3DDB",
+      "verb": "NAT を経由せず到達する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "IFEP",
+      "verb": "対応しない → インターフェース型",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "IFEP",
+      "to": "SMSQS",
+      "verb": "VPC 内から直接到達する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "NAT",
+      "verb": "エンドポイントを作らない場合の経路",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "NAT",
+      "to": "NATI",
+      "verb": "運用負荷と可用性の低下",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "NAT",
+      "to": "PUBSN",
+      "verb": "セキュリティ上不適切",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "NAT",
+      "to": "CIDR",
+      "verb": "採らない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "IFEP",
+      "to": "NOTE",
+      "verb": "コスト比較の前提を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "EPS",
+      "label": "VPC エンドポイントで NAT を迂回する",
+      "members": [
+        "GWEP",
+        "S3DDB",
+        "IFEP",
+        "SMSQS"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "コスト削減にならない / 不適切な案",
+      "members": [
+        "NATI",
+        "PUBSN",
+        "CIDR"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「ゲートウェイ型に対応するサービスか」の 1 問で 2 種のエンドポイントに振り分け、作らない場合の経路として NAT を残す",
+    "経路の対比(before / after): 現状(すべて NAT 経由)と改善後(エンドポイント経由)の 2 枚の経路図を並べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。本問の判断は「サービスごとにどちらのエンドポイントを作るか」であり、4 サービスが 2 系統に分かれることが答えの中身そのもの。before / after の対比は削減の効果は示せるが、S3・DynamoDB とそれ以外を分ける基準が図に現れない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=起点となる要件、菱形(青)=判断ポイント、矩形(緑)=正解につながるエンドポイント、矩形(白)=アクセス先サービス、矩形(グレー)=避けたい経路と不適切な案、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=NAT を迂回する経路、白=アクセス先、グレー=NAT 経由および不適切な代替案、青=起点と判断軸、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行と通信の経路、破線矢印=避けたい経路・不適切な案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「VPC の CIDR を小さくする」が不適な理由は解説に記述がないため、グレー枠に置くだけで理由を書いていない。",
+    "インターフェース型が常に NAT より安いとは限らない点は注釈で「多くの場合」と留保している。実際の損益分岐は解説の範囲外のため図に含めない。"
+  ],
+  "mermaid": "flowchart TD\n    EC2[\"プライベートサブネットの EC2<br/>NAT のデータ処理料金を削減したい\"]:::req\n    Q{\"ゲートウェイ型に<br/>対応するサービスか?\"}:::judge\n\n    subgraph EPS[\"VPC エンドポイントで NAT を迂回する\"]\n        GWEP[\"ゲートウェイ型エンドポイント<br/>追加料金なし\"]:::best\n        S3DDB[\"S3 / DynamoDB\"]:::svc\n        IFEP[\"インターフェース型エンドポイント<br/>PrivateLink・時間課金 + データ処理料金\"]:::best\n        SMSQS[\"Secrets Manager / SQS\"]:::svc\n        GWEP --> S3DDB\n        IFEP --> SMSQS\n    end\n\n    NAT[\"NAT ゲートウェイ経由<br/>データ処理料金がかかる\"]:::alt\n\n    subgraph NG[\"コスト削減にならない / 不適切な案\"]\n        NATI[\"NAT インスタンスに置き換える<br/>運用負荷と可用性の低下\"]:::alt\n        PUBSN[\"全サブネットをパブリック化する<br/>セキュリティ上不適切\"]:::alt\n        CIDR[\"VPC の CIDR を小さくする\"]:::alt\n    end\n\n    NOTE[\"インターフェース型の課金は多くの場合<br/>NAT のデータ処理料金より安価\"]:::note\n\n    EC2 --> Q\n    Q -->|\"対応する\"| GWEP\n    Q -->|\"対応しない\"| IFEP\n    Q -.->|\"作らない場合\"| NAT\n    NAT -.-> NG\n    IFEP -.- NOTE"
+}

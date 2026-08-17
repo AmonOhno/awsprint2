@@ -1,0 +1,46 @@
+{
+  "question_id": "net31",
+  "purpose": "「接続先 IP を固定したい」という要件が、入口に置くサービスの選択だけで決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、ELB の種類は知っているが「固定 IP が必要」と言われたときにどれを選ぶか迷う人。",
+  "message": "固定 IP 要件を満たせるのは Elastic IP を割り当てられる NLB か、固定エニーキャスト IP を持つ Global Accelerator の 2 つだけ。",
+  "source_summary": "取引先のファイアウォールに許可登録するため API の接続先 IP を固定したい。ALB の IP アドレスは変動するため固定 IP 要件を満たせない。静的 IP が必要な場合は Elastic IP を割り当てられる NLB を入口にする(NLB の背後に ALB をターゲットとして置く構成も可能)か、固定エニーキャスト IP を提供する Global Accelerator を使う。「固定 IP 要件 = NLB か Global Accelerator」と覚える。",
+  "elements": [
+    { "id": "REQ", "label": "取引先ファイアウォールに登録する接続先 IP を固定したい", "type": "state", "priority": "primary" },
+    { "id": "Q", "label": "入口が固定 IP を持てるか?", "type": "process", "priority": "primary" },
+    { "id": "NLB", "label": "NLB を前段に置き Elastic IP を割り当てる", "type": "artifact", "priority": "primary" },
+    { "id": "GA", "label": "Global Accelerator(固定エニーキャスト IP)", "type": "artifact", "priority": "primary" },
+    { "id": "ALB", "label": "ALB のまま(IP アドレスが変動する)", "type": "artifact", "priority": "secondary" },
+    { "id": "TTL", "label": "Route 53 で TTL を長くする", "type": "artifact", "priority": "secondary" },
+    { "id": "CF", "label": "CloudFront を挟む", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "NLB の背後に ALB を置く構成も可能", "type": "other", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q", "verb": "まず問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q", "to": "NLB", "verb": "持てる → NLB + EIP", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "GA", "verb": "持てる → Global Accelerator", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "ALB", "verb": "IP が変動して要件を満たせない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q", "to": "TTL", "verb": "IP 自体は固定されない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q", "to": "CF", "verb": "IP 自体は固定されない", "direction": "one-way", "kind": "contrast" },
+    { "from": "NLB", "to": "NOTE", "verb": "既存構成の残し方を補う", "direction": "none", "kind": "other" }
+  ],
+  "groups": [
+    { "id": "OK", "label": "固定 IP を提供できる", "members": ["NLB", "GA"] },
+    { "id": "NG", "label": "固定 IP にはならない", "members": ["ALB", "TTL", "CF"] }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「入口が固定 IP を持てるか」の 1 問で、満たせる 2 案と満たせない 3 案に振り分ける",
+    "対比(左右 2 枠): 「IP が固定される構成」と「IP が変動する構成」を並べて置く"
+  ],
+  "selected_pattern": "分岐(判断フロー)。本問の判断軸は「入口サービスが固定 IP を持てるか」の 1 点しかなく、要件から 1 回分岐させるだけで正解 2 案と誤答 3 案が同時に説明できる。対比 2 枠だと「なぜそちらに分かれるのか」を読む側が補う必要があり、判断軸が図に現れない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成、矩形(グレー)=実在するが要件を満たさない選択肢、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=固定 IP 要件を満たす経路、グレー=満たさない選択肢、青=要件と判断軸、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=要件を満たさない側への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "CloudFront と TTL 延長がなぜ固定 IP にならないかは解説に踏み込んだ記述がないため、図でも「固定 IP にはならない」枠に置くだけにとどめている。",
+    "NLB + Elastic IP と Global Accelerator のどちらを選ぶかの基準(グローバル配信の要否など)は解説の範囲外のため描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"取引先のファイアウォールに登録するため<br/>API の接続先 IP を固定したい\"]:::req\n    Q{\"入口が<br/>固定 IP を持てるか?\"}:::judge\n\n    subgraph OK[\"固定 IP を提供できる\"]\n        NLB[\"NLB を前段に置く<br/>Elastic IP を割り当てられる\"]:::best\n        GA[\"Global Accelerator<br/>固定エニーキャスト IP\"]:::best\n    end\n\n    subgraph NG[\"固定 IP にはならない\"]\n        ALB[\"ALB のまま使う<br/>IP アドレスは変動する\"]:::alt\n        TTL[\"Route 53 で TTL を長くする\"]:::alt\n        CF[\"CloudFront を挟む\"]:::alt\n    end\n\n    NOTE[\"NLB の背後に ALB をターゲットとして<br/>置く構成も可能\"]:::note\n\n    REQ --> Q\n    Q -->|\"持てる\"| NLB\n    Q -->|\"持てる\"| GA\n    Q -.->|\"持てない\"| ALB\n    Q -.->|\"持てない\"| TTL\n    Q -.->|\"持てない\"| CF\n    NLB -.- NOTE"
+}

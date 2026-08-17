@@ -1,0 +1,51 @@
+{
+  "question_id": "net32",
+  "purpose": "ロードバランサーを置かずに DNS だけで冗長化するとき、複数値回答ルーティングが何を返すサービスなのかを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Route 53 のルーティングポリシー名は知っているが、それぞれが返す応答の違いが曖昧な人。",
+  "message": "ヘルスチェック付きで最大 8 件の正常なレコードを返せるのは複数値回答ルーティングだけなので、LB なしの簡易分散はこれで実現する。",
+  "source_summary": "ロードバランサーを使わず Route 53 だけで複数の正常なサーバー IP をランダムに返し、簡易的な負荷分散と冗長化を行いたい。複数値回答(Multivalue Answer)ルーティングは最大 8 件の正常なレコードをヘルスチェック付きで返し、異常なエンドポイントを応答から自動的に除外する。DNS レベルの簡易負荷分散として使えるが、接続の分散精度やヘルスチェックの即時性は ELB に劣るため、本格的な負荷分散には ELB を使う。",
+  "elements": [
+    { "id": "REQ", "label": "LB を使わず DNS だけで簡易負荷分散と冗長化をしたい", "type": "state", "priority": "primary" },
+    { "id": "Q", "label": "DNS 応答に何を求めるか?", "type": "process", "priority": "primary" },
+    { "id": "MVA", "label": "複数値回答(Multivalue Answer)ルーティング", "type": "artifact", "priority": "primary" },
+    { "id": "MANY", "label": "最大 8 件の正常なレコードを返す", "type": "concept", "priority": "secondary" },
+    { "id": "HC", "label": "ヘルスチェックで異常なエンドポイントを応答から除外", "type": "concept", "priority": "secondary" },
+    { "id": "CLIENT", "label": "クライアントが受け取った複数 IP へ接続する", "type": "actor", "priority": "support" },
+    { "id": "SIMPLE", "label": "シンプルルーティング", "type": "artifact", "priority": "secondary" },
+    { "id": "GEO", "label": "位置情報ルーティング", "type": "artifact", "priority": "secondary" },
+    { "id": "FAILOVER", "label": "フェイルオーバールーティング", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "本格的な負荷分散には ELB を使う", "type": "other", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q", "verb": "まず問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q", "to": "MVA", "verb": "正常な複数レコードを返したい", "direction": "one-way", "kind": "flow" },
+    { "from": "MVA", "to": "MANY", "verb": "返す", "direction": "one-way", "kind": "include" },
+    { "from": "MVA", "to": "HC", "verb": "備える", "direction": "one-way", "kind": "include" },
+    { "from": "MANY", "to": "CLIENT", "verb": "複数の宛先が渡る", "direction": "one-way", "kind": "flow" },
+    { "from": "HC", "to": "CLIENT", "verb": "異常な宛先は渡らない", "direction": "one-way", "kind": "flow" },
+    { "from": "Q", "to": "SIMPLE", "verb": "要件に届かない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q", "to": "GEO", "verb": "要件に届かない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q", "to": "FAILOVER", "verb": "要件に届かない", "direction": "one-way", "kind": "contrast" },
+    { "from": "MVA", "to": "NOTE", "verb": "適用限界を補う", "direction": "none", "kind": "other" }
+  ],
+  "groups": [
+    { "id": "MV", "label": "複数値回答ルーティングの振る舞い", "members": ["MVA", "MANY", "HC"] },
+    { "id": "OTHERS", "label": "本問の要件には届かないポリシー", "members": ["SIMPLE", "GEO", "FAILOVER"] }
+  ],
+  "candidate_patterns": [
+    "分岐 + 包含: 要件から 1 問でポリシーを決め、選んだポリシーが返す応答の中身(最大 8 件・ヘルスチェック)を展開する",
+    "対比(4 枠並列): 4 つのルーティングポリシーを横に並べ、それぞれが返す応答を書き比べる"
+  ],
+  "selected_pattern": "分岐 + 包含。解説が中身まで説明しているのは複数値回答だけで、他の 3 ポリシーの動作は解説の範囲外にある。4 枠を並べる対比にすると 3 枠が空欄同然になるか、解説にない説明を創作することになるため、正解のポリシーだけを展開して「何を返すから要件を満たすのか」を主役にした。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解のポリシー、矩形(白)=そのポリシーの振る舞いとクライアント、矩形(グレー)=本問の要件を満たさないポリシー、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=正解につながるポリシー、白=その具体的な振る舞い、グレー=要件に届かない選択肢、青=要件と判断軸、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行と応答の流れ、破線矢印=要件を満たさない側への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "シンプル / 位置情報 / フェイルオーバーの各ポリシーの動作は解説に説明がないため、名前だけを置いて「要件に届かない」枠にまとめている。ポリシー全体を比較する図が必要になったら別問題の図解として起こすほうがよい。",
+    "「ランダムに返す」というクライアント側の分散精度の限界は注釈に含めたが、DNS キャッシュの影響には解説が触れていないため描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"ロードバランサーを使わず<br/>Route 53 だけで簡易的な負荷分散と冗長化\"]:::req\n    Q{\"DNS 応答に<br/>何を求めるか?\"}:::judge\n\n    subgraph MV[\"複数値回答ルーティングの振る舞い\"]\n        MVA[\"複数値回答(Multivalue Answer)ルーティング\"]:::best\n        MANY[\"最大 8 件の正常なレコードを返す\"]:::svc\n        HC[\"ヘルスチェックで異常な<br/>エンドポイントを応答から除外\"]:::svc\n        MVA --> MANY\n        MVA --> HC\n    end\n\n    CLIENT[\"クライアント<br/>受け取った複数 IP へ接続する\"]:::svc\n\n    subgraph OTHERS[\"本問の要件には届かないポリシー\"]\n        SIMPLE[\"シンプルルーティング\"]:::alt\n        GEO[\"位置情報ルーティング\"]:::alt\n        FAILOVER[\"フェイルオーバールーティング\"]:::alt\n    end\n\n    NOTE[\"分散精度とヘルスチェックの即時性は ELB に劣る<br/>本格的な負荷分散には ELB を使う\"]:::note\n\n    REQ --> Q\n    Q -->|\"正常な複数IP\"| MVA\n    MANY --> CLIENT\n    HC --> CLIENT\n    Q -.->|\"届かない\"| SIMPLE\n    Q -.->|\"届かない\"| GEO\n    Q -.->|\"届かない\"| FAILOVER\n    MVA -.- NOTE"
+}

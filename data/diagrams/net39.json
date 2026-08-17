@@ -1,0 +1,56 @@
+{
+  "question_id": "net39",
+  "purpose": "NAT ゲートウェイが AZ 単位のリソースであることが、コストと AZ 障害時の挙動を同時に決めていることを現状 / 改善の対比で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、NAT ゲートウェイをマルチ AZ 構成でどう配置するか判断したことがない人。",
+  "message": "NAT ゲートウェイは AZ 単位のリソースなので、各 AZ に置いて同一 AZ のサブネットから使うのが可用性・コストの両面で正解。",
+  "source_summary": "マルチ AZ のプライベートサブネットから外部 API を呼ぶ構成で、現在は 1 つの AZ にのみ NAT ゲートウェイを置き全 AZ のサブネットがそこを向いている。NAT ゲートウェイは AZ 単位のリソースで、他 AZ から利用すると AZ 間データ転送料金が発生し、その AZ の障害で全 AZ の外向き通信が止まる。各 AZ に NAT を置き同一 AZ のサブネットから利用する構成が可用性・コストの両面で推奨される。同一 AZ への追加は AZ 障害に無力で、NAT に NLB を挟む構成はサポートされない。",
+  "elements": [
+    { "id": "NOWA", "label": "現状: AZ-a のプライベートサブネット", "type": "artifact", "priority": "secondary" },
+    { "id": "NOWB", "label": "現状: AZ-b のプライベートサブネット", "type": "artifact", "priority": "secondary" },
+    { "id": "NOWNAT", "label": "現状: AZ-a にだけ置いた NAT ゲートウェイ", "type": "artifact", "priority": "primary" },
+    { "id": "COST", "label": "他 AZ からの利用で AZ 間データ転送料金が発生", "type": "state", "priority": "primary" },
+    { "id": "FAIL", "label": "AZ-a の障害で全 AZ の外向き通信が止まる", "type": "state", "priority": "primary" },
+    { "id": "NEWA", "label": "改善: AZ-a のサブネット → AZ-a の NAT", "type": "artifact", "priority": "primary" },
+    { "id": "NEWB", "label": "改善: AZ-b のサブネット → AZ-b の NAT", "type": "artifact", "priority": "primary" },
+    { "id": "RT", "label": "各 AZ のルートテーブルを同一 AZ の NAT へ向ける", "type": "concept", "priority": "primary" },
+    { "id": "SAMEAZ", "label": "同じ AZ に NAT をもう 1 つ追加する", "type": "artifact", "priority": "secondary" },
+    { "id": "IGW", "label": "NAT を削除して IGW へ直接ルーティングする", "type": "artifact", "priority": "secondary" },
+    { "id": "NLBX", "label": "NAT の前段に NLB を置いて負荷分散する", "type": "artifact", "priority": "secondary" },
+    { "id": "NOTE", "label": "NAT ゲートウェイは AZ 単位のリソース", "type": "other", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "NOWA", "to": "NOWNAT", "verb": "同一 AZ から使う", "direction": "one-way", "kind": "flow" },
+    { "from": "NOWB", "to": "NOWNAT", "verb": "AZ をまたいで使う", "direction": "one-way", "kind": "flow" },
+    { "from": "NOWNAT", "to": "COST", "verb": "料金が発生する", "direction": "one-way", "kind": "cause" },
+    { "from": "NOWNAT", "to": "FAIL", "verb": "単一障害点になる", "direction": "one-way", "kind": "cause" },
+    { "from": "COST", "to": "RT", "verb": "配置を見直す", "direction": "one-way", "kind": "flow" },
+    { "from": "FAIL", "to": "RT", "verb": "配置を見直す", "direction": "one-way", "kind": "flow" },
+    { "from": "RT", "to": "NEWA", "verb": "AZ-a 内で完結させる", "direction": "one-way", "kind": "flow" },
+    { "from": "RT", "to": "NEWB", "verb": "AZ-b 内で完結させる", "direction": "one-way", "kind": "flow" },
+    { "from": "RT", "to": "SAMEAZ", "verb": "AZ 障害に無力", "direction": "one-way", "kind": "contrast" },
+    { "from": "RT", "to": "IGW", "verb": "採らない", "direction": "one-way", "kind": "contrast" },
+    { "from": "RT", "to": "NLBX", "verb": "サポートされない構成", "direction": "one-way", "kind": "contrast" },
+    { "from": "RT", "to": "NOTE", "verb": "判断の根拠を補う", "direction": "none", "kind": "other" }
+  ],
+  "groups": [
+    { "id": "NOW", "label": "現状 — NAT が 1 つの AZ にしかない", "members": ["NOWA", "NOWB", "NOWNAT", "COST", "FAIL"] },
+    { "id": "NEW", "label": "改善 — 各 AZ に NAT を置き同一 AZ から使う", "members": ["NEWA", "NEWB", "RT"] },
+    { "id": "NG", "label": "改善にならない案", "members": ["SAMEAZ", "IGW", "NLBX"] }
+  ],
+  "candidate_patterns": [
+    "対比(現状 / 改善の 2 枠): 現状の構成と、そこから生じる 2 つの問題、それを解く改善構成を左右に並べる",
+    "分岐(判断フロー): 「NAT はどの AZ にあるか」を問い、同一 AZ / 他 AZ に振り分ける"
+  ],
+  "selected_pattern": "対比(現状 / 改善の 2 枠)。本問は「現状のどこが悪いか」が判断軸そのもの(AZ 間転送料金と AZ 障害の巻き込み)なので、悪い構成と直した構成を並べると、AZ をまたぐ 1 本の線が消えることが図の変化として読める。分岐フローは同じ結論に着くが、現状の問題点を図に置く場所がない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=現状の構成と生じている問題、矩形(緑)=改善後の構成、矩形(白)=サブネットなどの一般要素、矩形(グレー)=改善にならない案、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=推奨される配置、青=現状と現状が抱える問題、グレー=改善にならない案、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=通信の経路と改善の流れ、破線矢印=改善にならない案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "AZ は a / b の 2 つに簡略化している(実際の AZ 数は判断軸に影響しない)。",
+    "「NAT を削除して IGW へ直接ルーティング」が不適な理由は解説に明示がないため、グレー枠に置くだけで理由を書いていない。"
+  ],
+  "mermaid": "flowchart TB\n    subgraph NOW[\"現状 — NAT が 1 つの AZ にしかない\"]\n        NOWA[\"AZ-a のプライベートサブネット\"]:::svc\n        NOWB[\"AZ-b のプライベートサブネット\"]:::svc\n        NOWNAT[\"AZ-a の NAT ゲートウェイ\"]:::req\n        COST[\"AZ 間データ転送料金が発生\"]:::req\n        FAIL[\"AZ-a の障害で全 AZ の外向き通信が停止\"]:::req\n        NOWA --> NOWNAT\n        NOWB -->|\"AZ をまたぐ\"| NOWNAT\n        NOWNAT --> COST\n        NOWNAT --> FAIL\n    end\n\n    RT[\"各 AZ のルートテーブルを<br/>同一 AZ の NAT へ向ける\"]:::judge\n\n    subgraph NEW[\"改善 — 各 AZ に NAT を置き同一 AZ から使う\"]\n        NEWA[\"AZ-a のサブネット → AZ-a の NAT\"]:::best\n        NEWB[\"AZ-b のサブネット → AZ-b の NAT\"]:::best\n    end\n\n    subgraph NG[\"改善にならない案\"]\n        SAMEAZ[\"同じ AZ に NAT をもう 1 つ追加<br/>AZ 障害には無力\"]:::alt\n        IGW[\"NAT を削除し IGW へ直接ルーティング\"]:::alt\n        NLBX[\"NAT の前段に NLB を置く<br/>サポートされない構成\"]:::alt\n    end\n\n    NOTE[\"NAT ゲートウェイは AZ 単位のリソース<br/>AZ をまたいで使うと料金と障害を共有する\"]:::note\n\n    COST --> RT\n    FAIL --> RT\n    RT --> NEWA\n    RT --> NEWB\n    RT -.-> NG\n    RT -.- NOTE"
+}

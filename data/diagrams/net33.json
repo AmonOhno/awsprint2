@@ -1,0 +1,49 @@
+{
+  "question_id": "net33",
+  "purpose": "VPC 境界の防御を選ぶとき、「遮断できるか」と「どこまで見て判断できるか」の 2 問で答えが決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、SG / NACL / Network Firewall / GuardDuty の役割が重なって見える人。",
+  "message": "ドメイン名フィルタや IPS ルールは IP・ポートしか見ない SG / NACL では書けず、検知専門の GuardDuty は遮断できないので、Network Firewall を使う。",
+  "source_summary": "VPC の境界でドメイン名ベースのアウトバウンドフィルタリングや IPS(侵入防止)ルールをマネージドに適用したい。AWS Network Firewall は VPC にデプロイするマネージド型ネットワークファイアウォールで、ステートフルインスペクション・ドメイン名/URL フィルタリング・Suricata 互換の IPS ルールをサポートする。SG / NACL は IP・ポートレベルの制御のみでドメイン名フィルタや侵入防止はできない。GuardDuty は「検知」専門で通信の遮断は行わない。",
+  "elements": [
+    { "id": "REQ", "label": "VPC 境界でドメイン名ベースのフィルタと IPS ルールを適用したい", "type": "state", "priority": "primary" },
+    { "id": "Q1", "label": "通信を遮断できるか?", "type": "process", "priority": "primary" },
+    { "id": "GD", "label": "GuardDuty(検知専門・遮断はしない)", "type": "artifact", "priority": "secondary" },
+    { "id": "Q2", "label": "IP・ポートより上を見て判断できるか?", "type": "process", "priority": "primary" },
+    { "id": "SGNACL", "label": "セキュリティグループ / ネットワーク ACL(IP・ポートレベルのみ)", "type": "artifact", "priority": "secondary" },
+    { "id": "NFW", "label": "AWS Network Firewall(VPC にデプロイするマネージド型)", "type": "artifact", "priority": "primary" },
+    { "id": "DOM", "label": "ドメイン名 / URL フィルタリング", "type": "concept", "priority": "secondary" },
+    { "id": "IPS", "label": "Suricata 互換の IPS ルール", "type": "concept", "priority": "secondary" },
+    { "id": "STATE", "label": "ステートフルインスペクション", "type": "concept", "priority": "secondary" },
+    { "id": "NOTE", "label": "「検知」と「遮断」を取り違えないこと", "type": "other", "priority": "support" }
+  ],
+  "relationships": [
+    { "from": "REQ", "to": "Q1", "verb": "まず問う", "direction": "one-way", "kind": "sequence" },
+    { "from": "Q1", "to": "GD", "verb": "遮断しない → 検知だけ", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q1", "to": "Q2", "verb": "遮断できる → 次の問いへ", "direction": "one-way", "kind": "flow" },
+    { "from": "Q2", "to": "SGNACL", "verb": "IP・ポートまでしか見ない", "direction": "one-way", "kind": "contrast" },
+    { "from": "Q2", "to": "NFW", "verb": "上位レイヤーまで見て判断する", "direction": "one-way", "kind": "flow" },
+    { "from": "NFW", "to": "DOM", "verb": "備える", "direction": "one-way", "kind": "include" },
+    { "from": "NFW", "to": "IPS", "verb": "備える", "direction": "one-way", "kind": "include" },
+    { "from": "NFW", "to": "STATE", "verb": "備える", "direction": "one-way", "kind": "include" },
+    { "from": "Q1", "to": "NOTE", "verb": "誤読しやすい点を補う", "direction": "none", "kind": "other" }
+  ],
+  "groups": [
+    { "id": "NF", "label": "Network Firewall がサポートする機能", "members": ["NFW", "DOM", "IPS", "STATE"] }
+  ],
+  "candidate_patterns": [
+    "分岐(2 段の判断フロー): 「遮断できるか」→「IP・ポートより上を見られるか」の 2 問で 4 候補を振り分ける",
+    "マトリクス: 「遮断できる / できない」×「L3-L4 まで / それより上まで」の 2 軸に 4 候補を配置する"
+  ],
+  "selected_pattern": "分岐(2 段の判断フロー)。4 候補が落ちる理由は 2 種類(GuardDuty は遮断しない、SG / NACL は見る層が足りない)しかなく、順に問えば一本道で正解に着く。マトリクスは同じ情報を持つが、空きセルの意味を読み手が解釈する手間が増えるため採らない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解のサービス、矩形(白)=そのサービスが持つ機能、矩形(グレー)=要件を満たさない選択肢、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=要件を満たすサービス、白=その機能、グレー=要件を満たさない選択肢、青=要件と判断軸、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・機能の内訳、破線矢印=要件を満たさない側への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "セキュリティグループとネットワーク ACL は落ちる理由が同じ(IP・ポートレベルのみ)なので 1 ノードにまとめている。両者の差を問う問題(net30)とは粒度が異なる点に注意。",
+    "Network Firewall の配置形態(検査用サブネットとルートテーブルの引き回し)は解説の範囲外のため描いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"VPC 境界でドメイン名ベースの<br/>アウトバウンドフィルタと IPS ルールを適用したい\"]:::req\n    Q1{\"通信を<br/>遮断できるか?\"}:::judge\n    GD[\"Amazon GuardDuty<br/>検知専門・通信の遮断は行わない\"]:::alt\n    Q2{\"IP・ポートより上を<br/>見て判断できるか?\"}:::judge\n    SGNACL[\"セキュリティグループ / ネットワーク ACL<br/>IP・ポートレベルの制御のみ\"]:::alt\n\n    subgraph NF[\"Network Firewall がサポートする機能\"]\n        NFW[\"AWS Network Firewall<br/>VPC にデプロイするマネージド型\"]:::best\n        DOM[\"ドメイン名 / URL フィルタリング\"]:::svc\n        IPS[\"Suricata 互換の IPS ルール\"]:::svc\n        STATE[\"ステートフルインスペクション\"]:::svc\n        NFW --> DOM\n        NFW --> IPS\n        NFW --> STATE\n    end\n\n    NOTE[\"GuardDuty は「検知」まで<br/>遮断が要るなら Network Firewall\"]:::note\n\n    REQ --> Q1\n    Q1 -.->|\"しない\"| GD\n    Q1 -->|\"できる\"| Q2\n    Q2 -.->|\"見えない\"| SGNACL\n    Q2 -->|\"見える\"| NFW\n    Q1 -.- NOTE"
+}
