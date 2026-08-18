@@ -1,0 +1,169 @@
+{
+  "question_id": "net44",
+  "purpose": "「どこまでの情報が取れるか」と「既存インスタンスに手を入れるか」の 2 軸で、パケット解析の手段が 1 つに絞られることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、VPC フローログとトラフィックミラーリングの取得できる情報の差が曖昧な人。",
+  "message": "ペイロードまで解析でき、しかも既存インスタンスに手を入れずに済むのは VPC トラフィックミラーリングだけ。",
+  "source_summary": "本番 VPC のインスタンス間で発生している不審な通信を、パケットの中身まで含めて解析したい。既存インスタンスの構成変更やエージェント導入は避けたい。正解は VPC トラフィックミラーリングで対象 ENI のパケットを解析用アプライアンス(NLB 配下)へ複製する構成。ミラーリングは ENI 単位でパケット全体(またはヘッダー部)をコピーし、NLB や別 ENI をターゲットに送って IDS/パケットキャプチャツールでペイロードまで解析できる。VPC フローログは 5 タプルやバイト数などのメタデータのみでペイロードを含まない。CloudWatch エージェントはメトリクス/ログの収集で導入作業が要り、Network Firewall のログは検査ルールに合致した事象の記録にとどまる。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "インスタンス間の不審な通信をパケットの中身まで解析したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q1",
+      "label": "パケットの中身(ペイロード)まで見えるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "Q2",
+      "label": "既存インスタンスに手を入れずに済むか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ENI",
+      "label": "対象 ENI(ミラーソース)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "MIR",
+      "label": "VPC トラフィックミラーリング",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "TARGET",
+      "label": "解析用アプライアンス(NLB 配下)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "FLOW",
+      "label": "VPC フローログを S3 へ出力し Athena で解析する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NFWLOG",
+      "label": "Network Firewall のアラートログを確認する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CWA",
+      "label": "CloudWatch エージェントを導入してメトリクスを収集する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "メタデータで足りるならフローログ、中身が要るならミラーリング",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q1",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q1",
+      "to": "FLOW",
+      "verb": "5 タプルなどメタデータのみ",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q1",
+      "to": "NFWLOG",
+      "verb": "検査ルールに合致した事象の記録のみ",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q1",
+      "to": "Q2",
+      "verb": "中身まで見えるなら次の問いへ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q2",
+      "to": "CWA",
+      "verb": "各インスタンスへの導入が要る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q2",
+      "to": "ENI",
+      "verb": "ENI 単位で複製する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ENI",
+      "to": "MIR",
+      "verb": "ミラーソースに指定する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "MIR",
+      "to": "TARGET",
+      "verb": "パケットのコピーを送る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "MIR",
+      "to": "NOTE",
+      "verb": "使い分けを補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "MIRG",
+      "label": "VPC トラフィックミラーリング",
+      "members": [
+        "ENI",
+        "MIR",
+        "TARGET"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "ペイロードまでは見えない案",
+      "members": [
+        "FLOW",
+        "NFWLOG"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「ペイロードまで見えるか」「既存インスタンスに手を入れずに済むか」の 2 問で振り分ける",
+    "対比: 取得できる情報の粒度(メタデータ / パケット全体)で左右に並べて比べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。問題文の条件が「中身まで解析したい」と「構成変更・エージェント導入を避けたい」の 2 つで、誤答もこの 2 軸に分かれて落ちる。対比だと情報の粒度は見せられるが、CloudWatch エージェントが落ちる理由(導入作業が要る)が別軸なので同じ図に収まらない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解を構成するミラーリングと解析先、矩形(白)=対象 ENI などの一般要素、矩形(グレー)=要件を満たさない案、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=ペイロード解析を成立させる構成要素、白=前提となる要素、グレー=要件を満たさない案、青=要件と判断軸、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行とパケットコピーの流れ、破線矢印=要件を満たさない案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "ミラーリングは「パケット全体またはヘッダー部」を選べるが、本問では中身まで見たいケースなので全体側だけをラベルに残し、選択の可否は括弧書きにとどめている。",
+    "ミラーリングのコスト・帯域への影響は解説の範囲外のため描いていない。運用面の比較を問う問題を追加する場合は別図が要る。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"本番 VPC のインスタンス間の不審な通信を<br/>パケットの中身まで含めて解析したい<br/>構成変更・エージェント導入は避けたい\"]:::req\n    Q1{\"パケットの中身<br/>(ペイロード)まで見えるか?\"}:::judge\n    Q2{\"既存インスタンスに<br/>手を入れずに済むか?\"}:::judge\n\n    subgraph MIRG[\"VPC トラフィックミラーリング\"]\n        ENI[\"対象 ENI<br/>ミラーソースに指定する\"]:::svc\n        MIR[\"トラフィックミラーリング<br/>パケット全体(またはヘッダー部)を複製\"]:::best\n        TARGET[\"解析用アプライアンス(NLB 配下)<br/>IDS / パケットキャプチャでペイロードまで解析\"]:::best\n        ENI --> MIR --> TARGET\n    end\n\n    subgraph NG[\"ペイロードまでは見えない案\"]\n        FLOW[\"VPC フローログ + Athena<br/>5 タプルやバイト数などメタデータのみ\"]:::alt\n        NFWLOG[\"Network Firewall のアラートログ<br/>検査ルールに合致した事象の記録にとどまる\"]:::alt\n    end\n\n    CWA[\"CloudWatch エージェントを導入<br/>メトリクス / ログの収集・導入作業が要る\"]:::alt\n\n    NOTE[\"メタデータで足りるならフローログ<br/>中身が要るならミラーリング\"]:::note\n\n    REQ --> Q1\n    Q1 -.->|\"メタデータのみ\"| NG\n    Q1 -->|\"中身が見える\"| Q2\n    Q2 -.->|\"導入が要る\"| CWA\n    Q2 -->|\"手を入れない\"| ENI\n    MIR -.- NOTE"
+}

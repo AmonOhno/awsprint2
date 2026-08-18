@@ -1,0 +1,170 @@
+{
+  "question_id": "net46",
+  "purpose": "セキュリティグループのソースに「別のセキュリティグループ ID」を書けることが、CIDR 変更に強い設計になる理由を 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、層間のアクセス制御をつい CIDR で書いてしまう人。",
+  "message": "DB 層のインバウンドの送信元にアプリ層のセキュリティグループ ID を指定すれば、サブネットや CIDR が変わってもルールを直さずに済む。",
+  "source_summary": "3 層構成(ALB → アプリ EC2 → RDS)で、アプリ層と DB 層のアクセス制御を IP レンジではなく論理的に管理したい。将来サブネットや CIDR が変わっても設定を修正したくない。正解は DB 層のセキュリティグループのインバウンドで送信元にアプリ層のセキュリティグループ ID を指定する構成。セキュリティグループのソースには別のセキュリティグループ ID を指定でき、そのグループに所属する ENI からの通信を論理的に許可できる。インスタンスの入れ替えやサブネット/CIDR の変更があってもルール修正が不要で、最小権限を維持しやすい。CIDR や固定 IP による指定は構成変更時にメンテナンスが必要になる。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "層間のアクセス制御を IP レンジではなく論理的に管理したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "ALB",
+      "label": "ALB",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "APP",
+      "label": "アプリ層 EC2(sg-app に所属)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "RDS",
+      "label": "RDS(sg-db を適用)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "BEST",
+      "label": "sg-db のインバウンドの送信元に sg-app を指定する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "EFFECT",
+      "label": "sg-app に属する ENI からの通信だけが許可される",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "CIDR",
+      "label": "アプリ層サブネットの CIDR を許可する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NACLA",
+      "label": "ネットワーク ACL でアプリ層サブネットからの通信のみ許可する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "FIXIP",
+      "label": "アプリ層に固定のプライベート IP を割り当てて許可する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "ソースに書けるのは CIDR だけではなくセキュリティグループ ID も",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "ALB",
+      "to": "APP",
+      "verb": "リクエストを転送する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "APP",
+      "to": "RDS",
+      "verb": "DB へ接続する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "REQ",
+      "to": "BEST",
+      "verb": "論理的な参照で書く",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "BEST",
+      "to": "RDS",
+      "verb": "sg-db に設定する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "BEST",
+      "to": "EFFECT",
+      "verb": "所属で許可が決まる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "REQ",
+      "to": "CIDR",
+      "verb": "CIDR 変更のたびに直す必要がある",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "NACLA",
+      "verb": "サブネット単位の指定なので変更に追随しない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "FIXIP",
+      "verb": "インスタンス入れ替えのたびに直す必要がある",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "EFFECT",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "TIER",
+      "label": "3 層構成",
+      "members": [
+        "ALB",
+        "APP",
+        "RDS"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "構成が変わるたびに直す必要がある案",
+      "members": [
+        "CIDR",
+        "NACLA",
+        "FIXIP"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "対比: 「所属(SG ID)で書く」案と「位置(CIDR / 固定 IP)で書く」案を並べ、構成変更時に直す必要があるかで比べる",
+    "構成図: ALB → アプリ層 → DB 層の 3 層に sg-app / sg-db を重ね、参照の矢印だけを描く"
+  ],
+  "selected_pattern": "対比。判断軸が「将来 CIDR やサブネットが変わっても直さずに済むか」なので、直さずに済む案と直す必要がある案を並べる形がそのまま答えの理由になる。構成図だけだと正解の設定は描けるが、誤答 3 つが共通して抱える弱点(位置で書いているから変更に追随しない)が図に残らない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、矩形(緑)=正解の設定とその効果、矩形(白)=3 層構成の各要素、矩形(グレー)=構成変更のたびに直す必要がある案、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=論理的な参照による許可、白=前提となる 3 層の構成要素、グレー=位置(CIDR / IP)で書く案、青=要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=通信の流れと設定の適用、破線矢印=要件を満たさない案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "セキュリティグループ名は解説にないため sg-app / sg-db という仮名を図の中だけで使っている。実在の設定値ではないことがラベルから読み取れるようにしている。",
+    "ALB 層とアプリ層の間にも同じ「SG ID をソースに指定する」パターンが使えるが、本問が問うているのはアプリ層と DB 層の間なので、そちらだけを緑で描いている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"アプリ層と DB 層のアクセス制御を<br/>IP レンジではなく論理的に管理したい<br/>サブネットや CIDR が変わっても直したくない\"]:::req\n\n    subgraph TIER[\"3 層構成\"]\n        ALB[\"ALB\"]:::svc\n        APP[\"アプリ層 EC2<br/>セキュリティグループ sg-app に所属\"]:::svc\n        RDS[\"RDS<br/>セキュリティグループ sg-db を適用\"]:::svc\n        ALB --> APP --> RDS\n    end\n\n    BEST[\"sg-db のインバウンドで<br/>送信元にアプリ層の<br/>セキュリティグループ ID(sg-app)を指定\"]:::best\n    EFFECT[\"sg-app に所属する ENI からの通信だけを許可<br/>インスタンス入れ替えや CIDR 変更でもルール修正が不要\"]:::best\n\n    subgraph NG[\"構成が変わるたびに直す必要がある案\"]\n        CIDR[\"アプリ層サブネットの CIDR を許可\"]:::alt\n        NACLA[\"NACL でアプリ層サブネットのみ許可\"]:::alt\n        FIXIP[\"固定のプライベート IP を割り当てて許可\"]:::alt\n    end\n\n    NOTE[\"送信元に書けるのは CIDR だけではない<br/>別のセキュリティグループ ID を指定できる\"]:::note\n\n    REQ --> BEST\n    BEST -->|\"sg-db に設定\"| RDS\n    BEST --> EFFECT\n    REQ -.->|\"位置で指定\"| NG\n    EFFECT -.- NOTE"
+}

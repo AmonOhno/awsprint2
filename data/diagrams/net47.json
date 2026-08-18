@@ -1,0 +1,178 @@
+{
+  "question_id": "net47",
+  "purpose": "CloudFront 配信の保護が「エッジで誰を通すか」と「オリジンでどこから来たかを確かめるか」の 2 層に分かれることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、WAF の関連付け先とオリジン直アクセスの塞ぎ方が結びついていない人。",
+  "message": "地理的制限・レート制限・認証はエッジの CloudFront 側で行い、オリジン直アクセスはプレフィックスリストとカスタムヘッダー検証の二段構えで塞ぐ。",
+  "source_summary": "CloudFront で配信する動的 API(オリジンは ALB)で、特定国からのアクセス遮断、レートベースの制限、認証済みユーザーのみのアクセスを実装し、オリジンへの直接アクセスも防ぎたい。正解は CloudFront に WAF(地理的制限とレートベースルール)を関連付け、CloudFront Functions/Lambda@Edge で認証を検証し、オリジン側は CloudFront マネージドプレフィックスリスト + カスタムヘッダー検証で直接アクセスを遮断する構成。WAF は CloudFront に関連付けることでエッジで地理的制限やレートベースルールを適用でき、CloudFront Functions/Lambda@Edge でトークン検証などの軽量な認可を行える。オリジン保護は ALB のセキュリティグループで CloudFront のマネージドプレフィックスリストのみを許可し、さらに CloudFront が付与するシークレットなカスタムヘッダーを ALB のリスナールールで検証する二段構えが定石。Route 53 のルーティングはアクセス制御機構ではない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "特定国の遮断・レート制限・認証済みのみ・オリジン直アクセス防止",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "WAF",
+      "label": "AWS WAF を CloudFront に関連付ける",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "FUNC",
+      "label": "CloudFront Functions / Lambda@Edge で認証を検証する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "PL",
+      "label": "ALB の SG で CloudFront マネージドプレフィックスリストのみ許可",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "HDR",
+      "label": "カスタムヘッダーを ALB のリスナールールで検証する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ALB",
+      "label": "オリジンの ALB",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ALBWAF",
+      "label": "WAF を ALB 側だけに関連付け、SG は 0.0.0.0/0 のまま",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "R53",
+      "label": "Route 53 の位置情報ルーティングで特定国を除外する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "S3",
+      "label": "署名付き Cookie のみで制御し、オリジンを S3 に変更する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "エッジで「誰を通すか」、オリジンで「どこから来たか」",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "WAF",
+      "verb": "エッジで国とレートを絞る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "WAF",
+      "to": "FUNC",
+      "verb": "通過分だけ認可へ進める",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "FUNC",
+      "to": "ALB",
+      "verb": "オリジンへ転送する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "PL",
+      "to": "ALB",
+      "verb": "送信元を CloudFront に限定する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "HDR",
+      "to": "ALB",
+      "verb": "CloudFront 経由であることを確かめる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "REQ",
+      "to": "ALBWAF",
+      "verb": "オリジン直アクセスが通ってしまう",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "R53",
+      "verb": "アクセス制御機構ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "S3",
+      "verb": "動的 API の要件から外れる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "HDR",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "EDGE",
+      "label": "エッジ(CloudFront)で誰を通すかを決める",
+      "members": [
+        "WAF",
+        "FUNC"
+      ]
+    },
+    {
+      "id": "ORIGIN",
+      "label": "オリジン(ALB)で直アクセスを塞ぐ",
+      "members": [
+        "PL",
+        "HDR",
+        "ALB"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "要件を満たさない案",
+      "members": [
+        "ALBWAF",
+        "R53",
+        "S3"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "レイヤー(2 層構成図): エッジ層とオリジン層に分け、どの要件がどちらの層で処理されるかを配置で見せる",
+    "合流(要件と部品の対応): 4 つの要件それぞれに対応する部品を線で結ぶ"
+  ],
+  "selected_pattern": "レイヤー(2 層構成図)。本問は要件が 4 つあるが、答えの中身は「エッジで防ぐもの」と「オリジンで確かめるもの」という置き場所の分担にある。要件と部品を 1 対 1 で結ぶ合流図だと線が 4 本走るだけで、なぜ ALB 側に WAF を付けるだけでは駄目なのか(オリジン直アクセスが残る)が図に現れない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、矩形(緑)=正解を構成するエッジ側とオリジン側の対策、矩形(白)=オリジンの ALB などの一般要素、矩形(グレー)=要件を満たさない案、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=正解を構成する対策、白=前提となる構成要素、グレー=要件を満たさない案、青=要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=リクエストの流れと対策の適用、破線矢印=要件を満たさない案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "CloudFront Functions と Lambda@Edge のどちらで認証を検証するかは解説が併記しているため 1 ノードにまとめている。両者の使い分けは net49 の図で扱う。",
+    "「オリジンを S3 に変更する」案が不適な理由は解説に明示がないため、問題文が動的 API だという前提から『動的 API の要件から外れる』とだけ書いている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"CloudFront 配信の動的 API(オリジンは ALB)<br/>特定国の遮断・レート制限・認証済みのみ<br/>オリジンへの直接アクセスも防ぎたい\"]:::req\n\n    subgraph EDGE[\"エッジ(CloudFront)で誰を通すかを決める\"]\n        WAF[\"AWS WAF を CloudFront に関連付け<br/>地理的制限 + レートベースルール\"]:::best\n        FUNC[\"CloudFront Functions / Lambda@Edge<br/>トークン検証などの軽量な認可\"]:::best\n    end\n\n    subgraph ORIGIN[\"オリジン(ALB)で直アクセスを塞ぐ\"]\n        PL[\"ALB のセキュリティグループで<br/>CloudFront マネージドプレフィックスリストのみ許可\"]:::best\n        HDR[\"CloudFront が付与するカスタムヘッダーを<br/>ALB のリスナールールで検証\"]:::best\n        ALB[\"オリジンの ALB\"]:::svc\n    end\n\n    subgraph NG[\"要件を満たさない案\"]\n        ALBWAF[\"WAF を ALB 側だけに関連付け<br/>SG は 0.0.0.0/0 のまま = 直アクセスが通る\"]:::alt\n        R53[\"Route 53 の位置情報ルーティングで除外<br/>アクセス制御機構ではない\"]:::alt\n        S3[\"署名付き Cookie のみ・オリジンを S3 に変更<br/>動的 API の要件から外れる\"]:::alt\n    end\n\n    NOTE[\"エッジで「誰を通すか」<br/>オリジンで「どこから来たか」<br/>二段構えで守る\"]:::note\n\n    REQ --> WAF\n    WAF -->|\"通過分のみ\"| FUNC\n    FUNC -->|\"オリジンへ\"| ALB\n    PL -->|\"送信元を限定\"| ALB\n    HDR -->|\"経由を確認\"| ALB\n    REQ -.-> NG\n    HDR -.- NOTE"
+}

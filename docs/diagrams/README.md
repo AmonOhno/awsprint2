@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 173 問 / 全 400 問
+収録: 183 問 / 全 400 問
 
 ---
 
@@ -8762,3 +8762,571 @@ flowchart TB
 **解説**: Route 53 Resolver のアウトバウンドエンドポイント+転送ルールで特定ドメインのクエリをオンプレミス DNS へ条件付き転送し、インバウンドエンドポイントでオンプレミスから VPC 内(プライベートホストゾーンや VPC 内リソース)の名前解決を受け付けます。DHCP オプションでオンプレ DNS のみを指定すると AWS のプライベートホストゾーンや VPC エンドポイントの名前が解決できなくなり、社内名をパブリックホストゾーンに置くのは情報漏えいの観点で不適切です。
 
 **確認事項**: 転送ルールを Resolver とアウトバウンドエンドポイントのどちらのノードに置くかは迷いどころで、本図では「アウトバウンドエンドポイント + 転送ルール」と 1 ノードにまとめている。ルールの共有(RAM 経由での他 VPC への共有)は解説の範囲外のため描いていない。 / /etc/resolv.conf 追記が不適な理由は解説に明示がないため、グレー枠に置くだけで理由を書いていない。
+
+---
+
+## net41 — ネットワーク / level 3
+
+**問題**: セキュリティ要件として、VPC 内から解決される DNS クエリを記録し、既知の悪性ドメインへの名前解決をブロックしたい。EC2 側にエージェントを入れずに実現したい。最適な組み合わせはどれか?
+
+**正解**: Route 53 Resolver クエリログを有効化し、Route 53 Resolver DNS Firewall のドメインリストで拒否ルールを適用する
+
+**他の選択肢**: VPC フローログを有効化し、Network Firewall でポート 53 を遮断する / GuardDuty を有効化し、検出時に手動でセキュリティグループを更新する / CloudWatch エージェントを EC2 に導入して DNS ログを収集する
+
+**図解の主メッセージ**: DNS クエリの記録は Resolver クエリログ、悪性ドメインの遮断は Resolver DNS Firewall で、どちらも VPC レベルで効くのでエージェントが要らない。
+
+**採用パターン**: 分岐(判断フロー)。問題文が挙げる条件が「エージェント不要」と「ドメイン名ベースの記録・遮断」の 2 つで、誤答はこの 2 条件のどちらかで必ず落ちる。合流型だと正解の 2 部品はきれいに描けるが、誤答がなぜ落ちるかを同じ図の中で言えない。(候補: 分岐(判断フロー): 「エージェント不要か」「ドメイン名で記録・遮断できるか」の 2 問で振り分ける / 合流(要求と部品の対応): 「記録したい」「遮断したい」の 2 つの要求に、クエリログと DNS Firewall を 1 つずつ対応づける)
+
+```mermaid
+flowchart TD
+    REQ["VPC 内から解決される DNS クエリを記録し<br/>既知の悪性ドメインへの名前解決を遮断したい"]:::req
+    Q1{"EC2 にエージェントを<br/>入れずに済むか?"}:::judge
+    AGENT["CloudWatch エージェントを EC2 に導入<br/>各インスタンスへの導入作業が要る"]:::alt
+    Q2{"ドメイン名で<br/>記録・遮断できるか?"}:::judge
+
+    subgraph R53["Route 53 Resolver — VPC レベルで機能する"]
+        LOG["Resolver クエリログ<br/>VPC 内から発行された DNS クエリを記録<br/>CloudWatch Logs / S3 / Firehose へ"]:::best
+        FW["Resolver DNS Firewall<br/>ドメインリストで ALLOW / BLOCK / ALERT<br/>AWS マネージドの脅威リストを含む"]:::best
+    end
+
+    subgraph NG["ドメイン名の記録・遮断にならない案"]
+        FLOW["VPC フローログ + ポート 53 の遮断<br/>フローログにドメイン名は含まれず<br/>正当な名前解決まで壊れる"]:::alt
+        GD["GuardDuty + 手動でセキュリティグループ更新<br/>検知はできるが遮断が手作業"]:::alt
+    end
+
+    NOTE["記録は クエリログ<br/>遮断は DNS Firewall"]:::note
+
+    REQ --> Q1
+    Q1 -.->|"導入が要る"| AGENT
+    Q1 -->|"入れずに済む"| Q2
+    Q2 -->|"記録する"| LOG
+    Q2 -->|"遮断する"| FW
+    Q2 -.->|"名前が無い"| FLOW
+    Q2 -.->|"検知のみ"| GD
+    FW -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net41.svg`](../../web/diagrams/net41.svg)
+
+**解説**: Route 53 Resolver クエリログは VPC 内から発行された DNS クエリを CloudWatch Logs・S3・Firehose に記録し、Resolver DNS Firewall はドメインリスト(AWS マネージドの脅威リストを含む)に基づいて ALLOW/BLOCK/ALERT を適用します。いずれも VPC レベルで機能しエージェント不要です。フローログはドメイン名を含まず、ポート 53 の遮断は正当な名前解決まで壊します。
+
+**確認事項**: DNS Firewall の ALERT 相当の動作は解説に列挙があるためラベルに残したが、ALLOW/BLOCK/ALERT の使い分けそのものは本問の判断軸ではないので図の主線には載せていない。 / クエリログの出力先(CloudWatch Logs / S3 / Firehose)は解説の記述どおり 1 ノードに併記している。出力先の選択を問う問題を追加する場合は分割が必要。
+
+---
+
+## net42 — ネットワーク / level 3
+
+**問題**: 監査要件により、VPC を出入りするすべてのトラフィックについて、ドメイン名ベースの許可リストとシグネチャベースの侵入防止(IPS)を集中適用したい。VPC は 30 個あり、インスペクションは一元管理したい。最適な構成はどれか?
+
+**正解**: インスペクション VPC に AWS Network Firewall を配置し、Transit Gateway のアプライアンスモードを使って全 VPC の東西/南北トラフィックを経由させる
+
+**他の選択肢**: 各 VPC のセキュリティグループとネットワーク ACL に許可リストを実装する / 各 VPC に NAT ゲートウェイを配置し、送信先ドメインでフィルタする / AWS WAF を各 VPC の ALB に関連付けてドメインフィルタリングを行う
+
+**図解の主メッセージ**: ドメイン許可リストとシグネチャ IPS を 30 VPC に一元適用するには、インスペクション VPC の Network Firewall へ Transit Gateway で全トラフィックを寄せる。
+
+**採用パターン**: ハブ&スポーク構成図。本問の答えの中身は「検査機能をどこに置き、トラフィックをどう寄せるか」という配置そのもので、30 本の経路が 1 つの Network Firewall に集まる形がそのまま一元管理の理由になる。判断フローだと「集中」という配置の話が図に残らず、誤答との差が言葉の比較に落ちてしまう。(候補: ハブ&スポーク構成図: スポーク VPC 群 → Transit Gateway → インスペクション VPC の経路を描き、検査が 1 箇所に集まることを見せる / 分岐(判断フロー): 「ドメイン名で判断できるか」「30 VPC を一元管理できるか」の 2 問で選択肢を振り分ける)
+
+```mermaid
+flowchart TB
+    REQ["30 個の VPC を出入りするすべての通信に<br/>ドメイン許可リストと IPS を集中適用したい"]:::req
+
+    subgraph SPOKE["スポーク VPC(30 個)"]
+        V1["VPC A"]:::svc
+        V2["VPC B"]:::svc
+        V3["VPC N(全 30 個)"]:::svc
+    end
+
+    TGW["Transit Gateway<br/>アプライアンスモードを有効化"]:::best
+
+    subgraph INSP["インスペクション VPC(検査を集約)"]
+        NFW["AWS Network Firewall<br/>ステートフル検査 / Suricata 互換の IPS<br/>ドメインリストフィルタリング"]:::best
+    end
+
+    OUT["インターネット / 他 VPC"]:::svc
+
+    subgraph NG["各 VPC に配る案(集中適用にならない)"]
+        SGNACL["各 VPC の SG / NACL に許可リスト<br/>IP・ポートしか見られない"]:::alt
+        NAT["各 VPC に NAT ゲートウェイ<br/>送信先ドメインでのフィルタはできない"]:::alt
+        WAF["各 ALB に AWS WAF<br/>HTTP レイヤーの保護にとどまる"]:::alt
+    end
+
+    NOTE["アプライアンスモードで<br/>同一フローが同じ FW を通り<br/>非対称ルーティングを避けられる"]:::note
+
+    REQ --> V1
+    REQ --> V2
+    REQ --> V3
+    V1 --> TGW
+    V2 --> TGW
+    V3 --> TGW
+    TGW -->|"引き込む"| NFW
+    NFW -->|"検査後"| OUT
+    REQ -.->|"分散配置"| NG
+    TGW -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net42.svg`](../../web/diagrams/net42.svg)
+
+**解説**: Network Firewall はステートフル検査、Suricata 互換ルールによる IPS、ドメインリストフィルタリングを提供し、集中インスペクション VPC に配置して Transit Gateway 経由でトラフィックを引き込むのが標準的なハブ&スポーク設計です。TGW のアプライアンスモードを有効にすると同一フローが同じファイアウォールエンドポイントを通り、非対称ルーティングを避けられます。SG/NACL は IP/ポートのみ、WAF は HTTP レイヤーの保護です。
+
+**確認事項**: スポーク VPC は図の読みやすさのため 3 個だけ描き、ラベルで 30 個であることを示している。数そのものを問う問題ではないため省略した。 / 解説にある「東西(VPC 間)」と「南北(インターネット向け)」の区別は、1 枚に両方の経路を描くと線が増えて主メッセージがぼやけるため、出口を『インターネット / 他 VPC』の 1 ノードにまとめている。
+
+---
+
+## net43 — ネットワーク / level 3
+
+**問題**: サードパーティ製の仮想侵入検知アプライアンスを、既存のルーティング設計を大きく変えずにトラフィック経路へ透過的に挿入したい。アプライアンスは水平スケールと高可用性が必要である。最適なサービスはどれか?
+
+**正解**: Gateway Load Balancer(GWLB)とエンドポイントを使い、GENEVE でアプライアンス群へトラフィックを転送する
+
+**他の選択肢**: Network Load Balancer をアプライアンスの前段に置き、ルートテーブルで NLB を指す / VPC トラフィックミラーリングでアプライアンスへコピーを送る / Transit Gateway のブラックホールルートでアプライアンス経由を強制する
+
+**図解の主メッセージ**: ルートテーブルのターゲットにできてインラインで遮断もできるのは GWLB エンドポイントだけなので、透過的な経路挿入は Gateway Load Balancer で行う。
+
+**採用パターン**: 分岐(判断フロー)。誤答 3 つがそれぞれ「ルートテーブルのターゲットにできない」「経路を捨てるだけ」「コピーの解析だけ」という別々の理由で落ちるため、2 つの問いで順に振り分けるほうが理由が図に残る。構成図だけだと正解の形は見えるが、なぜ NLB やミラーリングでは駄目なのかが図の外に出てしまう。(候補: 分岐(判断フロー): 「経路に透過挿入できるか」「インラインで遮断できるか」の 2 問で誤答を順に落とす / 構成図: VPC のルートテーブル → GWLB エンドポイント → GWLB → アプライアンス群 の経路だけを描く)
+
+```mermaid
+flowchart TD
+    REQ["サードパーティ製の仮想 IDS アプライアンスを<br/>既存のルーティングを大きく変えずに<br/>経路へ透過的に挿入したい<br/>水平スケールと高可用性が必要"]:::req
+    Q1{"経路そのものに<br/>透過的に挿入できるか?"}:::judge
+    Q2{"インラインで<br/>遮断できるか?"}:::judge
+
+    subgraph GW["Gateway Load Balancer による透過挿入"]
+        GWLBE["GWLB エンドポイント<br/>ルートテーブルのターゲットに指定するだけ"]:::best
+        GWLB["Gateway Load Balancer<br/>L3 で透過的に動作<br/>ヘルスチェックとスケーリングで可用性を確保"]:::best
+        APPL["サードパーティ製アプライアンス群"]:::svc
+        GWLBE --> GWLB
+        GWLB -->|"GENEVE 6081"| APPL
+    end
+
+    subgraph NG["透過挿入にならない案"]
+        NLB["NLB をアプライアンスの前段に置く<br/>ルートテーブルのターゲットにできない"]:::alt
+        BH["Transit Gateway のブラックホールルート<br/>通信を捨てるだけで検査に回せない"]:::alt
+        MIR["VPC トラフィックミラーリング<br/>コピーの解析のみ・遮断はできない"]:::alt
+    end
+
+    NOTE["経路への挿入は GWLB エンドポイント<br/>アプライアンスへは GENEVE で転送"]:::note
+
+    REQ --> Q1
+    Q1 -.->|"できない"| NLB
+    Q1 -.->|"捨てるだけ"| BH
+    Q1 -->|"挿入できる"| Q2
+    Q2 -.->|"コピーのみ"| MIR
+    Q2 -->|"遮断できる"| GWLBE
+    GWLB -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net43.svg`](../../web/diagrams/net43.svg)
+
+**解説**: Gateway Load Balancer は L3 で透過的に動作し、GENEVE(ポート 6081)でトラフィックをアプライアンス群へカプセル化して転送し、スケーリングとヘルスチェックによる可用性を提供します。GWLB エンドポイントをルートテーブルのターゲットに指定するだけで経路へ挿入できます。NLB はルートテーブルのターゲットにできず、トラフィックミラーリングはコピーの解析のみで遮断(インライン防御)はできません。
+
+**確認事項**: 「水平スケールと高可用性」は GWLB のヘルスチェックとスケーリングとしてラベルに書いたが、判断の分岐には使っていない。誤答がこの条件では落ちないため主線に入れると軸がぼやける。 / GWLB エンドポイントとサービスプロバイダ側の GWLB を別 VPC に置く一般的な構成は、解説に記述がないため 1 つの枠にまとめて描いている。
+
+---
+
+## net44 — ネットワーク / level 3
+
+**問題**: 本番 VPC のインスタンス間で発生している不審な通信について、パケットの中身まで含めて解析したい。既存インスタンスの構成変更やエージェント導入は避けたい。最適な方法はどれか?
+
+**正解**: VPC トラフィックミラーリングで対象 ENI のパケットを解析用アプライアンス(NLB 配下)へ複製する
+
+**他の選択肢**: VPC フローログを 1 分間隔に設定し、S3 に出力して Athena で解析する / CloudWatch エージェントを導入してネットワークメトリクスを収集する / Network Firewall のアラートログを有効化して該当通信を確認する
+
+**図解の主メッセージ**: ペイロードまで解析でき、しかも既存インスタンスに手を入れずに済むのは VPC トラフィックミラーリングだけ。
+
+**採用パターン**: 分岐(判断フロー)。問題文の条件が「中身まで解析したい」と「構成変更・エージェント導入を避けたい」の 2 つで、誤答もこの 2 軸に分かれて落ちる。対比だと情報の粒度は見せられるが、CloudWatch エージェントが落ちる理由(導入作業が要る)が別軸なので同じ図に収まらない。(候補: 分岐(判断フロー): 「ペイロードまで見えるか」「既存インスタンスに手を入れずに済むか」の 2 問で振り分ける / 対比: 取得できる情報の粒度(メタデータ / パケット全体)で左右に並べて比べる)
+
+```mermaid
+flowchart TD
+    REQ["本番 VPC のインスタンス間の不審な通信を<br/>パケットの中身まで含めて解析したい<br/>構成変更・エージェント導入は避けたい"]:::req
+    Q1{"パケットの中身<br/>(ペイロード)まで見えるか?"}:::judge
+    Q2{"既存インスタンスに<br/>手を入れずに済むか?"}:::judge
+
+    subgraph MIRG["VPC トラフィックミラーリング"]
+        ENI["対象 ENI<br/>ミラーソースに指定する"]:::svc
+        MIR["トラフィックミラーリング<br/>パケット全体(またはヘッダー部)を複製"]:::best
+        TARGET["解析用アプライアンス(NLB 配下)<br/>IDS / パケットキャプチャでペイロードまで解析"]:::best
+        ENI --> MIR --> TARGET
+    end
+
+    subgraph NG["ペイロードまでは見えない案"]
+        FLOW["VPC フローログ + Athena<br/>5 タプルやバイト数などメタデータのみ"]:::alt
+        NFWLOG["Network Firewall のアラートログ<br/>検査ルールに合致した事象の記録にとどまる"]:::alt
+    end
+
+    CWA["CloudWatch エージェントを導入<br/>メトリクス / ログの収集・導入作業が要る"]:::alt
+
+    NOTE["メタデータで足りるならフローログ<br/>中身が要るならミラーリング"]:::note
+
+    REQ --> Q1
+    Q1 -.->|"メタデータのみ"| NG
+    Q1 -->|"中身が見える"| Q2
+    Q2 -.->|"導入が要る"| CWA
+    Q2 -->|"手を入れない"| ENI
+    MIR -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net44.svg`](../../web/diagrams/net44.svg)
+
+**解説**: VPC トラフィックミラーリングは ENI 単位でパケット全体(またはヘッダー部)をコピーし、NLB や別 ENI をターゲットに送って IDS/パケットキャプチャツールでペイロードまで解析できます。フローログは 5 タプルやバイト数などのメタデータのみでペイロードを含みません。CloudWatch エージェントはメトリクス/ログ、Network Firewall のログは検査ルールに合致した事象の記録にとどまります。
+
+**確認事項**: ミラーリングは「パケット全体またはヘッダー部」を選べるが、本問では中身まで見たいケースなので全体側だけをラベルに残し、選択の可否は括弧書きにとどめている。 / ミラーリングのコスト・帯域への影響は解説の範囲外のため描いていない。運用面の比較を問う問題を追加する場合は別図が要る。
+
+---
+
+## net45 — ネットワーク / level 3
+
+**問題**: ALB の背後にある EC2 に対し、送信元 IP が 203.0.113.10 からのアクセスだけが到達しない事象が起きている。セキュリティグループでは 0.0.0.0/0 の 443 を許可し、ネットワーク ACL のインバウンドで 203.0.113.10/32 の DENY ルール(ルール番号 90)と 0.0.0.0/0 の ALLOW(番号 100)が設定されている。原因として正しいのはどれか?
+
+**正解**: ネットワーク ACL はルール番号の小さい順に評価され、最初に一致した DENY が適用されるため、番号 90 の拒否が有効になっている
+
+**他の選択肢**: セキュリティグループはステートレスであるため、戻りのトラフィックが拒否されている / ALB はネットワーク ACL の影響を受けないため、原因はセキュリティグループ側にある / ネットワーク ACL はすべてのルールを評価し、ALLOW が 1 つでもあれば通過するため、別の原因である
+
+**図解の主メッセージ**: ネットワーク ACL は番号の小さい順に評価して最初に一致したルールで確定するため、90 番の DENY が 100 番の ALLOW より先に効いて該当 IP だけ遮断される。
+
+**採用パターン**: 直列(評価順)。本問の答えの中身は「どちらのルールが先に評価されるか」という順序そのもので、番号順に並べて 100 番へ矢印が届かないことを見せれば主メッセージが図だけで伝わる。対比は性質の整理には向くが、90 番が先に効くという肝心の順序が図に現れない。(候補: 直列(評価順): パケットが辿る順序に沿って、サブネット → 90 番 → 確定 と並べ、100 番には到達しないことを示す / 対比: ネットワーク ACL(ステートレス・先勝ち)とセキュリティグループ(ステートフル・全評価)を左右に並べて性質を比べる)
+
+```mermaid
+flowchart TD
+    REQ["203.0.113.10 からのアクセスだけ到達しない<br/>SG は 0.0.0.0/0 の 443 を許可済み"]:::req
+    PKT["203.0.113.10 からの HTTPS(443)リクエスト"]:::svc
+    SUBNET["ALB の ENI が置かれるサブネット"]:::svc
+
+    subgraph NACL["ネットワーク ACL のインバウンド — ステートレス・番号の昇順に評価"]
+        R90["ルール 90<br/>203.0.113.10/32 を DENY"]:::best
+        R100["ルール 100<br/>0.0.0.0/0 を ALLOW<br/>90 で確定済みのため評価されない"]:::alt
+    end
+
+    STOP["最初に一致した 90 番の DENY が適用され<br/>この送信元だけ遮断される"]:::best
+    SG["セキュリティグループ<br/>ステートフル・戻りは自動許可<br/>今回の原因ではない"]:::svc
+
+    subgraph MIS["取り違えやすい説明(いずれも誤り)"]
+        M1["SG がステートレスで戻りが拒否されている"]:::alt
+        M2["ALB は NACL の影響を受けない"]:::alt
+        M3["全ルールを評価し ALLOW が 1 つあれば通る"]:::alt
+    end
+
+    NOTE["NACL は番号の小さい順に評価し<br/>最初に一致したルールで確定する"]:::note
+
+    REQ --> PKT
+    PKT --> SUBNET
+    SUBNET -->|"昇順に評価"| R90
+    R90 -->|"一致"| STOP
+    R90 -.->|"到達しない"| R100
+    SUBNET -.->|"原因でない"| SG
+    REQ -.-> MIS
+    STOP -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net45.svg`](../../web/diagrams/net45.svg)
+
+**解説**: ネットワーク ACL はステートレスで、ルール番号の昇順に評価して最初にマッチしたルールを適用します。番号 90 の DENY が番号 100 の ALLOW より先に評価されるため該当 IP は遮断されます。セキュリティグループはステートフルで戻りトラフィックは自動許可されます。ALB の ENI が置かれるサブネットの NACL も適用される点に注意が必要です。
+
+**確認事項**: アウトバウンド側の NACL 評価(ステートレスなので戻りにもルールが要る)は本問の原因ではないため描いていない。戻り方向を問う問題を追加する場合は別図が要る。 / 「ALB の ENI が置かれるサブネットの NACL も適用される」は解説の注意書きを 1 ノードに落としているが、クライアント → ALB → EC2 の 2 段のサブネットを描き分けると図が密になるため、ALB 側の 1 段だけにしている。
+
+---
+
+## net46 — ネットワーク / level 3
+
+**問題**: 3 層構成(ALB → アプリ EC2 → RDS)で、アプリ層と DB 層のアクセス制御を IP レンジではなく論理的に管理したい。将来サブネットや CIDR が変わっても設定を修正したくない。最適な設計はどれか?
+
+**正解**: DB 層のセキュリティグループのインバウンドで、送信元にアプリ層のセキュリティグループ ID を指定する
+
+**他の選択肢**: DB 層のセキュリティグループでアプリ層サブネットの CIDR を許可する / ネットワーク ACL でアプリ層サブネットからの通信のみ許可する / アプリ層に固定のプライベート IP を割り当て、DB 層でその IP を許可する
+
+**図解の主メッセージ**: DB 層のインバウンドの送信元にアプリ層のセキュリティグループ ID を指定すれば、サブネットや CIDR が変わってもルールを直さずに済む。
+
+**採用パターン**: 対比。判断軸が「将来 CIDR やサブネットが変わっても直さずに済むか」なので、直さずに済む案と直す必要がある案を並べる形がそのまま答えの理由になる。構成図だけだと正解の設定は描けるが、誤答 3 つが共通して抱える弱点(位置で書いているから変更に追随しない)が図に残らない。(候補: 対比: 「所属(SG ID)で書く」案と「位置(CIDR / 固定 IP)で書く」案を並べ、構成変更時に直す必要があるかで比べる / 構成図: ALB → アプリ層 → DB 層の 3 層に sg-app / sg-db を重ね、参照の矢印だけを描く)
+
+```mermaid
+flowchart TB
+    REQ["アプリ層と DB 層のアクセス制御を<br/>IP レンジではなく論理的に管理したい<br/>サブネットや CIDR が変わっても直したくない"]:::req
+
+    subgraph TIER["3 層構成"]
+        ALB["ALB"]:::svc
+        APP["アプリ層 EC2<br/>セキュリティグループ sg-app に所属"]:::svc
+        RDS["RDS<br/>セキュリティグループ sg-db を適用"]:::svc
+        ALB --> APP --> RDS
+    end
+
+    BEST["sg-db のインバウンドで<br/>送信元にアプリ層の<br/>セキュリティグループ ID(sg-app)を指定"]:::best
+    EFFECT["sg-app に所属する ENI からの通信だけを許可<br/>インスタンス入れ替えや CIDR 変更でもルール修正が不要"]:::best
+
+    subgraph NG["構成が変わるたびに直す必要がある案"]
+        CIDR["アプリ層サブネットの CIDR を許可"]:::alt
+        NACLA["NACL でアプリ層サブネットのみ許可"]:::alt
+        FIXIP["固定のプライベート IP を割り当てて許可"]:::alt
+    end
+
+    NOTE["送信元に書けるのは CIDR だけではない<br/>別のセキュリティグループ ID を指定できる"]:::note
+
+    REQ --> BEST
+    BEST -->|"sg-db に設定"| RDS
+    BEST --> EFFECT
+    REQ -.->|"位置で指定"| NG
+    EFFECT -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net46.svg`](../../web/diagrams/net46.svg)
+
+**解説**: セキュリティグループのソースには別のセキュリティグループ ID を指定でき、そのグループに所属する ENI からの通信を論理的に許可できます。インスタンスの入れ替えやサブネット/CIDR の変更があってもルール修正が不要で、最小権限を維持しやすい標準パターンです。CIDR や固定 IP による指定は構成変更時にメンテナンスが必要になります。
+
+**確認事項**: セキュリティグループ名は解説にないため sg-app / sg-db という仮名を図の中だけで使っている。実在の設定値ではないことがラベルから読み取れるようにしている。 / ALB 層とアプリ層の間にも同じ「SG ID をソースに指定する」パターンが使えるが、本問が問うているのはアプリ層と DB 層の間なので、そちらだけを緑で描いている。
+
+---
+
+## net47 — ネットワーク / level 3
+
+**問題**: CloudFront で配信する動的 API について、オリジンは ALB である。特定国からのアクセス遮断、レートベースの制限、認証済みユーザーのみのアクセスを実装したい。オリジンへの直接アクセスも防ぎたい。最も適切な組み合わせはどれか?
+
+**正解**: CloudFront に WAF(地理的制限とレートベースルール)を関連付け、CloudFront Functions/Lambda@Edge で認証を検証し、オリジンには CloudFront マネージドプレフィックスリスト + カスタムヘッダー検証で直接アクセスを遮断する
+
+**他の選択肢**: ALB に WAF を関連付け、CloudFront では地理的制限のみを設定し、ALB のセキュリティグループを 0.0.0.0/0 のままにする / Route 53 の位置情報ルーティングで特定国を除外し、ALB に IP 許可リストを設定する / CloudFront の署名付き Cookie のみで制御し、オリジンは S3 に変更する
+
+**図解の主メッセージ**: 地理的制限・レート制限・認証はエッジの CloudFront 側で行い、オリジン直アクセスはプレフィックスリストとカスタムヘッダー検証の二段構えで塞ぐ。
+
+**採用パターン**: レイヤー(2 層構成図)。本問は要件が 4 つあるが、答えの中身は「エッジで防ぐもの」と「オリジンで確かめるもの」という置き場所の分担にある。要件と部品を 1 対 1 で結ぶ合流図だと線が 4 本走るだけで、なぜ ALB 側に WAF を付けるだけでは駄目なのか(オリジン直アクセスが残る)が図に現れない。(候補: レイヤー(2 層構成図): エッジ層とオリジン層に分け、どの要件がどちらの層で処理されるかを配置で見せる / 合流(要件と部品の対応): 4 つの要件それぞれに対応する部品を線で結ぶ)
+
+```mermaid
+flowchart TB
+    REQ["CloudFront 配信の動的 API(オリジンは ALB)<br/>特定国の遮断・レート制限・認証済みのみ<br/>オリジンへの直接アクセスも防ぎたい"]:::req
+
+    subgraph EDGE["エッジ(CloudFront)で誰を通すかを決める"]
+        WAF["AWS WAF を CloudFront に関連付け<br/>地理的制限 + レートベースルール"]:::best
+        FUNC["CloudFront Functions / Lambda@Edge<br/>トークン検証などの軽量な認可"]:::best
+    end
+
+    subgraph ORIGIN["オリジン(ALB)で直アクセスを塞ぐ"]
+        PL["ALB のセキュリティグループで<br/>CloudFront マネージドプレフィックスリストのみ許可"]:::best
+        HDR["CloudFront が付与するカスタムヘッダーを<br/>ALB のリスナールールで検証"]:::best
+        ALB["オリジンの ALB"]:::svc
+    end
+
+    subgraph NG["要件を満たさない案"]
+        ALBWAF["WAF を ALB 側だけに関連付け<br/>SG は 0.0.0.0/0 のまま = 直アクセスが通る"]:::alt
+        R53["Route 53 の位置情報ルーティングで除外<br/>アクセス制御機構ではない"]:::alt
+        S3["署名付き Cookie のみ・オリジンを S3 に変更<br/>動的 API の要件から外れる"]:::alt
+    end
+
+    NOTE["エッジで「誰を通すか」<br/>オリジンで「どこから来たか」<br/>二段構えで守る"]:::note
+
+    REQ --> WAF
+    WAF -->|"通過分のみ"| FUNC
+    FUNC -->|"オリジンへ"| ALB
+    PL -->|"送信元を限定"| ALB
+    HDR -->|"経由を確認"| ALB
+    REQ -.-> NG
+    HDR -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net47.svg`](../../web/diagrams/net47.svg)
+
+**解説**: WAF は CloudFront に関連付けることでエッジで地理的制限やレートベースルールを適用でき、CloudFront Functions/Lambda@Edge でトークン検証などの軽量な認可を行えます。オリジン保護は、ALB のセキュリティグループで CloudFront のマネージドプレフィックスリストのみを許可し、さらに CloudFront が付与するシークレットなカスタムヘッダーを ALB のリスナールールで検証する二段構えが定石です。Route 53 のルーティングはアクセス制御機構ではありません。
+
+**確認事項**: CloudFront Functions と Lambda@Edge のどちらで認証を検証するかは解説が併記しているため 1 ノードにまとめている。両者の使い分けは net49 の図で扱う。 / 「オリジンを S3 に変更する」案が不適な理由は解説に明示がないため、問題文が動的 API だという前提から『動的 API の要件から外れる』とだけ書いている。
+
+---
+
+## net48 — ネットワーク / level 3
+
+**問題**: CloudFront 配信で、同一 URL に対してデバイス種別(モバイル/デスクトップ)ごとに異なるオリジンレスポンスを返しつつ、キャッシュ効率も維持したい。最も適切な設定はどれか?
+
+**正解**: キャッシュポリシーでキャッシュキーに CloudFront-Is-Mobile-Viewer などのデバイス判定ヘッダーを含め、オリジンリクエストポリシーでそのヘッダーをオリジンへ転送する
+
+**他の選択肢**: すべてのヘッダーと Cookie とクエリ文字列をキャッシュキーに含める / キャッシュを無効化(TTL 0)し、常にオリジンへ問い合わせる / デバイスごとに別のディストリビューションを作成し、Route 53 で振り分ける
+
+**図解の主メッセージ**: キャッシュキーはデバイス判定ヘッダーだけに絞れば保持するバリアントが 2 種類で済み、振り分けとキャッシュ効率を両立できる。
+
+**採用パターン**: 分岐(判断フロー)。誤答が「全部入れる」「キャッシュしない」「そもそも分けてしまう」と方向がばらばらで、対比の 2 列には収まらない。1 つの問い(キャッシュキーに何を含めるか)から 4 方向へ分けるほうが、判断軸がひとつであることも同時に伝わる。(候補: 分岐(判断フロー): 「キャッシュキーに何を含めるか」の 1 問で 4 つの案を振り分け、それぞれの結果をラベルに書く / 対比: 「判定ヘッダーだけをキーに含める」案と「全部入れる/キャッシュしない」案を左右に並べ、バリアント数で比べる)
+
+```mermaid
+flowchart TD
+    REQ["同一 URL でモバイル/デスクトップに<br/>異なるオリジンレスポンスを返しつつ<br/>キャッシュ効率も維持したい"]:::req
+    Q{"キャッシュキーに<br/>何を含めるか?"}:::judge
+
+    subgraph BESTG["必要最小限だけをキャッシュキーに含める"]
+        CP["キャッシュポリシー<br/>CloudFront-Is-Mobile-Viewer などの<br/>デバイス判定ヘッダーをキャッシュキーに含める"]:::best
+        ORP["オリジンリクエストポリシー<br/>そのヘッダーをオリジンへ転送する"]:::best
+        VAR["保持されるのは<br/>モバイル/デスクトップの 2 種類のバリアントだけ"]:::best
+        CP --> ORP
+        CP --> VAR
+    end
+
+    subgraph NG["キャッシュ効率を落とす案"]
+        ALLK["全ヘッダー・Cookie・クエリ文字列をキーに含める<br/>キャッシュヒット率が壊滅的に下がる"]:::alt
+        TTL0["TTL 0 で常にオリジンへ問い合わせる<br/>キャッシュの意味を失う"]:::alt
+        DIST["デバイスごとに別ディストリビューション<br/>Route 53 ではデバイス判定ができない"]:::alt
+    end
+
+    NOTE["キャッシュキーは最小限に絞る<br/>振り分けに要るヘッダーだけ足す"]:::note
+
+    REQ --> Q
+    Q -->|"判定ヘッダー"| CP
+    Q -.->|"全部入れる"| ALLK
+    Q -.->|"使わない"| TTL0
+    Q -.->|"配信を分ける"| DIST
+    VAR -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net48.svg`](../../web/diagrams/net48.svg)
+
+**解説**: CloudFront はキャッシュポリシーでキャッシュキーに含める要素を最小限に絞るのが原則で、デバイス判定は CloudFront-Is-Mobile-Viewer 等の追加ヘッダーをキャッシュキーに含めることで 2 種類のバリアントだけを保持できます。全ヘッダー/Cookie をキーに含めるとキャッシュヒット率が壊滅的に下がり、TTL 0 はキャッシュの意味を失わせます。Route 53 ではデバイス判定はできません。
+
+**確認事項**: デバイス判定ヘッダーは解説が挙げる CloudFront-Is-Mobile-Viewer を代表例として書き、他の CloudFront-Is-*-Viewer ヘッダーは「など」に含めている。ヘッダー名を個別に問う問題を追加する場合は列挙が要る。 / キャッシュポリシーとオリジンリクエストポリシーは役割が違うため 2 ノードに分けたが、両方が要ることは矢印でしか示していない。片方だけだと何が起きるかは解説に記述がないため書いていない。
+
+---
+
+## net49 — ネットワーク / level 3
+
+**問題**: CloudFront で提供する SPA(シングルページアプリケーション)で、URL の書き換え(/app/* を /index.html へ)と、簡単な A/B テスト用の Cookie 付与を、可能な限り低レイテンシー・低コストで実装したい。外部ネットワークアクセスや長時間の処理は不要である。最適な選択肢はどれか?
+
+**正解**: CloudFront Functions(ビューアーリクエスト/レスポンス)で実装する
+
+**他の選択肢**: Lambda@Edge のオリジンリクエストイベントで実装する / オリジンの ALB のリスナールールでリダイレクトを設定する / S3 の静的ウェブサイトホスティングのリダイレクトルールで実装する
+
+**図解の主メッセージ**: 外部ネットワークアクセスも長い処理も要らない軽い処理なので、サブミリ秒で動き Lambda@Edge の約 1/6 のコストで済む CloudFront Functions を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。解説自体が「ネットワークアクセスやファイルシステム、長い実行時間が必要なら Lambda@Edge」という 1 つの問いで線を引いており、その問いをそのまま菱形にすれば読み手が試験本番でなぞる順序と一致する。対比表は項目が増えるほど「結局どちらか」の判断が図から遠のく。(候補: 分岐(判断フロー): 「外部ネットワークアクセスや長時間の処理が要るか」の 1 問で CloudFront Functions と Lambda@Edge に振り分ける / 対比: CloudFront Functions と Lambda@Edge を左右に並べ、実行時間・コスト・できることを項目ごとに比べる)
+
+```mermaid
+flowchart TD
+    REQ["SPA の URL 書き換え(/app/* を /index.html へ)と<br/>A/B テスト用の Cookie 付与を<br/>低レイテンシー・低コストで実装したい"]:::req
+    Q{"外部ネットワークアクセスや<br/>長時間の処理が要るか?"}:::judge
+
+    subgraph CFF["CloudFront Functions で足りる"]
+        FUNC["CloudFront Functions<br/>ビューアーリクエスト/レスポンスで実行<br/>JavaScript(ECMAScript 5.1 相当)"]:::best
+        PERF["サブミリ秒で実行<br/>Lambda@Edge の約 1/6 のコスト"]:::best
+        USE["URL 書き換え・ヘッダー操作<br/>Cookie 付与・簡易認可に適する"]:::best
+        FUNC --> PERF
+        FUNC --> USE
+    end
+
+    LAE["Lambda@Edge<br/>ネットワークアクセス・ファイルシステム<br/>長い実行時間が要るときに選ぶ"]:::alt
+
+    subgraph NG["この要件では選ばない案"]
+        ALB["オリジンの ALB のリスナールールでリダイレクト<br/>エッジではなくオリジンでの処理になる"]:::alt
+        S3W["S3 静的ウェブサイトのリダイレクトルール<br/>Cookie 付与はできない"]:::alt
+    end
+
+    NOTE["軽い処理はエッジの CloudFront Functions<br/>重い処理だけ Lambda@Edge"]:::note
+
+    REQ --> Q
+    Q -->|"要らない"| FUNC
+    Q -.->|"要る"| LAE
+    REQ -.-> NG
+    PERF -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net49.svg`](../../web/diagrams/net49.svg)
+
+**解説**: CloudFront Functions は JavaScript(ECMAScript 5.1 相当)による軽量関数で、ビューアーリクエスト/レスポンス時にサブミリ秒で実行され、Lambda@Edge の約 1/6 のコストで大量リクエストを処理できます。URL 書き換え、ヘッダー操作、Cookie 付与、簡易認可などに適します。ネットワークアクセスやファイルシステム、長い実行時間が必要なら Lambda@Edge を選びます。
+
+**確認事項**: Lambda@Edge はこの要件では選ばないが「誤りの選択肢」ではなく条件が変われば正解になるため、破線で分岐先として描いている。グレーの枠(選ばない案)には入れていない。 / ALB のリスナールールが不適な理由は解説に明示がないため、問題文の低レイテンシー要件から『エッジではなくオリジンでの処理になる』とだけ書いている。
+
+---
+
+## net50 — ネットワーク / level 3
+
+**問題**: グローバルに提供する REST API を東京・フランクフルト・バージニアの 3 リージョンで稼働させている。障害時のフェイルオーバーを数十秒以内で完了させ、TCP 接続の確立を高速化し、クライアント側の DNS キャッシュの影響も避けたい。最適な構成はどれか?
+
+**正解**: AWS Global Accelerator を使い、2 つの静的エニーキャスト IP から最寄りのエッジ経由で最適リージョンへ転送し、ヘルスチェック失敗時に自動フェイルオーバーさせる
+
+**他の選択肢**: Route 53 のレイテンシールーティングとヘルスチェックを設定し、TTL を 60 秒にする / 各リージョンに CloudFront ディストリビューションを作り、オリジンフェイルオーバーを設定する / Route 53 の加重ルーティングで 3 リージョンへ均等分散し、障害時に手動で重みを変更する
+
+**図解の主メッセージ**: 切り替えを DNS に依存させないのが要件なので、静的エニーキャスト IP で経路から DNS を外す Global Accelerator を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。誤答 3 つのうち 2 つは Route 53、1 つは CloudFront と落ちる理由が揃っておらず、対比の 2 列にはきれいに収まらない。「DNS に頼らずに済むか」という 1 つの問いから分ければ、判断軸がひとつであることと、誤答それぞれの落ちどころを同じ図で言える。(候補: 分岐(判断フロー): 「切り替えを DNS に頼らずに済むか」の 1 問で、エニーキャスト IP の案と DNS ベースの案に振り分ける / 対比: 左に DNS ベース(名前解決 → キャッシュ → 切り替え遅延)、右にエニーキャスト IP(常に同じ IP)を並べ、経路の長さを比べる)
+
+```mermaid
+flowchart TB
+    REQ["東京・フランクフルト・バージニアの 3 リージョンで稼働<br/>フェイルオーバーは数十秒以内・TCP 確立を高速化<br/>クライアント側の DNS キャッシュの影響も避けたい"]:::req
+    Q{"切り替えを DNS に<br/>頼らずに済むか?"}:::judge
+
+    subgraph GA["AWS Global Accelerator — 経路から DNS を外す"]
+        IP["2 つの静的エニーキャスト IP<br/>クライアントは常に同じ IP を使う"]:::best
+        EDGE["最寄りの AWS エッジで TCP を終端し<br/>バックボーン経由で最適リージョンへ転送"]:::best
+        HC["ヘルスチェック失敗時に自動フェイルオーバー<br/>DNS に依存せず数十秒以内に完了"]:::best
+        IP --> EDGE --> HC
+    end
+
+    REGIONS["東京 / フランクフルト / バージニア"]:::svc
+
+    subgraph NG["DNS / キャッシュに左右される案"]
+        LAT["Route 53 レイテンシールーティング + TTL 60 秒<br/>リゾルバのキャッシュで TTL どおりに切り替わらない"]:::alt
+        WGT["Route 53 加重ルーティング + 手動で重み変更<br/>切り替えが手作業になる"]:::alt
+        CF["各リージョンに CloudFront + オリジンフェイルオーバー<br/>静的/HTTP キャッシュ配信が主目的"]:::alt
+    end
+
+    NOTE["DNS を経路から外すと<br/>クライアントのキャッシュに左右されない"]:::note
+
+    REQ --> Q
+    Q -->|"外せる"| IP
+    EDGE -->|"転送"| REGIONS
+    Q -.->|"DNS 依存"| NG
+    HC -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net50.svg`](../../web/diagrams/net50.svg)
+
+**解説**: Global Accelerator は静的エニーキャスト IP を提供し、ユーザーは最寄りの AWS エッジで TCP を終端して AWS バックボーン経由で最適なリージョンへ転送されるため、接続確立が速く、フェイルオーバーも DNS に依存せず数十秒以内に完了します。Route 53 は DNS ベースであり、クライアントやリゾルバのキャッシュによって TTL どおりに切り替わらないことがあります。CloudFront は静的/HTTP キャッシュ配信が主目的です。
+
+**確認事項**: 「TCP 接続の確立を高速化」は最寄りエッジでの TCP 終端として 1 ノードに書いたが、判断の分岐には使っていない。誤答がこの条件だけでは落ちないため、主軸を DNS 依存の有無に絞っている。 / 3 リージョンは 1 ノードにまとめて描いている。リージョンごとのエンドポイントグループやトラフィックダイヤルは解説の範囲外のため描いていない。

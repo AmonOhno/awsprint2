@@ -1,0 +1,182 @@
+{
+  "question_id": "net45",
+  "purpose": "ネットワーク ACL が「番号の昇順に評価し、最初に一致したルールで確定する」ことを、パケットが通る順序として 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、セキュリティグループとネットワーク ACL の評価方式(ステートフル/ステートレス、全評価/先勝ち)を取り違える人。",
+  "message": "ネットワーク ACL は番号の小さい順に評価して最初に一致したルールで確定するため、90 番の DENY が 100 番の ALLOW より先に効いて該当 IP だけ遮断される。",
+  "source_summary": "ALB 背後の EC2 に対し、送信元 IP 203.0.113.10 からのアクセスだけが到達しない。セキュリティグループは 0.0.0.0/0 の 443 を許可、ネットワーク ACL のインバウンドに 203.0.113.10/32 の DENY(ルール番号 90)と 0.0.0.0/0 の ALLOW(番号 100)がある。正解は「NACL はルール番号の小さい順に評価され、最初に一致した DENY が適用されるため 90 番の拒否が有効になっている」。NACL はステートレスで昇順評価・先勝ち、セキュリティグループはステートフルで戻りトラフィックは自動許可される。ALB の ENI が置かれるサブネットの NACL も適用される点に注意が必要。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "203.0.113.10 からのアクセスだけ到達しない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "PKT",
+      "label": "203.0.113.10 からの HTTPS(443)リクエスト",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SUBNET",
+      "label": "ALB の ENI が置かれるサブネット",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "R90",
+      "label": "ルール 90: 203.0.113.10/32 を DENY",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "R100",
+      "label": "ルール 100: 0.0.0.0/0 を ALLOW",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "STOP",
+      "label": "最初に一致した 90 番の DENY が適用され遮断される",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "SG",
+      "label": "セキュリティグループ(ステートフル・0.0.0.0/0 の 443 を許可)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "M1",
+      "label": "SG がステートレスで戻りが拒否されている、という説明",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "M2",
+      "label": "ALB は NACL の影響を受けない、という説明",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "M3",
+      "label": "NACL は全ルールを評価し ALLOW が 1 つあれば通る、という説明",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "NACL は昇順評価・先勝ち、SG は全ルール評価・ステートフル",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "PKT",
+      "verb": "問題の通信をたどる",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "PKT",
+      "to": "SUBNET",
+      "verb": "サブネットに入る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "SUBNET",
+      "to": "R90",
+      "verb": "番号の小さい順に評価する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "R90",
+      "to": "STOP",
+      "verb": "最初に一致して確定する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "R90",
+      "to": "R100",
+      "verb": "評価が到達しない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "SUBNET",
+      "to": "SG",
+      "verb": "戻りは自動許可なので原因ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "M1",
+      "verb": "SG はステートフルなので誤り",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "M2",
+      "verb": "ALB の ENI のサブネットにも NACL は効く",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "M3",
+      "verb": "NACL は先勝ちなので誤り",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "STOP",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NACL",
+      "label": "ネットワーク ACL のインバウンド(ステートレス・昇順評価)",
+      "members": [
+        "R90",
+        "R100"
+      ]
+    },
+    {
+      "id": "MIS",
+      "label": "取り違えやすい説明(いずれも誤り)",
+      "members": [
+        "M1",
+        "M2",
+        "M3"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "直列(評価順): パケットが辿る順序に沿って、サブネット → 90 番 → 確定 と並べ、100 番には到達しないことを示す",
+    "対比: ネットワーク ACL(ステートレス・先勝ち)とセキュリティグループ(ステートフル・全評価)を左右に並べて性質を比べる"
+  ],
+  "selected_pattern": "直列(評価順)。本問の答えの中身は「どちらのルールが先に評価されるか」という順序そのもので、番号順に並べて 100 番へ矢印が届かないことを見せれば主メッセージが図だけで伝わる。対比は性質の整理には向くが、90 番が先に効くという肝心の順序が図に現れない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=事象・前提、矩形(緑)=正解の根拠を担うノード(先に評価される 90 番と、その結果確定する遮断)、矩形(白)=パケットやサブネット、SG などの一般要素、矩形(グレー)=評価に到達しないルールと取り違えやすい説明、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=正解の根拠となる経路、グレー=到達しない/誤りの説明、青=観測された事象、白=前提となる構成要素、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=評価の進行、破線矢印=到達しない経路と誤りの説明への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "アウトバウンド側の NACL 評価(ステートレスなので戻りにもルールが要る)は本問の原因ではないため描いていない。戻り方向を問う問題を追加する場合は別図が要る。",
+    "「ALB の ENI が置かれるサブネットの NACL も適用される」は解説の注意書きを 1 ノードに落としているが、クライアント → ALB → EC2 の 2 段のサブネットを描き分けると図が密になるため、ALB 側の 1 段だけにしている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"203.0.113.10 からのアクセスだけ到達しない<br/>SG は 0.0.0.0/0 の 443 を許可済み\"]:::req\n    PKT[\"203.0.113.10 からの HTTPS(443)リクエスト\"]:::svc\n    SUBNET[\"ALB の ENI が置かれるサブネット\"]:::svc\n\n    subgraph NACL[\"ネットワーク ACL のインバウンド — ステートレス・番号の昇順に評価\"]\n        R90[\"ルール 90<br/>203.0.113.10/32 を DENY\"]:::best\n        R100[\"ルール 100<br/>0.0.0.0/0 を ALLOW<br/>90 で確定済みのため評価されない\"]:::alt\n    end\n\n    STOP[\"最初に一致した 90 番の DENY が適用され<br/>この送信元だけ遮断される\"]:::best\n    SG[\"セキュリティグループ<br/>ステートフル・戻りは自動許可<br/>今回の原因ではない\"]:::svc\n\n    subgraph MIS[\"取り違えやすい説明(いずれも誤り)\"]\n        M1[\"SG がステートレスで戻りが拒否されている\"]:::alt\n        M2[\"ALB は NACL の影響を受けない\"]:::alt\n        M3[\"全ルールを評価し ALLOW が 1 つあれば通る\"]:::alt\n    end\n\n    NOTE[\"NACL は番号の小さい順に評価し<br/>最初に一致したルールで確定する\"]:::note\n\n    REQ --> PKT\n    PKT --> SUBNET\n    SUBNET -->|\"昇順に評価\"| R90\n    R90 -->|\"一致\"| STOP\n    R90 -.->|\"到達しない\"| R100\n    SUBNET -.->|\"原因でない\"| SG\n    REQ -.-> MIS\n    STOP -.- NOTE"
+}

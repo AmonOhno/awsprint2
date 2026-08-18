@@ -1,0 +1,157 @@
+{
+  "question_id": "net48",
+  "purpose": "CloudFront のキャッシュキーに何を含めるかが、そのままバリアント数(キャッシュ効率)を決めることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、キャッシュポリシーとオリジンリクエストポリシーの役割分担が曖昧な人。",
+  "message": "キャッシュキーはデバイス判定ヘッダーだけに絞れば保持するバリアントが 2 種類で済み、振り分けとキャッシュ効率を両立できる。",
+  "source_summary": "CloudFront 配信で、同一 URL に対してデバイス種別(モバイル/デスクトップ)ごとに異なるオリジンレスポンスを返しつつキャッシュ効率も維持したい。正解はキャッシュポリシーでキャッシュキーに CloudFront-Is-Mobile-Viewer などのデバイス判定ヘッダーを含め、オリジンリクエストポリシーでそのヘッダーをオリジンへ転送する設定。CloudFront はキャッシュキーに含める要素を最小限に絞るのが原則で、デバイス判定ヘッダーをキーに含めれば 2 種類のバリアントだけを保持できる。全ヘッダー/Cookie をキーに含めるとキャッシュヒット率が壊滅的に下がり、TTL 0 はキャッシュの意味を失わせる。Route 53 ではデバイス判定はできない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "同一 URL でデバイス別のレスポンスを返しつつキャッシュ効率も維持したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "キャッシュキーに何を含めるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CP",
+      "label": "キャッシュポリシーでデバイス判定ヘッダーをキャッシュキーに含める",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ORP",
+      "label": "オリジンリクエストポリシーでそのヘッダーをオリジンへ転送する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "VAR",
+      "label": "保持されるのはモバイル/デスクトップの 2 種類のバリアントだけ",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "ALLK",
+      "label": "全ヘッダー・Cookie・クエリ文字列をキャッシュキーに含める",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "TTL0",
+      "label": "TTL 0 にして常にオリジンへ問い合わせる",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DIST",
+      "label": "デバイスごとに別ディストリビューションを作り Route 53 で振り分ける",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "キャッシュキーは最小限に絞り、振り分けに要るものだけ足す",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "キャッシュキーの設計を問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "CP",
+      "verb": "デバイス判定ヘッダーだけ含める",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CP",
+      "to": "ORP",
+      "verb": "オリジンにも同じヘッダーを渡す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CP",
+      "to": "VAR",
+      "verb": "バリアントが 2 種類に収まる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "ALLK",
+      "verb": "キャッシュヒット率が壊滅的に下がる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "TTL0",
+      "verb": "キャッシュの意味を失う",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "DIST",
+      "verb": "Route 53 ではデバイス判定ができない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "VAR",
+      "to": "NOTE",
+      "verb": "設計原則を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "BESTG",
+      "label": "必要最小限だけをキャッシュキーに含める",
+      "members": [
+        "CP",
+        "ORP",
+        "VAR"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "キャッシュ効率を落とす案",
+      "members": [
+        "ALLK",
+        "TTL0",
+        "DIST"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「キャッシュキーに何を含めるか」の 1 問で 4 つの案を振り分け、それぞれの結果をラベルに書く",
+    "対比: 「判定ヘッダーだけをキーに含める」案と「全部入れる/キャッシュしない」案を左右に並べ、バリアント数で比べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。誤答が「全部入れる」「キャッシュしない」「そもそも分けてしまう」と方向がばらばらで、対比の 2 列には収まらない。1 つの問い(キャッシュキーに何を含めるか)から 4 方向へ分けるほうが、判断軸がひとつであることも同時に伝わる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解の設定とその結果、矩形(グレー)=キャッシュ効率を落とす案、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=キャッシュ効率を保つ設定、グレー=効率を落とす案、青=要件と判断軸、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行と設定の連なり、破線矢印=要件を満たさない案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "デバイス判定ヘッダーは解説が挙げる CloudFront-Is-Mobile-Viewer を代表例として書き、他の CloudFront-Is-*-Viewer ヘッダーは「など」に含めている。ヘッダー名を個別に問う問題を追加する場合は列挙が要る。",
+    "キャッシュポリシーとオリジンリクエストポリシーは役割が違うため 2 ノードに分けたが、両方が要ることは矢印でしか示していない。片方だけだと何が起きるかは解説に記述がないため書いていない。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"同一 URL でモバイル/デスクトップに<br/>異なるオリジンレスポンスを返しつつ<br/>キャッシュ効率も維持したい\"]:::req\n    Q{\"キャッシュキーに<br/>何を含めるか?\"}:::judge\n\n    subgraph BESTG[\"必要最小限だけをキャッシュキーに含める\"]\n        CP[\"キャッシュポリシー<br/>CloudFront-Is-Mobile-Viewer などの<br/>デバイス判定ヘッダーをキャッシュキーに含める\"]:::best\n        ORP[\"オリジンリクエストポリシー<br/>そのヘッダーをオリジンへ転送する\"]:::best\n        VAR[\"保持されるのは<br/>モバイル/デスクトップの 2 種類のバリアントだけ\"]:::best\n        CP --> ORP\n        CP --> VAR\n    end\n\n    subgraph NG[\"キャッシュ効率を落とす案\"]\n        ALLK[\"全ヘッダー・Cookie・クエリ文字列をキーに含める<br/>キャッシュヒット率が壊滅的に下がる\"]:::alt\n        TTL0[\"TTL 0 で常にオリジンへ問い合わせる<br/>キャッシュの意味を失う\"]:::alt\n        DIST[\"デバイスごとに別ディストリビューション<br/>Route 53 ではデバイス判定ができない\"]:::alt\n    end\n\n    NOTE[\"キャッシュキーは最小限に絞る<br/>振り分けに要るヘッダーだけ足す\"]:::note\n\n    REQ --> Q\n    Q -->|\"判定ヘッダー\"| CP\n    Q -.->|\"全部入れる\"| ALLK\n    Q -.->|\"使わない\"| TTL0\n    Q -.->|\"配信を分ける\"| DIST\n    VAR -.- NOTE"
+}

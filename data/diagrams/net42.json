@@ -1,0 +1,204 @@
+{
+  "question_id": "net42",
+  "purpose": "30 個の VPC に同じ検査を掛けたいときに、検査機能を各 VPC に配るのではなく 1 箇所へ集めて経路を寄せる、というハブ&スポークの形を 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Network Firewall・SG/NACL・WAF の守備範囲と、集中インスペクションの置き場所が整理できていない人。",
+  "message": "ドメイン許可リストとシグネチャ IPS を 30 VPC に一元適用するには、インスペクション VPC の Network Firewall へ Transit Gateway で全トラフィックを寄せる。",
+  "source_summary": "VPC を出入りするすべてのトラフィックに、ドメイン名ベースの許可リストとシグネチャベースの IPS を集中適用したい。VPC は 30 個でインスペクションは一元管理したい。正解はインスペクション VPC に AWS Network Firewall を配置し、Transit Gateway のアプライアンスモードで全 VPC の東西/南北トラフィックを経由させる構成。Network Firewall はステートフル検査、Suricata 互換ルールによる IPS、ドメインリストフィルタリングを提供する。アプライアンスモードを有効にすると同一フローが同じファイアウォールエンドポイントを通り、非対称ルーティングを避けられる。SG/NACL は IP/ポートのみ、WAF は HTTP レイヤーの保護、NAT ゲートウェイにドメインフィルタ機能はない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "30 VPC の出入りにドメイン許可リストと IPS を集中適用したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "V1",
+      "label": "スポーク VPC A",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "V2",
+      "label": "スポーク VPC B",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "V3",
+      "label": "スポーク VPC N(全 30 個)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "TGW",
+      "label": "Transit Gateway(アプライアンスモード)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NFW",
+      "label": "AWS Network Firewall",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "OUT",
+      "label": "インターネット / 他 VPC",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SGNACL",
+      "label": "各 VPC の SG / NACL に許可リストを実装する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NAT",
+      "label": "各 VPC に NAT ゲートウェイを置いて送信先でフィルタする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "WAF",
+      "label": "各 VPC の ALB に AWS WAF を関連付ける",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "アプライアンスモードで同一フローを同じ FW に通す",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "V1",
+      "verb": "すべてのスポーク VPC に掛かる要件",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "REQ",
+      "to": "V2",
+      "verb": "すべてのスポーク VPC に掛かる要件",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "REQ",
+      "to": "V3",
+      "verb": "すべてのスポーク VPC に掛かる要件",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "V1",
+      "to": "TGW",
+      "verb": "アタッチする",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "V2",
+      "to": "TGW",
+      "verb": "アタッチする",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "V3",
+      "to": "TGW",
+      "verb": "アタッチする",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "TGW",
+      "to": "NFW",
+      "verb": "インスペクション VPC へ引き込む",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "NFW",
+      "to": "OUT",
+      "verb": "検査を通ったものだけ出す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "REQ",
+      "to": "SGNACL",
+      "verb": "IP・ポートしか見られない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "NAT",
+      "verb": "ドメインでのフィルタができない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "WAF",
+      "verb": "HTTP レイヤーの保護にとどまる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "TGW",
+      "to": "NOTE",
+      "verb": "設定上の前提を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "SPOKE",
+      "label": "スポーク VPC(30 個)",
+      "members": [
+        "V1",
+        "V2",
+        "V3"
+      ]
+    },
+    {
+      "id": "INSP",
+      "label": "インスペクション VPC(検査を集約)",
+      "members": [
+        "NFW"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "各 VPC に配る案(集中適用にならない)",
+      "members": [
+        "SGNACL",
+        "NAT",
+        "WAF"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "ハブ&スポーク構成図: スポーク VPC 群 → Transit Gateway → インスペクション VPC の経路を描き、検査が 1 箇所に集まることを見せる",
+    "分岐(判断フロー): 「ドメイン名で判断できるか」「30 VPC を一元管理できるか」の 2 問で選択肢を振り分ける"
+  ],
+  "selected_pattern": "ハブ&スポーク構成図。本問の答えの中身は「検査機能をどこに置き、トラフィックをどう寄せるか」という配置そのもので、30 本の経路が 1 つの Network Firewall に集まる形がそのまま一元管理の理由になる。判断フローだと「集中」という配置の話が図に残らず、誤答との差が言葉の比較に落ちてしまう。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、矩形(緑)=正解を構成する Transit Gateway と Network Firewall、矩形(白)=スポーク VPC や外部などの一般要素、矩形(グレー)=要件を満たさない案、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=集中インスペクションを成立させる構成要素、白=前提となる VPC・外部、グレー=各 VPC に配る案、青=要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=トラフィックの流れ、破線矢印=要件を満たさない案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "スポーク VPC は図の読みやすさのため 3 個だけ描き、ラベルで 30 個であることを示している。数そのものを問う問題ではないため省略した。",
+    "解説にある「東西(VPC 間)」と「南北(インターネット向け)」の区別は、1 枚に両方の経路を描くと線が増えて主メッセージがぼやけるため、出口を『インターネット / 他 VPC』の 1 ノードにまとめている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"30 個の VPC を出入りするすべての通信に<br/>ドメイン許可リストと IPS を集中適用したい\"]:::req\n\n    subgraph SPOKE[\"スポーク VPC(30 個)\"]\n        V1[\"VPC A\"]:::svc\n        V2[\"VPC B\"]:::svc\n        V3[\"VPC N(全 30 個)\"]:::svc\n    end\n\n    TGW[\"Transit Gateway<br/>アプライアンスモードを有効化\"]:::best\n\n    subgraph INSP[\"インスペクション VPC(検査を集約)\"]\n        NFW[\"AWS Network Firewall<br/>ステートフル検査 / Suricata 互換の IPS<br/>ドメインリストフィルタリング\"]:::best\n    end\n\n    OUT[\"インターネット / 他 VPC\"]:::svc\n\n    subgraph NG[\"各 VPC に配る案(集中適用にならない)\"]\n        SGNACL[\"各 VPC の SG / NACL に許可リスト<br/>IP・ポートしか見られない\"]:::alt\n        NAT[\"各 VPC に NAT ゲートウェイ<br/>送信先ドメインでのフィルタはできない\"]:::alt\n        WAF[\"各 ALB に AWS WAF<br/>HTTP レイヤーの保護にとどまる\"]:::alt\n    end\n\n    NOTE[\"アプライアンスモードで<br/>同一フローが同じ FW を通り<br/>非対称ルーティングを避けられる\"]:::note\n\n    REQ --> V1\n    REQ --> V2\n    REQ --> V3\n    V1 --> TGW\n    V2 --> TGW\n    V3 --> TGW\n    TGW -->|\"引き込む\"| NFW\n    NFW -->|\"検査後\"| OUT\n    REQ -.->|\"分散配置\"| NG\n    TGW -.- NOTE"
+}

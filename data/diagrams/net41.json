@@ -1,0 +1,155 @@
+{
+  "question_id": "net41",
+  "purpose": "DNS の「記録」と「遮断」がそれぞれ Route 53 Resolver のどの機能に対応するか、そしてなぜエージェントが要らないかを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、DNS 関連のログ・防御が VPC フローログや GuardDuty と混ざってしまう人。",
+  "message": "DNS クエリの記録は Resolver クエリログ、悪性ドメインの遮断は Resolver DNS Firewall で、どちらも VPC レベルで効くのでエージェントが要らない。",
+  "source_summary": "VPC 内から解決される DNS クエリを記録し、既知の悪性ドメインへの名前解決をブロックしたい。EC2 にエージェントは入れない。正解は Route 53 Resolver クエリログ + Resolver DNS Firewall。クエリログは VPC 内から発行された DNS クエリを CloudWatch Logs・S3・Firehose に記録し、DNS Firewall は AWS マネージドの脅威リストを含むドメインリストに基づいて ALLOW/BLOCK/ALERT を適用する。いずれも VPC レベルで機能しエージェント不要。VPC フローログはドメイン名を含まず、ポート 53 の遮断は正当な名前解決まで壊す。GuardDuty は検知のみで遮断は手動。CloudWatch エージェントは EC2 への導入が必要。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "VPC 内の DNS クエリを記録し、悪性ドメインの名前解決を遮断したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q1",
+      "label": "EC2 にエージェントを入れずに済むか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "AGENT",
+      "label": "CloudWatch エージェントを EC2 に導入する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "Q2",
+      "label": "ドメイン名で記録・遮断できるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "LOG",
+      "label": "Route 53 Resolver クエリログ",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "FW",
+      "label": "Route 53 Resolver DNS Firewall",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "FLOW",
+      "label": "VPC フローログ + ポート 53 の遮断",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "GD",
+      "label": "GuardDuty + 手動でのセキュリティグループ更新",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "記録はクエリログ、遮断は DNS Firewall",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q1",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q1",
+      "to": "AGENT",
+      "verb": "各インスタンスへの導入が要る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q1",
+      "to": "Q2",
+      "verb": "VPC レベルで効くなら次の問いへ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q2",
+      "to": "LOG",
+      "verb": "DNS クエリを記録する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q2",
+      "to": "FW",
+      "verb": "ドメインリストで遮断する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q2",
+      "to": "FLOW",
+      "verb": "ドメイン名が記録されない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q2",
+      "to": "GD",
+      "verb": "検知にとどまり遮断が手作業",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "FW",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "R53",
+      "label": "Route 53 Resolver(VPC レベルで機能する)",
+      "members": [
+        "LOG",
+        "FW"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "ドメイン名の記録・遮断にならない案",
+      "members": [
+        "FLOW",
+        "GD"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「エージェント不要か」「ドメイン名で記録・遮断できるか」の 2 問で振り分ける",
+    "合流(要求と部品の対応): 「記録したい」「遮断したい」の 2 つの要求に、クエリログと DNS Firewall を 1 つずつ対応づける"
+  ],
+  "selected_pattern": "分岐(判断フロー)。問題文が挙げる条件が「エージェント不要」と「ドメイン名ベースの記録・遮断」の 2 つで、誤答はこの 2 条件のどちらかで必ず落ちる。合流型だと正解の 2 部品はきれいに描けるが、誤答がなぜ落ちるかを同じ図の中で言えない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=正解を構成する Resolver の 2 機能、グレー=要件を満たさない案、青=要件と判断軸、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・正解への経路、破線矢印=要件を満たさない案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "DNS Firewall の ALERT 相当の動作は解説に列挙があるためラベルに残したが、ALLOW/BLOCK/ALERT の使い分けそのものは本問の判断軸ではないので図の主線には載せていない。",
+    "クエリログの出力先(CloudWatch Logs / S3 / Firehose)は解説の記述どおり 1 ノードに併記している。出力先の選択を問う問題を追加する場合は分割が必要。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"VPC 内から解決される DNS クエリを記録し<br/>既知の悪性ドメインへの名前解決を遮断したい\"]:::req\n    Q1{\"EC2 にエージェントを<br/>入れずに済むか?\"}:::judge\n    AGENT[\"CloudWatch エージェントを EC2 に導入<br/>各インスタンスへの導入作業が要る\"]:::alt\n    Q2{\"ドメイン名で<br/>記録・遮断できるか?\"}:::judge\n\n    subgraph R53[\"Route 53 Resolver — VPC レベルで機能する\"]\n        LOG[\"Resolver クエリログ<br/>VPC 内から発行された DNS クエリを記録<br/>CloudWatch Logs / S3 / Firehose へ\"]:::best\n        FW[\"Resolver DNS Firewall<br/>ドメインリストで ALLOW / BLOCK / ALERT<br/>AWS マネージドの脅威リストを含む\"]:::best\n    end\n\n    subgraph NG[\"ドメイン名の記録・遮断にならない案\"]\n        FLOW[\"VPC フローログ + ポート 53 の遮断<br/>フローログにドメイン名は含まれず<br/>正当な名前解決まで壊れる\"]:::alt\n        GD[\"GuardDuty + 手動でセキュリティグループ更新<br/>検知はできるが遮断が手作業\"]:::alt\n    end\n\n    NOTE[\"記録は クエリログ<br/>遮断は DNS Firewall\"]:::note\n\n    REQ --> Q1\n    Q1 -.->|\"導入が要る\"| AGENT\n    Q1 -->|\"入れずに済む\"| Q2\n    Q2 -->|\"記録する\"| LOG\n    Q2 -->|\"遮断する\"| FW\n    Q2 -.->|\"名前が無い\"| FLOW\n    Q2 -.->|\"検知のみ\"| GD\n    FW -.- NOTE"
+}

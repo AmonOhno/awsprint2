@@ -1,0 +1,170 @@
+{
+  "question_id": "net43",
+  "purpose": "サードパーティ製アプライアンスを経路へ透過的に挿入できるのは、ルートテーブルのターゲットになれて、かつインラインで遮断できる仕組みだけであることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、GWLB・NLB・トラフィックミラーリングの役割の違いが混ざってしまう人。",
+  "message": "ルートテーブルのターゲットにできてインラインで遮断もできるのは GWLB エンドポイントだけなので、透過的な経路挿入は Gateway Load Balancer で行う。",
+  "source_summary": "サードパーティ製の仮想侵入検知アプライアンスを、既存のルーティング設計を大きく変えずに経路へ透過的に挿入したい。アプライアンスは水平スケールと高可用性が必要。正解は Gateway Load Balancer(GWLB)とエンドポイントを使い、GENEVE(ポート 6081)でアプライアンス群へトラフィックを転送する構成。GWLB は L3 で透過的に動作し、スケーリングとヘルスチェックによる可用性を提供する。GWLB エンドポイントをルートテーブルのターゲットに指定するだけで経路へ挿入できる。NLB はルートテーブルのターゲットにできず、トラフィックミラーリングはコピーの解析のみで遮断はできない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "既存のルーティングを大きく変えずにアプライアンスを経路へ透過挿入したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q1",
+      "label": "経路そのものに透過的に挿入できるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "Q2",
+      "label": "インラインで遮断できるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "GWLBE",
+      "label": "GWLB エンドポイント(ルートテーブルのターゲット)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "GWLB",
+      "label": "Gateway Load Balancer",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "APPL",
+      "label": "サードパーティ製アプライアンス群",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NLB",
+      "label": "Network Load Balancer をアプライアンスの前段に置く",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "BH",
+      "label": "Transit Gateway のブラックホールルート",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "MIR",
+      "label": "VPC トラフィックミラーリングでコピーを送る",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "経路挿入は GWLB エンドポイント、転送は GENEVE",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q1",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q1",
+      "to": "NLB",
+      "verb": "ルートテーブルのターゲットにできない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q1",
+      "to": "BH",
+      "verb": "通信を捨てるだけで検査に回せない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q1",
+      "to": "Q2",
+      "verb": "挿入できるなら次の問いへ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q2",
+      "to": "MIR",
+      "verb": "コピーの解析のみで遮断できない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q2",
+      "to": "GWLBE",
+      "verb": "経路へ透過的に挿入する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "GWLBE",
+      "to": "GWLB",
+      "verb": "トラフィックを渡す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "GWLB",
+      "to": "APPL",
+      "verb": "GENEVE でカプセル化して転送する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "GWLB",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "GW",
+      "label": "Gateway Load Balancer による透過挿入",
+      "members": [
+        "GWLBE",
+        "GWLB",
+        "APPL"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "透過挿入にならない案",
+      "members": [
+        "NLB",
+        "BH",
+        "MIR"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「経路に透過挿入できるか」「インラインで遮断できるか」の 2 問で誤答を順に落とす",
+    "構成図: VPC のルートテーブル → GWLB エンドポイント → GWLB → アプライアンス群 の経路だけを描く"
+  ],
+  "selected_pattern": "分岐(判断フロー)。誤答 3 つがそれぞれ「ルートテーブルのターゲットにできない」「経路を捨てるだけ」「コピーの解析だけ」という別々の理由で落ちるため、2 つの問いで順に振り分けるほうが理由が図に残る。構成図だけだと正解の形は見えるが、なぜ NLB やミラーリングでは駄目なのかが図の外に出てしまう。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解を構成する GWLB とエンドポイント、矩形(白)=アプライアンス群などの一般要素、矩形(グレー)=要件を満たさない案、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=透過挿入を成立させる構成要素、白=前提となる要素、グレー=要件を満たさない案、青=要件と判断軸、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行とトラフィックの流れ、破線矢印=要件を満たさない案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「水平スケールと高可用性」は GWLB のヘルスチェックとスケーリングとしてラベルに書いたが、判断の分岐には使っていない。誤答がこの条件では落ちないため主線に入れると軸がぼやける。",
+    "GWLB エンドポイントとサービスプロバイダ側の GWLB を別 VPC に置く一般的な構成は、解説に記述がないため 1 つの枠にまとめて描いている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"サードパーティ製の仮想 IDS アプライアンスを<br/>既存のルーティングを大きく変えずに<br/>経路へ透過的に挿入したい<br/>水平スケールと高可用性が必要\"]:::req\n    Q1{\"経路そのものに<br/>透過的に挿入できるか?\"}:::judge\n    Q2{\"インラインで<br/>遮断できるか?\"}:::judge\n\n    subgraph GW[\"Gateway Load Balancer による透過挿入\"]\n        GWLBE[\"GWLB エンドポイント<br/>ルートテーブルのターゲットに指定するだけ\"]:::best\n        GWLB[\"Gateway Load Balancer<br/>L3 で透過的に動作<br/>ヘルスチェックとスケーリングで可用性を確保\"]:::best\n        APPL[\"サードパーティ製アプライアンス群\"]:::svc\n        GWLBE --> GWLB\n        GWLB -->|\"GENEVE 6081\"| APPL\n    end\n\n    subgraph NG[\"透過挿入にならない案\"]\n        NLB[\"NLB をアプライアンスの前段に置く<br/>ルートテーブルのターゲットにできない\"]:::alt\n        BH[\"Transit Gateway のブラックホールルート<br/>通信を捨てるだけで検査に回せない\"]:::alt\n        MIR[\"VPC トラフィックミラーリング<br/>コピーの解析のみ・遮断はできない\"]:::alt\n    end\n\n    NOTE[\"経路への挿入は GWLB エンドポイント<br/>アプライアンスへは GENEVE で転送\"]:::note\n\n    REQ --> Q1\n    Q1 -.->|\"できない\"| NLB\n    Q1 -.->|\"捨てるだけ\"| BH\n    Q1 -->|\"挿入できる\"| Q2\n    Q2 -.->|\"コピーのみ\"| MIR\n    Q2 -->|\"遮断できる\"| GWLBE\n    GWLB -.- NOTE"
+}

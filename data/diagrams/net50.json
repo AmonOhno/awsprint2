@@ -1,0 +1,170 @@
+{
+  "question_id": "net50",
+  "purpose": "フェイルオーバーを DNS に頼るか、静的エニーキャスト IP に寄せるかで、切り替え速度がクライアントのキャッシュに左右されるかどうかが決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Route 53 のルーティングと Global Accelerator の役割の違いが整理できていない人。",
+  "message": "切り替えを DNS に依存させないのが要件なので、静的エニーキャスト IP で経路から DNS を外す Global Accelerator を選ぶ。",
+  "source_summary": "グローバルに提供する REST API を東京・フランクフルト・バージニアの 3 リージョンで稼働させている。障害時のフェイルオーバーを数十秒以内で完了させ、TCP 接続の確立を高速化し、クライアント側の DNS キャッシュの影響も避けたい。正解は AWS Global Accelerator を使い、2 つの静的エニーキャスト IP から最寄りのエッジ経由で最適リージョンへ転送し、ヘルスチェック失敗時に自動フェイルオーバーさせる構成。Global Accelerator は静的エニーキャスト IP を提供し、ユーザーは最寄りの AWS エッジで TCP を終端して AWS バックボーン経由で最適なリージョンへ転送されるため、接続確立が速く、フェイルオーバーも DNS に依存せず数十秒以内に完了する。Route 53 は DNS ベースであり、クライアントやリゾルバのキャッシュによって TTL どおりに切り替わらないことがある。CloudFront は静的/HTTP キャッシュ配信が主目的。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "3 リージョン構成でフェイルオーバー数十秒以内・TCP 確立の高速化・DNS キャッシュの影響回避",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "切り替えを DNS に頼らずに済むか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "IP",
+      "label": "2 つの静的エニーキャスト IP",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "EDGE",
+      "label": "最寄りの AWS エッジで TCP を終端しバックボーン経由で転送",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "HC",
+      "label": "ヘルスチェック失敗時に自動フェイルオーバー",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "REGIONS",
+      "label": "東京・フランクフルト・バージニアの 3 リージョン",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "LAT",
+      "label": "Route 53 レイテンシールーティング + ヘルスチェック(TTL 60 秒)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "WGT",
+      "label": "Route 53 加重ルーティングで均等分散し障害時に手動で重み変更",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CF",
+      "label": "各リージョンに CloudFront ディストリビューション + オリジンフェイルオーバー",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "DNS を経路から外すとクライアントのキャッシュに左右されない",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "IP",
+      "verb": "固定 IP なので名前解決が要らない",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "IP",
+      "to": "EDGE",
+      "verb": "最寄りのエッジへ届く",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "EDGE",
+      "to": "REGIONS",
+      "verb": "最適リージョンへ転送する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "EDGE",
+      "to": "HC",
+      "verb": "障害時に転送先を切り替える",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "LAT",
+      "verb": "リゾルバのキャッシュで TTL どおりに切り替わらない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "WGT",
+      "verb": "切り替えが手作業になる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "CF",
+      "verb": "静的/HTTP キャッシュ配信が主目的",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "HC",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "GA",
+      "label": "AWS Global Accelerator — 経路から DNS を外す",
+      "members": [
+        "IP",
+        "EDGE",
+        "HC"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "DNS / キャッシュに左右される案",
+      "members": [
+        "LAT",
+        "WGT",
+        "CF"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「切り替えを DNS に頼らずに済むか」の 1 問で、エニーキャスト IP の案と DNS ベースの案に振り分ける",
+    "対比: 左に DNS ベース(名前解決 → キャッシュ → 切り替え遅延)、右にエニーキャスト IP(常に同じ IP)を並べ、経路の長さを比べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。誤答 3 つのうち 2 つは Route 53、1 つは CloudFront と落ちる理由が揃っておらず、対比の 2 列にはきれいに収まらない。「DNS に頼らずに済むか」という 1 つの問いから分ければ、判断軸がひとつであることと、誤答それぞれの落ちどころを同じ図で言える。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解を構成する Global Accelerator の要素、矩形(白)=3 リージョンなどの一般要素、矩形(グレー)=要件を満たさない案、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=DNS に依存しない切り替えを成立させる構成要素、白=前提となるリージョン、グレー=DNS/キャッシュに左右される案、青=要件と判断軸、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行とトラフィックの流れ、破線矢印=要件を満たさない案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「TCP 接続の確立を高速化」は最寄りエッジでの TCP 終端として 1 ノードに書いたが、判断の分岐には使っていない。誤答がこの条件だけでは落ちないため、主軸を DNS 依存の有無に絞っている。",
+    "3 リージョンは 1 ノードにまとめて描いている。リージョンごとのエンドポイントグループやトラフィックダイヤルは解説の範囲外のため描いていない。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"東京・フランクフルト・バージニアの 3 リージョンで稼働<br/>フェイルオーバーは数十秒以内・TCP 確立を高速化<br/>クライアント側の DNS キャッシュの影響も避けたい\"]:::req\n    Q{\"切り替えを DNS に<br/>頼らずに済むか?\"}:::judge\n\n    subgraph GA[\"AWS Global Accelerator — 経路から DNS を外す\"]\n        IP[\"2 つの静的エニーキャスト IP<br/>クライアントは常に同じ IP を使う\"]:::best\n        EDGE[\"最寄りの AWS エッジで TCP を終端し<br/>バックボーン経由で最適リージョンへ転送\"]:::best\n        HC[\"ヘルスチェック失敗時に自動フェイルオーバー<br/>DNS に依存せず数十秒以内に完了\"]:::best\n        IP --> EDGE --> HC\n    end\n\n    REGIONS[\"東京 / フランクフルト / バージニア\"]:::svc\n\n    subgraph NG[\"DNS / キャッシュに左右される案\"]\n        LAT[\"Route 53 レイテンシールーティング + TTL 60 秒<br/>リゾルバのキャッシュで TTL どおりに切り替わらない\"]:::alt\n        WGT[\"Route 53 加重ルーティング + 手動で重み変更<br/>切り替えが手作業になる\"]:::alt\n        CF[\"各リージョンに CloudFront + オリジンフェイルオーバー<br/>静的/HTTP キャッシュ配信が主目的\"]:::alt\n    end\n\n    NOTE[\"DNS を経路から外すと<br/>クライアントのキャッシュに左右されない\"]:::note\n\n    REQ --> Q\n    Q -->|\"外せる\"| IP\n    EDGE -->|\"転送\"| REGIONS\n    Q -.->|\"DNS 依存\"| NG\n    HC -.- NOTE"
+}

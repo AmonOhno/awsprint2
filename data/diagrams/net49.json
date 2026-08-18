@@ -1,0 +1,156 @@
+{
+  "question_id": "net49",
+  "purpose": "CloudFront Functions と Lambda@Edge の選び分けが「外部ネットワークアクセスや長い実行時間が要るか」の 1 問で決まることを示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、エッジで動く 2 つの実行環境の使い分けが覚えられない人。",
+  "message": "外部ネットワークアクセスも長い処理も要らない軽い処理なので、サブミリ秒で動き Lambda@Edge の約 1/6 のコストで済む CloudFront Functions を選ぶ。",
+  "source_summary": "CloudFront で提供する SPA で、URL の書き換え(/app/* を /index.html へ)と A/B テスト用の Cookie 付与を、可能な限り低レイテンシー・低コストで実装したい。外部ネットワークアクセスや長時間の処理は不要。正解は CloudFront Functions(ビューアーリクエスト/レスポンス)で実装する案。CloudFront Functions は JavaScript(ECMAScript 5.1 相当)による軽量関数で、ビューアーリクエスト/レスポンス時にサブミリ秒で実行され、Lambda@Edge の約 1/6 のコストで大量リクエストを処理できる。URL 書き換え、ヘッダー操作、Cookie 付与、簡易認可などに適する。ネットワークアクセスやファイルシステム、長い実行時間が必要なら Lambda@Edge を選ぶ。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "URL 書き換えと Cookie 付与を低レイテンシー・低コストで実装したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "外部ネットワークアクセスや長時間の処理が要るか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "FUNC",
+      "label": "CloudFront Functions(ビューアーリクエスト/レスポンス)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "PERF",
+      "label": "サブミリ秒で実行、Lambda@Edge の約 1/6 のコスト",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "USE",
+      "label": "URL 書き換え・ヘッダー操作・Cookie 付与・簡易認可に適する",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "LAE",
+      "label": "Lambda@Edge のオリジンリクエストイベント",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ALB",
+      "label": "オリジンの ALB のリスナールールでリダイレクトする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "S3W",
+      "label": "S3 静的ウェブサイトホスティングのリダイレクトルールで実装する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "軽い処理は CloudFront Functions、重い処理だけ Lambda@Edge",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "FUNC",
+      "verb": "要らないので軽量関数で足りる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "LAE",
+      "verb": "要るなら Lambda@Edge を選ぶ",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "FUNC",
+      "to": "PERF",
+      "verb": "低レイテンシー・低コストを満たす",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "FUNC",
+      "to": "USE",
+      "verb": "用途が一致する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "REQ",
+      "to": "ALB",
+      "verb": "エッジではなくオリジンでの処理になる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "S3W",
+      "verb": "Cookie 付与ができない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "PERF",
+      "to": "NOTE",
+      "verb": "覚え方を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "CFF",
+      "label": "CloudFront Functions で足りる",
+      "members": [
+        "FUNC",
+        "PERF",
+        "USE"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "この要件では選ばない案",
+      "members": [
+        "ALB",
+        "S3W"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「外部ネットワークアクセスや長時間の処理が要るか」の 1 問で CloudFront Functions と Lambda@Edge に振り分ける",
+    "対比: CloudFront Functions と Lambda@Edge を左右に並べ、実行時間・コスト・できることを項目ごとに比べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。解説自体が「ネットワークアクセスやファイルシステム、長い実行時間が必要なら Lambda@Edge」という 1 つの問いで線を引いており、その問いをそのまま菱形にすれば読み手が試験本番でなぞる順序と一致する。対比表は項目が増えるほど「結局どちらか」の判断が図から遠のく。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解となる CloudFront Functions とその特性、矩形(グレー)=この要件では選ばない案、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=要件を満たす選択肢とその根拠、グレー=この要件では選ばない案、青=要件と判断軸、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行と根拠の展開、破線矢印=条件が変われば選ぶ案・要件を満たさない案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "Lambda@Edge はこの要件では選ばないが「誤りの選択肢」ではなく条件が変われば正解になるため、破線で分岐先として描いている。グレーの枠(選ばない案)には入れていない。",
+    "ALB のリスナールールが不適な理由は解説に明示がないため、問題文の低レイテンシー要件から『エッジではなくオリジンでの処理になる』とだけ書いている。"
+  ],
+  "mermaid": "flowchart TD\n    REQ[\"SPA の URL 書き換え(/app/* を /index.html へ)と<br/>A/B テスト用の Cookie 付与を<br/>低レイテンシー・低コストで実装したい\"]:::req\n    Q{\"外部ネットワークアクセスや<br/>長時間の処理が要るか?\"}:::judge\n\n    subgraph CFF[\"CloudFront Functions で足りる\"]\n        FUNC[\"CloudFront Functions<br/>ビューアーリクエスト/レスポンスで実行<br/>JavaScript(ECMAScript 5.1 相当)\"]:::best\n        PERF[\"サブミリ秒で実行<br/>Lambda@Edge の約 1/6 のコスト\"]:::best\n        USE[\"URL 書き換え・ヘッダー操作<br/>Cookie 付与・簡易認可に適する\"]:::best\n        FUNC --> PERF\n        FUNC --> USE\n    end\n\n    LAE[\"Lambda@Edge<br/>ネットワークアクセス・ファイルシステム<br/>長い実行時間が要るときに選ぶ\"]:::alt\n\n    subgraph NG[\"この要件では選ばない案\"]\n        ALB[\"オリジンの ALB のリスナールールでリダイレクト<br/>エッジではなくオリジンでの処理になる\"]:::alt\n        S3W[\"S3 静的ウェブサイトのリダイレクトルール<br/>Cookie 付与はできない\"]:::alt\n    end\n\n    NOTE[\"軽い処理はエッジの CloudFront Functions<br/>重い処理だけ Lambda@Edge\"]:::note\n\n    REQ --> Q\n    Q -->|\"要らない\"| FUNC\n    Q -.->|\"要る\"| LAE\n    REQ -.-> NG\n    PERF -.- NOTE"
+}
