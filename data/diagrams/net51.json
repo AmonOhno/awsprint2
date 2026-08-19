@@ -1,0 +1,157 @@
+{
+  "question_id": "net51",
+  "purpose": "DNS フェイルオーバーの成否が「ヘルスチェックが何を見ているか」で決まることを、外部依存まで含めた判定の作り方として 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Route 53 のヘルスチェックと ALB のターゲットグループのヘルスチェックの役割の違いが混ざる人。",
+  "message": "DNS を切り替えたいなら、外部依存の状態まで映した判定を Route 53 のヘルスチェックに載せる。",
+  "source_summary": "東京 ALB(プライマリ)が落ちたら大阪 ALB(セカンダリ)へ切り替えたい。加えて東京が生きていても外部決済 API が落ちていればフェイルオーバーさせたい。正解はアプリの /health が依存関係を検査するようにし、計算済みヘルスチェック(複数の子ヘルスチェックを AND/OR で集約)でフェイルオーバーレコードを制御する構成。計算済みヘルスチェックは CloudWatch アラームをソースにすることもできる。ターゲットグループのヘルスチェックは ALB 内部の振り分けに影響するだけで DNS レベルの切り替えは行わない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "東京 ALB の障害だけでなく外部決済 API の障害でも大阪 ALB へ切り替えたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "DNS の切り替え判定に外部依存の状態を含められるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "HEALTH",
+      "label": "アプリの /health が依存関係(外部決済 API)を検査する",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CALC",
+      "label": "計算済みヘルスチェックが子ヘルスチェックを AND/OR で集約する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "FO",
+      "label": "フェイルオーバーレコードがセカンダリ(大阪 ALB)へ切り替わる",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "TG",
+      "label": "ターゲットグループのヘルスチェックのしきい値を厳しくする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "LAT",
+      "label": "レイテンシールーティングに変更して遅い方を外させる",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "LMD",
+      "label": "CloudWatch アラームで Lambda を起動し DNS レコードを書き換える",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "CloudWatch アラームもヘルスチェックのソースにできる",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "HEALTH",
+      "verb": "含められる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "HEALTH",
+      "to": "CALC",
+      "verb": "子ヘルスチェックの結果として渡す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CALC",
+      "to": "FO",
+      "verb": "レコードの正常/異常を決める",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "TG",
+      "verb": "ALB 内部の振り分けにしか効かない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "LAT",
+      "verb": "依存の障害を判定に使えない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "LMD",
+      "verb": "自前の書き換えが要る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "CALC",
+      "to": "NOTE",
+      "verb": "判定材料の広さを補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "OK",
+      "label": "計算済みヘルスチェックで判定を組み立てる",
+      "members": [
+        "HEALTH",
+        "CALC",
+        "FO"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "DNS の切り替え判定にならない案",
+      "members": [
+        "TG",
+        "LAT",
+        "LMD"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「DNS の切り替え判定に外部依存を含められるか」の 1 問で、計算済みヘルスチェックの案と含められない案に振り分ける",
+    "レイヤー図: DNS(Route 53)/ ロードバランサー(ALB)/ アプリ(/health)の 3 層を積み、どの層のヘルスチェックが何に効くかを示す"
+  ],
+  "selected_pattern": "分岐(判断フロー)。レイヤー図はターゲットグループのヘルスチェックが DNS に効かない理由をきれいに描けるが、レイテンシールーティングや Lambda 案が層に収まらず 1 枚に載らない。「外部依存の状態を判定に含められるか」という 1 つの問いから分ければ、判断軸と誤答 3 つの落ちどころを同じ図で言える。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解を構成する判定の要素、矩形(グレー)=要件を満たさない案、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=外部依存まで映した判定を成立させる要素、グレー=DNS の切り替え判定にならない案、青=要件と判断軸、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行と判定の伝わる順序、破線矢印=要件を満たさない案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "計算済みヘルスチェックの AND/OR のどちらを使うかは解説が指定していないため、「論理演算で集約する」までにとどめて具体式は描いていない。",
+    "CloudWatch アラームをソースにできる点は注釈に置き、Lambda で書き換える誤答との対比には使っていない(解説がその比較まではしていないため)。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"プライマリ(東京 ALB)の障害で大阪 ALB へ切り替えたい<br/>東京が生きていても外部決済 API が落ちたら切り替えたい\"]:::req\n    Q{\"DNS の切り替え判定に<br/>外部依存の状態を<br/>含められるか?\"}:::judge\n\n    subgraph OK[\"計算済みヘルスチェックで判定を組み立てる\"]\n        HEALTH[\"アプリの /health が<br/>依存する外部決済 API まで検査する\"]:::best\n        CALC[\"計算済みヘルスチェック<br/>子ヘルスチェックを AND/OR で集約\"]:::best\n        FO[\"フェイルオーバーレコードが<br/>セカンダリ(大阪 ALB)へ切り替わる\"]:::best\n        HEALTH --> CALC --> FO\n    end\n\n    subgraph NG[\"DNS の切り替え判定にならない案\"]\n        TG[\"ターゲットグループのしきい値を厳しくする<br/>ALB 内部の振り分けにしか効かない\"]:::alt\n        LAT[\"レイテンシールーティングに変更する<br/>依存の障害を判定に使えない\"]:::alt\n        LMD[\"CloudWatch アラーム + Lambda で書き換える<br/>切り替えを自前で実装することになる\"]:::alt\n    end\n\n    NOTE[\"CloudWatch アラームも<br/>ヘルスチェックのソースにできる\"]:::note\n\n    REQ --> Q\n    Q -->|\"含められる\"| HEALTH\n    Q -.->|\"含められない\"| NG\n    CALC -.- NOTE"
+}

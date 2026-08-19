@@ -1,0 +1,170 @@
+{
+  "question_id": "net53",
+  "purpose": "「地域」と「割合」の両方で制御したいときに、1 つのレコードで 2 つのポリシーを混ぜるのではなく段を分けて絞り込むことを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Route 53 の各ルーティングポリシーは知っているが、組み合わせ方(入れ子)を知らない人。",
+  "message": "地域と割合の両方を効かせるには、位置情報で絞ってからその配下で加重に渡す 2 段構えにする。",
+  "source_summary": "新サービスを日本のユーザーの 10% → 50% → 全体へ段階公開したい。地域と割合の両方で制御したい。正解は位置情報ルーティングで日本向けレコードを作り、そのターゲットとして加重ルーティングのエイリアス(新旧 10:90 等)を参照させる入れ子構成。Route 53 はトラフィックフロー(またはエイリアスによる参照)でルーティングポリシーを入れ子にできる。単一のレコードセットで異なるルーティングポリシーを同名・同タイプで混在させることはできない。加重のみでは地域を限定できず、位置情報のみでは割合制御ができない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "日本のユーザーへ 10% → 50% → 全体と段階公開したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "USER",
+      "label": "問い合わせてくるユーザー",
+      "type": "actor",
+      "priority": "secondary"
+    },
+    {
+      "id": "GEO",
+      "label": "位置情報ルーティングで日本向けレコードを選ぶ(第1段)",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ALIAS",
+      "label": "エイリアスで加重ルーティングのレコードを参照する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "WGT",
+      "label": "加重ルーティングで新旧を 10:90 に振り分ける(第2段)",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "NEW",
+      "label": "新サービス(重みを 10 → 50 → 100 と上げる)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "OLD",
+      "label": "旧サービス",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ONLYW",
+      "label": "加重ルーティングのみ(重み 10)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ONLYG",
+      "label": "位置情報ルーティングのみ(日本へ新サービス)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "MIX",
+      "label": "同一レコード名・同一タイプでレイテンシーと加重を併用",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "GEO",
+      "verb": "地域で絞る",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "USER",
+      "to": "GEO",
+      "verb": "名前解決を要求する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "GEO",
+      "to": "ALIAS",
+      "verb": "日本ならこのターゲットへ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ALIAS",
+      "to": "WGT",
+      "verb": "配下のポリシーへ渡す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "WGT",
+      "to": "NEW",
+      "verb": "重み 10 のぶんを回す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "WGT",
+      "to": "OLD",
+      "verb": "残り 90 を回す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "REQ",
+      "to": "ONLYW",
+      "verb": "地域を限定できない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "ONLYG",
+      "verb": "割合を制御できない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "MIX",
+      "verb": "同名・同タイプでは混在できない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NEST",
+      "label": "ルーティングポリシーの入れ子 — 2 段で絞る",
+      "members": [
+        "GEO",
+        "ALIAS",
+        "WGT"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "片方の軸しか効かない案",
+      "members": [
+        "ONLYW",
+        "ONLYG",
+        "MIX"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "直列(2 段の絞り込み): ユーザー → 位置情報で日本を選ぶ → エイリアスで加重へ渡す → 新旧に振り分ける、と上から下へたどる",
+    "マトリクス: 地域(日本/その他)× 割合(新/旧)の 2 軸に 4 象限を置き、どの案がどの軸を押さえられるかを配置する"
+  ],
+  "selected_pattern": "直列(2 段の絞り込み)。マトリクスは 2 つの軸があること自体は示せるが、この問題の肝である「順番に絞る(入れ子)」という構造が象限では表せない。名前解決が上から下へ 2 段で決まる様子をそのまま直列に描けば、なぜ 1 つのレコードで混在させられないのかも同じ図で言える。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、矩形(緑)=正解を構成する 2 段の要素、矩形(白)=ユーザーと振り分け先のサービス、矩形(グレー)=片方の軸しか効かない案。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=地域と割合の両方を効かせる要素、白=前提となるユーザーと新旧サービス、グレー=要件の片方を満たさない案、青=要件。",
+    "line_semantics": "実線矢印=名前解決が絞り込まれていく流れ、破線矢印=要件を満たさない案への分岐。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "解説はトラフィックフローとエイリアス参照の両方を入れ子の手段として挙げているが、図では選択肢の文面に合わせてエイリアス参照だけを描いた。トラフィックフローを問う問題を足す場合は分岐が要る。",
+    "10% → 50% → 全体の段階は「重みを上げていく」と 1 ノードに畳んでいる。段階ごとの状態遷移を見せるなら別図に分けるべき。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"新サービスを段階公開したい<br/>日本のユーザーの 10% → 50% → 全体<br/>地域と割合の両方で制御する\"]:::req\n    USER[\"ユーザーの名前解決\"]:::svc\n\n    subgraph NEST[\"ルーティングポリシーの入れ子 — 2 段で絞る\"]\n        GEO[\"第1段: 位置情報ルーティング<br/>日本向けレコードを選ぶ\"]:::best\n        ALIAS[\"エイリアスで加重レコードを参照する\"]:::best\n        WGT[\"第2段: 加重ルーティング<br/>新旧を 10:90 で振り分ける\"]:::best\n        GEO --> ALIAS --> WGT\n    end\n\n    NEW[\"新サービス<br/>重みを 10 → 50 → 100 と上げる\"]:::svc\n    OLD[\"旧サービス\"]:::svc\n\n    subgraph NG[\"片方の軸しか効かない案\"]\n        ONLYW[\"加重ルーティングのみ・重み 10<br/>地域を限定できない\"]:::alt\n        ONLYG[\"位置情報ルーティングのみ<br/>割合を制御できない\"]:::alt\n        MIX[\"同一レコード名・同一タイプで<br/>レイテンシーと加重を併用<br/>ポリシーは混在できない\"]:::alt\n    end\n\n    REQ --> GEO\n    USER --> GEO\n    WGT -->|\"10%\"| NEW\n    WGT -->|\"90%\"| OLD\n    REQ -.->|\"軸が足りない\"| NG"
+}

@@ -1,0 +1,185 @@
+{
+  "question_id": "net58",
+  "purpose": "エンドツーエンド暗号化と mTLS が、ALB のリスナー側とターゲットグループ側の 2 つの設定で別々に決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、ALB は TLS を終端するところまでは知っているが、mTLS 対応とバックエンドへの再暗号化の設定箇所が結び付いていない人。",
+  "message": "mTLS はリスナーの相互認証、バックエンドまでの暗号化はターゲットグループの HTTPS で、どちらも ALB で決まる。",
+  "source_summary": "ALB を使う Web アプリで HTTPS をバックエンドまで暗号化し、かつクライアント証明書による相互 TLS(mTLS)認証を行いたい。正解は ALB の HTTPS リスナーで相互認証(mTLS)を有効にし、ターゲットグループのプロトコルを HTTPS にしてバックエンドへも TLS で転送する構成。ALB は HTTPS リスナーでの相互 TLS 認証(パススルーモードと検証モード)をサポートし、検証モードでは信頼ストア(ACM 経由でアップロードした CA バンドル)に基づいてクライアント証明書を検証し、証明書情報をヘッダーでバックエンドに渡せる。NLB での TLS パススルーも選択肢だが L7 のルーティングや検証は行えない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "バックエンドまで暗号化しつつクライアント証明書で認証したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "CLIENT",
+      "label": "クライアント(クライアント証明書を提示)",
+      "type": "actor",
+      "priority": "secondary"
+    },
+    {
+      "id": "LISTENER",
+      "label": "ALB の HTTPS リスナーで相互認証(mTLS)を有効にする",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "TRUST",
+      "label": "検証モード: 信頼ストア(ACM 経由の CA バンドル)で証明書を検証",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "HEADER",
+      "label": "証明書情報をヘッダーでバックエンドへ渡す",
+      "type": "process",
+      "priority": "secondary"
+    },
+    {
+      "id": "TG",
+      "label": "ターゲットグループのプロトコルを HTTPS にする",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "BACKEND",
+      "label": "バックエンドまで TLS で転送される",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "NLB",
+      "label": "NLB で TLS パススルーし EC2 で mTLS を終端するしかない",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CF",
+      "label": "ALB は mTLS 非対応なので CloudFront で終端する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "XFCC",
+      "label": "HTTP リスナーで X-Forwarded-Client-Cert を付与し EC2 に検証させる",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "LISTENER",
+      "verb": "認証はリスナーで決める",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "REQ",
+      "to": "TG",
+      "verb": "暗号化はターゲットグループで決める",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "CLIENT",
+      "to": "LISTENER",
+      "verb": "クライアント証明書を提示する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "LISTENER",
+      "to": "TRUST",
+      "verb": "検証モードで照合する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "TRUST",
+      "to": "HEADER",
+      "verb": "検証結果を引き渡す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "LISTENER",
+      "to": "TG",
+      "verb": "転送する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "TG",
+      "to": "BACKEND",
+      "verb": "TLS のまま届く",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "REQ",
+      "to": "NLB",
+      "verb": "L7 のルーティングや検証ができない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "CF",
+      "verb": "ALB は mTLS に対応している",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "XFCC",
+      "verb": "HTTP では暗号化されない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "FRONT",
+      "label": "リスナー側 — 誰を通すか(mTLS)",
+      "members": [
+        "LISTENER",
+        "TRUST",
+        "HEADER"
+      ]
+    },
+    {
+      "id": "BACK",
+      "label": "ターゲットグループ側 — どう運ぶか(再暗号化)",
+      "members": [
+        "TG",
+        "BACKEND"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "ALB では実現できないという前提の案",
+      "members": [
+        "NLB",
+        "CF",
+        "XFCC"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "経路図(直列 + 2 つの設定箇所): クライアントから背後まで 1 本でたどり、リスナー側とターゲットグループ側に要件を割り当てる",
+    "分岐(判断フロー): 「ALB で mTLS を終端できるか」の 1 問で正解と誤答に振り分ける"
+  ],
+  "selected_pattern": "経路図(直列 + 2 つの設定箇所)。要件が「認証」と「暗号化」の 2 つあり、それぞれ設定する場所が違うことがこの問題の答えそのものなので、通信経路の上で担当箇所を分けて置くのが最短で伝わる。分岐にすると 2 つの設定が 1 ノードに潰れて、どちらの要件がどこで満たされるかが言えなくなる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、矩形(緑)=正解を構成する ALB の設定と結果、矩形(白)=クライアント、矩形(グレー)=要件を満たさない案。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=2 つの要件を満たす設定と結果、白=前提となるクライアント、グレー=ALB では実現できないという前提に立つ案、青=要件。",
+    "line_semantics": "実線矢印=通信と検証の流れ、破線矢印=要件を満たさない案への分岐。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "mTLS のパススルーモードは解説に名前だけあるため、図では検証モード側だけを描いている(要件の「認証を行う」に直結するのは検証モードのため)。",
+    "X-Forwarded-Client-Cert 案が落ちる理由は解説になく、問題文の「エンドツーエンドで暗号化したい」から書いている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"HTTPS をバックエンドまで暗号化したい<br/>クライアント証明書で相互 TLS 認証もしたい\"]:::req\n    CLIENT[\"クライアント<br/>クライアント証明書を提示\"]:::svc\n\n    subgraph FRONT[\"リスナー側 — 誰を通すか(mTLS)\"]\n        LISTENER[\"ALB の HTTPS リスナーで<br/>相互認証(mTLS)を有効にする\"]:::best\n        TRUST[\"検証モード: 信頼ストア<br/>(ACM 経由の CA バンドル)で検証\"]:::best\n        HEADER[\"証明書情報をヘッダーで<br/>バックエンドへ渡す\"]:::best\n        LISTENER --> TRUST --> HEADER\n    end\n\n    subgraph BACK[\"ターゲットグループ側 — どう運ぶか(再暗号化)\"]\n        TG[\"ターゲットグループのプロトコルを<br/>HTTPS にする\"]:::best\n        BACKEND[\"バックエンドまで TLS で転送される\"]:::best\n        TG --> BACKEND\n    end\n\n    subgraph NG[\"ALB では実現できないという前提の案\"]\n        NLB[\"NLB で TLS パススルーし EC2 で終端<br/>L7 のルーティングや検証ができない\"]:::alt\n        CF[\"ALB は非対応なので CloudFront で終端<br/>ALB は mTLS に対応している\"]:::alt\n        XFCC[\"HTTP リスナー + X-Forwarded-Client-Cert<br/>HTTP では暗号化されない\"]:::alt\n    end\n\n    CLIENT --> LISTENER\n    REQ --> LISTENER\n    REQ --> TG\n    LISTENER -->|\"転送\"| TG\n    REQ -.->|\"前提が誤り\"| NG"
+}

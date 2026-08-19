@@ -1,0 +1,157 @@
+{
+  "question_id": "net60",
+  "purpose": "VPN の帯域を足し算にできるかどうかが、トンネルの本数ではなくアタッチ先(VGW か TGW か)で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、VPN 接続を増やせば帯域が増えると考えている人。",
+  "message": "VPN の帯域を足し算にできるのは、ECMP に対応する Transit Gateway にアタッチしたときだけ。",
+  "source_summary": "オンプレと VPC を Site-to-Site VPN で接続しているが、単一トンネルあたり約 1.25 Gbps の帯域上限がボトルネック。Direct Connect は予算承認待ち。正解は Transit Gateway に複数の VPN 接続をアタッチして ECMP(等コストマルチパス)を有効にし、複数トンネルで負荷分散すること。TGW 経由の VPN は ECMP をサポートしており複数の VPN 接続にトラフィックを分散して帯域を集約できる。VGW は ECMP に対応していないため単純に VPN を追加しても帯域は増えない。アクセラレーテッド VPN は Global Accelerator 経由で経路品質を改善するがトンネルあたりの上限自体は変わらない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "単一トンネル約 1.25 Gbps の上限がボトルネック・Direct Connect は予算承認待ち",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "VPN のアタッチ先は ECMP に対応しているか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "TGW",
+      "label": "Transit Gateway に複数の VPN 接続をアタッチする",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ECMP",
+      "label": "ECMP(等コストマルチパス)を有効にする",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "AGG",
+      "label": "複数トンネルに分散して帯域が集約される",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "VGW",
+      "label": "同じ仮想プライベートゲートウェイに 2 本目の VPN を追加する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "MTU",
+      "label": "VPN トンネルの MTU を拡張する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ACC",
+      "label": "アクセラレーテッド VPN を有効化する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "アクセラレーテッド VPN は経路品質を改善するがトンネルの上限は変えない",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "TGW",
+      "verb": "対応している",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "TGW",
+      "to": "ECMP",
+      "verb": "有効化する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ECMP",
+      "to": "AGG",
+      "verb": "トンネルへ分散する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "VGW",
+      "verb": "VGW は ECMP に対応せず帯域が増えない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "MTU",
+      "verb": "トンネルあたりの上限は変わらない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "ACC",
+      "verb": "トンネルあたりの上限は変わらない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "ACC",
+      "to": "NOTE",
+      "verb": "役割の違いを補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "OK",
+      "label": "Transit Gateway — トンネルを束ねられる",
+      "members": [
+        "TGW",
+        "ECMP",
+        "AGG"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "トンネルあたりの上限が残る案",
+      "members": [
+        "VGW",
+        "MTU",
+        "ACC"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「アタッチ先が ECMP に対応しているか」の 1 問で、TGW の案と上限が残る案に振り分ける",
+    "対比(左右 2 列): 左に VGW + VPN 2 本(束ねられず 1 本ぶんのまま)、右に TGW + VPN 複数(ECMP で束ねる)を並べて帯域の違いを見比べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。対比は VGW と TGW の違いを最も直接に見せられるが、MTU 拡張とアクセラレーテッド VPN の 2 案がどちらの列にも属さず居場所を失う。「アタッチ先が ECMP に対応しているか」という 1 つの問いから分ければ、VGW もその他 2 案も同じ「上限が残る側」として 1 枚に収まる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=帯域を集約できる構成要素、矩形(グレー)=上限が残る案、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=帯域を足し算にできる要素、グレー=トンネルあたりの上限が残る案、青=要件と判断軸、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行と帯域集約の成立、破線矢印=要件を満たさない案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "MTU 拡張が落ちる理由は解説が個別に述べていないため、「トンネルあたりの上限は変わらない」という共通の理由でグループにまとめている。",
+    "Direct Connect は予算承認待ちという前提として要件側に置き、選択肢としては描いていない。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"Site-to-Site VPN の単一トンネル<br/>約 1.25 Gbps の上限がボトルネック<br/>Direct Connect は予算承認待ち\"]:::req\n    Q{\"VPN のアタッチ先は<br/>ECMP に対応しているか?\"}:::judge\n\n    subgraph OK[\"Transit Gateway — トンネルを束ねられる\"]\n        TGW[\"Transit Gateway に<br/>複数の VPN 接続をアタッチする\"]:::best\n        ECMP[\"ECMP(等コストマルチパス)を有効にする\"]:::best\n        AGG[\"複数トンネルに分散して帯域が集約される\"]:::best\n        TGW --> ECMP --> AGG\n    end\n\n    subgraph NG[\"トンネルあたりの上限が残る案\"]\n        VGW[\"同じ VGW に 2 本目の VPN を追加する<br/>VGW は ECMP に対応せず帯域は増えない\"]:::alt\n        MTU[\"VPN トンネルの MTU を拡張する\"]:::alt\n        ACC[\"アクセラレーテッド VPN を有効化する<br/>トンネルあたりの上限は変わらない\"]:::alt\n    end\n\n    NOTE[\"アクセラレーテッド VPN は<br/>Global Accelerator 経由で経路品質を改善するもの\"]:::note\n\n    REQ --> Q\n    Q -->|\"対応する\"| TGW\n    Q -.->|\"対応しない\"| NG\n    ACC -.- NOTE"
+}

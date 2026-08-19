@@ -1,0 +1,164 @@
+{
+  "question_id": "net59",
+  "purpose": "WebSocket が 60 秒で切れる原因を「無通信が続くこと」に特定し、上限を上げる手当てと通信を絶やさない手当ての両方が要ることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、ALB のアイドルタイムアウトが長時間接続に効いてくることを意識していない人。",
+  "message": "無通信で切られているので、アイドルタイムアウトの延長と ping/pong の両方で手当てする。",
+  "source_summary": "WebSocket を使うリアルタイム通知を ALB 配下で運用中、接続が 60 秒程度で切断されクライアントが再接続を繰り返す。アプリはキープアライブを送っていない。正解は ALB のアイドルタイムアウトを想定接続時間に合わせて延長し、併せてアプリ側で定期的な ping/pong を実装すること。ALB のアイドルタイムアウト(既定 60 秒)を超えて無通信が続くと接続が閉じられるため、長時間の WebSocket 接続ではタイムアウトの延長(最大 4000 秒)とアプリ層のキープアライブの双方を行う。NLB への置換でも解決し得るが L7 ルーティングや WAF が使えなくなる。登録解除の遅延やスティッキーは無通信切断とは無関係。",
+  "elements": [
+    {
+      "id": "WS",
+      "label": "WebSocket 接続(アプリはキープアライブを送っていない)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "IDLE",
+      "label": "ALB のアイドルタイムアウト(既定 60 秒)を超える無通信",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CUT",
+      "label": "接続が閉じられクライアントが再接続を繰り返す",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "EXT",
+      "label": "アイドルタイムアウトを想定接続時間に合わせて延長する(最大 4000 秒)",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "PING",
+      "label": "アプリ側で定期的な ping/pong を実装する",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "KEEP",
+      "label": "無通信の時間が上限に達しないので接続が保たれる",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "NLB",
+      "label": "ALB をやめて NLB に置き換え TCP パススルーにする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DEREG",
+      "label": "ターゲットグループの登録解除の遅延を延長する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "STICKY",
+      "label": "スティッキーセッションで同じターゲットへ固定する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "WS",
+      "to": "IDLE",
+      "verb": "通信のない時間が伸びる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "IDLE",
+      "to": "CUT",
+      "verb": "上限を超えて閉じられる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CUT",
+      "to": "EXT",
+      "verb": "上限の側を上げる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CUT",
+      "to": "PING",
+      "verb": "無通信の側を無くす",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "EXT",
+      "to": "KEEP",
+      "verb": "両方そろって解消する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "PING",
+      "to": "KEEP",
+      "verb": "両方そろって解消する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CUT",
+      "to": "NLB",
+      "verb": "解決し得るが L7 ルーティングと WAF を失う",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "CUT",
+      "to": "DEREG",
+      "verb": "無通信切断とは無関係",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "CUT",
+      "to": "STICKY",
+      "verb": "無通信切断とは無関係",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "FIX",
+      "label": "無通信を作らない × 上限を上げる(両方やる)",
+      "members": [
+        "EXT",
+        "PING",
+        "KEEP"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "原因に当たっていない案",
+      "members": [
+        "NLB",
+        "DEREG",
+        "STICKY"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "因果 + 合流: 「無通信 → 上限超過 → 切断」という原因の線を引き、そこから 2 つの対処へ分けて 1 つの結果へ合流させる",
+    "タイムライン: 接続開始から 60 秒までの無通信区間と、ping/pong が入る場合の区間を時間軸に並べて比較する"
+  ],
+  "selected_pattern": "因果 + 合流。タイムラインは 60 秒という数字の意味を直感的に見せられるが、誤答 3 つを時間軸上に置けない。原因を 1 本の線で示してから 2 つの対処に分け、同じ結果へ合流させれば「片方だけでは足りない」という解説の要点がそのまま形になる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=前提となる接続の状況、矩形(緑)=正解となる 2 つの対処とその結果、矩形(グレー)=いま起きている切断と原因に当たっていない案。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=切断を止める手当てと結果、グレー=症状と効かない案、青=前提。",
+    "line_semantics": "実線矢印=原因から結果への流れと対処の合流、破線矢印=原因に当たっていない案への分岐。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "「想定接続時間に合わせて延長する」の具体値は解説になく、上限の 4000 秒だけを添えている。",
+    "NLB 案は解説が「解決し得る」と認めているため、他の 2 つと同じグレーで並べつつ理由の書き分けで区別している。落ち方の違いを図形で分けるかは今後の検討事項。"
+  ],
+  "mermaid": "flowchart TB\n    WS[\"ALB 配下の WebSocket 接続<br/>アプリはキープアライブを送っていない\"]:::req\n    IDLE[\"アイドルタイムアウト(既定 60 秒)を<br/>超える無通信が続く\"]:::alt\n    CUT[\"接続が閉じられ<br/>クライアントが再接続を繰り返す\"]:::alt\n\n    subgraph FIX[\"無通信を作らない × 上限を上げる(両方やる)\"]\n        EXT[\"ALB のアイドルタイムアウトを<br/>想定接続時間に合わせて延長する<br/>最大 4000 秒\"]:::best\n        PING[\"アプリ側で定期的な<br/>ping/pong を実装する\"]:::best\n        KEEP[\"無通信の時間が上限に達せず<br/>接続が保たれる\"]:::best\n        EXT --> KEEP\n        PING --> KEEP\n    end\n\n    subgraph NG[\"原因に当たっていない案\"]\n        NLB[\"NLB に置き換え TCP パススルー<br/>解決し得るが L7 ルーティングと WAF を失う\"]:::alt\n        DEREG[\"登録解除の遅延を延長する<br/>無通信切断とは無関係\"]:::alt\n        STICKY[\"スティッキーセッションを有効にする<br/>無通信切断とは無関係\"]:::alt\n    end\n\n    WS --> IDLE --> CUT\n    CUT -->|\"上限を上げる\"| EXT\n    CUT -->|\"無通信を消す\"| PING\n    CUT -.->|\"効かない\"| NG"
+}

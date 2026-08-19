@@ -1,0 +1,171 @@
+{
+  "question_id": "net57",
+  "purpose": "数百顧客へのプライベート提供を「1 つの公開口 + 顧客ごとの承認」で捌けることを、承認とテナント識別がどこで効くかとして 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、PrivateLink のエンドポイントサービス側(提供者側)の構成と、顧客ごとの承認・識別の手当てが結び付いていない人。",
+  "message": "顧客ごとに経路を作らず、NLB 前段のエンドポイントサービス 1 つで承認と識別をまかなう。",
+  "source_summary": "SaaS 提供者として顧客の VPC から自社サービスへプライベート接続させたい。顧客数は数百で顧客ごとに承認制、接続元の顧客アカウントを識別してテナント分離したい。正解は NLB の前段に VPC エンドポイントサービスを作成し、許可プリンシパルで顧客アカウントを承認、プロキシプロトコル v2 のエンドポイント ID から顧客を識別する構成。PrivateLink のエンドポイントサービスは NLB(または GWLB)をバックエンドに公開し、AcceptanceRequired と許可プリンシパルで顧客ごとの承認制を実現でき、CIDR 重複も問題にならない。NLB のプロキシプロトコル v2 には VPC エンドポイント ID が含まれるためテナント識別に使える。ピアリングや VPN は数百規模では管理・CIDR の面で破綻する。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "数百の顧客へプライベート接続・顧客ごとの承認制・接続元の識別",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "CUST",
+      "label": "顧客 VPC のインターフェースエンドポイント(数百)",
+      "type": "actor",
+      "priority": "primary"
+    },
+    {
+      "id": "EPS",
+      "label": "VPC エンドポイントサービス(AcceptanceRequired + 許可プリンシパル)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NLB",
+      "label": "NLB(自社サービスのバックエンド)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "PPV2",
+      "label": "プロキシプロトコル v2 の VPC エンドポイント ID",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "TENANT",
+      "label": "接続元テナントを識別して分離する",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "PEER",
+      "label": "顧客ごとに VPC ピアリング + 個別のルートテーブル",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "VPN",
+      "label": "顧客ごとに Site-to-Site VPN + BGP",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "PUB",
+      "label": "パブリック ALB + 顧客ごとの API キー",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "顧客と自社の CIDR が重複していても問題にならない",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "EPS",
+      "verb": "公開口を 1 つにする",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "CUST",
+      "to": "EPS",
+      "verb": "接続を要求する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "EPS",
+      "to": "NLB",
+      "verb": "承認済みの接続を通す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "NLB",
+      "to": "PPV2",
+      "verb": "接続元の情報を付ける",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "PPV2",
+      "to": "TENANT",
+      "verb": "顧客を突き止める",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "REQ",
+      "to": "PEER",
+      "verb": "数百規模では管理と CIDR が破綻する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "VPN",
+      "verb": "数百規模では管理と CIDR が破綻する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "REQ",
+      "to": "PUB",
+      "verb": "プライベート接続にならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "EPS",
+      "to": "NOTE",
+      "verb": "利点を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "PL",
+      "label": "PrivateLink — 公開口は 1 つ、承認と識別はその上で",
+      "members": [
+        "EPS",
+        "NLB",
+        "PPV2",
+        "TENANT"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "顧客ごとに経路を作る案",
+      "members": [
+        "PEER",
+        "VPN",
+        "PUB"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "経路図(直列): 顧客エンドポイント → エンドポイントサービス(承認)→ NLB → プロキシプロトコル v2(識別)と 1 本でたどり、2 つの要件が経路上のどこで満たされるかを示す",
+    "分岐(判断フロー): 「顧客ごとに経路を作るか、公開口を 1 つにするか」の 1 問で正解と誤答に振り分ける"
+  ],
+  "selected_pattern": "経路図(直列)。この問題の要件は承認制とテナント識別の 2 つで、どちらも「経路上のどの部品が担うか」を示さないと答えにならない。分岐だと正解が 1 ノードに潰れて 2 要件の担い手が見えない。1 本の経路に沿って承認と識別の位置を置き、顧客ごとに経路を作る案は横に並べて落とす。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、矩形(緑)=正解の経路を構成する要素、矩形(白)=顧客側のエンドポイント、矩形(グレー)=要件を満たさない案、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=承認と識別を成立させる提供者側の要素、白=顧客側の接続点、グレー=規模や要件で破綻する案、青=要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=接続と情報の流れ、破線矢印=要件を満たさない案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "解説にある GWLB をバックエンドにする選択肢は、問題文が NLB を前提にしているため描いていない。",
+    "パブリック ALB 案が落ちる理由は解説になく、問題文の「プライベートに接続させたい」から書いている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"数百の顧客からプライベートに接続させたい<br/>顧客ごとに承認制<br/>接続元の顧客を識別してテナント分離\"]:::req\n    CUST[\"顧客 VPC のインターフェースエンドポイント<br/>数百アカウント\"]:::svc\n\n    subgraph PL[\"PrivateLink — 公開口は 1 つ、承認と識別はその上で\"]\n        EPS[\"VPC エンドポイントサービス<br/>AcceptanceRequired + 許可プリンシパルで承認\"]:::best\n        NLB[\"NLB(自社サービスのバックエンド)\"]:::best\n        PPV2[\"プロキシプロトコル v2 に含まれる<br/>VPC エンドポイント ID\"]:::best\n        TENANT[\"接続元テナントを識別して分離する\"]:::best\n        EPS --> NLB --> PPV2 --> TENANT\n    end\n\n    subgraph NG[\"顧客ごとに経路を作る案\"]\n        PEER[\"顧客ごとに VPC ピアリング<br/>数百規模で管理と CIDR が破綻\"]:::alt\n        VPN[\"顧客ごとに Site-to-Site VPN + BGP<br/>数百規模で管理と CIDR が破綻\"]:::alt\n        PUB[\"パブリック ALB + API キー<br/>プライベート接続にならない\"]:::alt\n    end\n\n    NOTE[\"顧客と自社の CIDR が<br/>重複していても問題にならない\"]:::note\n\n    REQ --> EPS\n    CUST -->|\"接続要求\"| EPS\n    REQ -.->|\"個別に張る\"| NG\n    EPS -.- NOTE"
+}

@@ -1,0 +1,171 @@
+{
+  "question_id": "net55",
+  "purpose": "複数アカウントにネットワークを提供する方法を「VPC を配るか、1 つの VPC を共有するか」の一択に還元し、共有インフラの重複が起きない側を示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、アカウント間の接続手段(ピアリング・TGW)は知っているが、VPC 共有(RAM)を選択肢に持っていない人。",
+  "message": "NAT やエンドポイントを重複させたくないなら、VPC をつなぐのではなくサブネットを共有する。",
+  "source_summary": "1 つのアカウントで作成した VPC のサブネットを Organizations 内の複数の開発アカウントへ提供し、各アカウントは自分のリソースだけを管理させたい。VPC・NAT・エンドポイントの重複作成を避けてコストを下げたい。正解は AWS RAM で VPC 共有(サブネットの共有)を行い、参加アカウントが共有サブネットにリソースを作成する構成。参加アカウントは共有サブネット内に自分の EC2 や ENI を作成でき、NAT ゲートウェイや VPC エンドポイントなどの共有インフラを重複作成せずに済む。ネットワークの管理はオーナーアカウントに集約される。TGW やピアリングでもつながるが、リソースの重複とデータ転送料金が発生する。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "複数アカウントへネットワークを提供しつつ VPC・NAT・エンドポイントの重複を避けたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "各アカウントに VPC を作るか、1 つの VPC を共有するか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "OWNER",
+      "label": "オーナーアカウントの VPC(NAT・エンドポイントは 1 組)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "RAM",
+      "label": "AWS RAM でサブネットを共有する",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "DEVA",
+      "label": "開発アカウント A が共有サブネットに自分の EC2/ENI を作る",
+      "type": "actor",
+      "priority": "primary"
+    },
+    {
+      "id": "DEVB",
+      "label": "開発アカウント B が共有サブネットに自分の EC2/ENI を作る",
+      "type": "actor",
+      "priority": "primary"
+    },
+    {
+      "id": "TGW",
+      "label": "各アカウントに VPC を作り Transit Gateway で相互接続",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "PEER",
+      "label": "各アカウントに VPC を作り VPC ピアリングでフルメッシュ接続",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ROLE",
+      "label": "クロスアカウントロールでオーナーアカウントへスイッチさせる",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "ネットワークの管理はオーナーアカウントに集約される",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "RAM",
+      "verb": "1 つの VPC を共有する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "OWNER",
+      "to": "RAM",
+      "verb": "サブネットを共有に出す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "RAM",
+      "to": "DEVA",
+      "verb": "共有サブネットを使わせる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "RAM",
+      "to": "DEVB",
+      "verb": "共有サブネットを使わせる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "TGW",
+      "verb": "VPC が増え重複と転送料金が出る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "PEER",
+      "verb": "VPC が増え重複と転送料金が出る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "ROLE",
+      "verb": "各アカウントが自分のリソースを持てない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "RAM",
+      "to": "NOTE",
+      "verb": "管理の所在を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "SHARE",
+      "label": "VPC 共有 — 共有インフラは 1 組だけ",
+      "members": [
+        "OWNER",
+        "RAM",
+        "DEVA",
+        "DEVB"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "重複や管理の集中が起きる案",
+      "members": [
+        "TGW",
+        "PEER",
+        "ROLE"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「各アカウントに VPC を作るか、1 つの VPC を共有するか」の 1 問で、RAM による共有と接続でつなぐ案に振り分ける",
+    "包含: オーナーの VPC という 1 つの枠の中に、各アカウントが作る EC2/ENI を入れ子で描き、NAT とエンドポイントが枠に 1 組しかないことを見せる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。包含は共有の姿そのものは直感的だが、誤答 3 つ(TGW・ピアリング・スイッチロール)が枠の外に浮いてしまう。「VPC を配るか共有するか」という 1 つの問いから分ければ、共有の中身も落ちる案も同じ図に収まり、判断軸が一言で言える。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解を構成する共有の要素、矩形(白)=共有サブネットを使う参加アカウント、矩形(グレー)=要件を満たさない案、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=重複を作らずに提供する要素、白=参加する開発アカウント、グレー=重複や管理の集中が起きる案、青=要件と判断軸、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行と共有の提供、破線矢印=要件を満たさない案への分岐、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "参加アカウントは 2 つだけ描いている(数を問う問題ではないため)。実際の Organizations の規模は解説の範囲外。",
+    "スイッチロール案が落ちる理由は解説になく、問題文の「各アカウントは自分のリソースだけを管理させたい」から書いている。ここを厳密にするなら解説の追記が要る。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"Organizations 内の複数の開発アカウントへ<br/>ネットワークを提供したい<br/>VPC・NAT・エンドポイントの重複を避けたい\"]:::req\n    Q{\"各アカウントに VPC を作るか<br/>1 つの VPC を共有するか?\"}:::judge\n\n    subgraph SHARE[\"VPC 共有 — 共有インフラは 1 組だけ\"]\n        OWNER[\"オーナーアカウントの VPC<br/>NAT ゲートウェイ・VPC エンドポイントは 1 組\"]:::best\n        RAM[\"AWS RAM でサブネットを共有する\"]:::best\n        DEVA[\"開発アカウント A<br/>共有サブネットに自分の EC2/ENI を作る\"]:::svc\n        DEVB[\"開発アカウント B<br/>共有サブネットに自分の EC2/ENI を作る\"]:::svc\n        OWNER --> RAM\n        RAM --> DEVA\n        RAM --> DEVB\n    end\n\n    subgraph NG[\"重複や管理の集中が起きる案\"]\n        TGW[\"各アカウントに VPC + Transit Gateway<br/>リソースの重複とデータ転送料金\"]:::alt\n        PEER[\"各アカウントに VPC + ピアリングでフルメッシュ<br/>リソースの重複とデータ転送料金\"]:::alt\n        ROLE[\"クロスアカウントロールでスイッチさせる<br/>各アカウントが自分のリソースを持てない\"]:::alt\n    end\n\n    NOTE[\"ネットワークの管理は<br/>オーナーアカウントに集約される\"]:::note\n\n    REQ --> Q\n    Q -->|\"共有する\"| OWNER\n    Q -.->|\"VPC を配る\"| NG\n    RAM -.- NOTE"
+}

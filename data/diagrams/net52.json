@@ -1,0 +1,142 @@
+{
+  "question_id": "net52",
+  "purpose": "ヘルスチェックが「アプリの実処理を通らない 200」を見ていると障害を検知できないことを、リクエストがどこで折り返しているかとして 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、ヘルスチェックの設定項目(間隔・しきい値)には目が行くが、監視対象のパスが何を通るかを意識していない人。",
+  "message": "200 を返したのがアプリでないなら、そのヘルスチェックは障害を見ていない。",
+  "source_summary": "Route 53 のフェイルオーバー構成で、プライマリの ALB が完全に停止したのにヘルスチェックが失敗しなかった。ヘルスチェックは ALB の DNS 名に対する / への HTTP 200 判定。原因は / が CloudFront やメンテナンスページなど別の経路から 200 を返しており、アプリの実際の状態を反映していないこと。対策は依存関係を含む専用の /health を用意し、キャッシュされない設定にすること。Route 53 のヘルスチェック間隔は標準 30 秒・高速 10 秒を選択できる。",
+  "elements": [
+    {
+      "id": "HC",
+      "label": "Route 53 ヘルスチェッカーが / へ HTTP 200 を確認する",
+      "type": "actor",
+      "priority": "primary"
+    },
+    {
+      "id": "EDGE",
+      "label": "CloudFront やメンテナンスページなど別の経路",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "OK200",
+      "label": "アプリを経ずに 200 が返る",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "APP",
+      "label": "停止している ALB とアプリ(実処理)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "RESULT",
+      "label": "ヘルスチェックは正常のままでフェイルオーバーが起きない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "FIX",
+      "label": "依存関係を含む専用の /health をキャッシュさせない設定で用意する",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "INTERVAL",
+      "label": "検知が遅れている(間隔の問題)",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "間隔は標準 30 秒・高速 10 秒を選べる",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "HC",
+      "to": "EDGE",
+      "verb": "/ を叩く",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "EDGE",
+      "to": "OK200",
+      "verb": "固定・静的なレスポンスを返す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "OK200",
+      "to": "RESULT",
+      "verb": "正常と判定される",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "EDGE",
+      "to": "APP",
+      "verb": "実処理までは到達していない",
+      "direction": "one-way",
+      "kind": "other"
+    },
+    {
+      "from": "HC",
+      "to": "FIX",
+      "verb": "監視先を実処理のパスに変える",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "FIX",
+      "to": "APP",
+      "verb": "アプリと依存関係の状態を返させる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "INTERVAL",
+      "to": "RESULT",
+      "verb": "原因ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "INTERVAL",
+      "to": "NOTE",
+      "verb": "仕様を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NOW",
+      "label": "いま起きていること — / への 200",
+      "members": [
+        "EDGE",
+        "OK200",
+        "RESULT"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "経路図(直列): ヘルスチェッカーのリクエストがどこで折り返して 200 になるかを左から右へたどり、アプリに届いていないことを見せる",
+    "分岐(判断フロー): 「200 を返したのはアプリか」の 1 問で、原因の候補 4 つに振り分ける"
+  ],
+  "selected_pattern": "経路図(直列)。この問題は選択ではなく原因の特定なので、判断フローにすると「アプリか?」という問いの答えが図の外にあることになる。リクエストが実処理の手前で折り返している経路をそのまま描けば、なぜ 200 が返り続けたのかが矢印の届く先だけで言える。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=前提(ヘルスチェッカーの動き)、矩形(緑)=正しい監視のしかた、矩形(グレー)=停止しているアプリと原因でない候補、矩形(白)=200 を返している別経路、薄黄=注釈。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=障害を検知できる監視、グレー=止まっている実処理と原因ではない候補、白=いま 200 を返している経路、青=ヘルスチェッカーという前提、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=リクエストと判定の流れ、破線矢印=到達していない/原因ではないという弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "誤答のうち「二重定義で無効化される」「フェイルオーバーレコードでは評価されない」は解説が仕様として否定していないため図に描かず、原因として否定できる「検知の遅れ」だけを残した。",
+    "CloudFront とメンテナンスページは 1 ノードにまとめている(どちらも「アプリを経ない固定レスポンス」という同じ役割のため)。"
+  ],
+  "mermaid": "flowchart TB\n    HC[\"Route 53 ヘルスチェッカー<br/>ALB の DNS 名の / が HTTP 200 かを見る\"]:::req\n\n    subgraph NOW[\"いま起きていること — / への 200\"]\n        EDGE[\"CloudFront やメンテナンスページなど<br/>別の経路が / に応答している\"]:::svc\n        OK200[\"アプリを経ずに 200 が返る\"]:::svc\n        RESULT[\"ヘルスチェックは正常のまま<br/>フェイルオーバーが起きない\"]:::alt\n        EDGE --> OK200 --> RESULT\n    end\n\n    APP[\"停止している ALB とアプリの実処理\"]:::alt\n    FIX[\"依存関係を含む専用の /health<br/>キャッシュされない設定にする\"]:::best\n    INTERVAL[\"検知が遅れているから<br/>という説明\"]:::alt\n    NOTE[\"ヘルスチェック間隔は<br/>標準 30 秒・高速 10 秒を選べる\"]:::note\n\n    HC -->|\"/ を叩く\"| EDGE\n    EDGE -.->|\"届かない\"| APP\n    HC -->|\"監視先を変更\"| FIX\n    FIX -->|\"実状を返す\"| APP\n    INTERVAL -.->|\"原因ではない\"| RESULT\n    INTERVAL -.- NOTE"
+}

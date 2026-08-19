@@ -1,0 +1,177 @@
+{
+  "question_id": "net54",
+  "purpose": "VPC エンドポイントのプライベート DNS が「VPC の .2 リゾルバで解決されること」を前提にしている以上、DNS の向き先をオンプレ一択にすると壊れることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、DHCP オプションセットと Route 53 Resolver のどちらで名前解決が決まるのかが整理できていない人。",
+  "message": "AWS のサービス名は VPC の .2 リゾルバで解決させ、社内ドメインだけをオンプレへ転送する。",
+  "source_summary": "Windows ドメイン参加サーバーを VPC へ移行後、ad.example.com は解決できるが VPC エンドポイント経由の S3 アクセスができない。DHCP オプションセットで DNS をオンプレのドメインコントローラーのみに設定している。正解はドメインコントローラー側で AWS 関連ドメインのフォワーダーを VPC の .2 リゾルバ(Amazon Provided DNS)へ設定するか、Route 53 Resolver の転送ルールで ad.example.com のみオンプレへ転送し DHCP は AmazonProvidedDNS に戻すこと。インターフェース型 VPC エンドポイントのプライベート DNS は VPC の Route 53 Resolver(CIDR の .2)で解決されるため、DNS を外部のみに向けると AWS サービス名がパブリック IP に解決されエンドポイント経由にならない。hosts の静的記載は IP 変動に耐えられない。",
+  "elements": [
+    {
+      "id": "NOW",
+      "label": "DHCP オプションセットで DNS をオンプレの DC のみに設定",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "S3NAME",
+      "label": "EC2 が S3 のサービス名を問い合わせる",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "PUBIP",
+      "label": "パブリック IP に解決されエンドポイントを経由しない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "AWS のサービス名を VPC の .2 リゾルバで解決できるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "FWD",
+      "label": "DC 側で AWS 関連ドメインのフォワーダーを .2 リゾルバへ向ける",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "RULE",
+      "label": "Route 53 Resolver の転送ルールで ad.example.com のみオンプレへ転送し DHCP は AmazonProvidedDNS に戻す",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "PDNS",
+      "label": "インターフェース型エンドポイントのプライベート DNS が効く",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "GW",
+      "label": "S3 エンドポイントをゲートウェイ型に変更する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DNSOFF",
+      "label": "VPC の enableDnsSupport を無効化する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "HOSTS",
+      "label": "EC2 の hosts にエンドポイントの IP を静的記載する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "NOW",
+      "to": "S3NAME",
+      "verb": "問い合わせ先が DC だけになる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "S3NAME",
+      "to": "PUBIP",
+      "verb": "パブリック IP が返る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "PUBIP",
+      "to": "Q",
+      "verb": "原因を問い直す",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "FWD",
+      "verb": "DC から .2 へ転送させる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "RULE",
+      "verb": "既定を .2 に戻し社内ドメインだけ転送する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "FWD",
+      "to": "PDNS",
+      "verb": "プライベート DNS が効く",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "RULE",
+      "to": "PDNS",
+      "verb": "プライベート DNS が効く",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "GW",
+      "verb": "DNS の向き先を直していない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "DNSOFF",
+      "verb": "DNS の向き先を直していない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "HOSTS",
+      "verb": "IP 変動に耐えられない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "FIX",
+      "label": "解決先を用途で振り分ける(どちらでも成立)",
+      "members": [
+        "FWD",
+        "RULE",
+        "PDNS"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "DNS の向き先を直さない案",
+      "members": [
+        "GW",
+        "DNSOFF",
+        "HOSTS"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "原因 → 分岐: いま起きている名前解決の流れをたどって原因を出し、「.2 リゾルバで解決できるか」の 1 問で対策と誤答に振り分ける",
+    "対比(現状と修正後): 左に「DNS = DC のみ」の解決経路、右に「既定は .2 + 社内ドメインだけ転送」の解決経路を並べて見比べる"
+  ],
+  "selected_pattern": "原因 → 分岐。対比は 2 つの経路をきれいに並べられるが、正解が「DC 側にフォワーダー」と「Resolver の転送ルール」の 2 通りあるため右側が二重になり、誤答 3 つの置き場も無くなる。原因を 1 本の線でたどってから 1 つの問いで分ければ、どちらの直し方も同じ分岐の下に並べられる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=いまの設定という前提、菱形(青)=判断ポイント、矩形(緑)=正解となる直し方とその結果、矩形(グレー)=いま起きている症状と要件を満たさない案。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=AWS 名を .2 リゾルバで解決させる直し方、グレー=症状と DNS の向き先を直さない案、青=前提と判断軸。",
+    "line_semantics": "実線矢印=名前解決の流れと判断の進行、破線矢印=要件を満たさない案への分岐。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "ゲートウェイ型への変更と enableDnsSupport の無効化は、解説が個別に反証していないため「DNS の向き先を直していない」という共通の理由でグループにまとめている。個別の理由を描くには解説の追記が要る。",
+    "正解の 2 通り(DC 側フォワーダー / Resolver 転送ルール)はどちらも同じ結果に合流させた。選び分けの基準は解説にないため描いていない。"
+  ],
+  "mermaid": "flowchart TB\n    NOW[\"DHCP オプションセットで<br/>DNS をオンプレの DC のみに設定\"]:::req\n    S3NAME[\"EC2 が S3 のサービス名を問い合わせる\"]:::alt\n    PUBIP[\"パブリック IP に解決され<br/>VPC エンドポイントを経由しない\"]:::alt\n    Q{\"AWS のサービス名を<br/>VPC の .2 リゾルバで<br/>解決できるか?\"}:::judge\n\n    subgraph FIX[\"解決先を用途で振り分ける(どちらでも成立)\"]\n        FWD[\"DC 側で AWS 関連ドメインのフォワーダーを<br/>VPC の .2(Amazon Provided DNS)へ向ける\"]:::best\n        RULE[\"Route 53 Resolver の転送ルールで<br/>ad.example.com のみオンプレへ転送し<br/>DHCP は AmazonProvidedDNS に戻す\"]:::best\n        PDNS[\"インターフェース型エンドポイントの<br/>プライベート DNS が効く\"]:::best\n    end\n\n    subgraph NG[\"DNS の向き先を直さない案\"]\n        GW[\"S3 をゲートウェイ型に変更する\"]:::alt\n        DNSOFF[\"enableDnsSupport を無効化する\"]:::alt\n        HOSTS[\"hosts に IP を静的記載する<br/>IP 変動に耐えられない\"]:::alt\n    end\n\n    NOW --> S3NAME --> PUBIP --> Q\n    Q -->|\"できる\"| FWD --> PDNS\n    Q -->|\"できる\"| RULE --> PDNS\n    Q -.->|\"向き先が同じ\"| NG"
+}

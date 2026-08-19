@@ -1,0 +1,170 @@
+{
+  "question_id": "net56",
+  "purpose": "IP 枯渇の対処が「既存を広げる」ではなく「新しい空間を足す」しかないことを、VPC の CIDR に対してできる操作の違いとして 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、VPC やサブネットの CIDR を後から変更できるかどうかが曖昧な人。",
+  "message": "既存の CIDR は変えられないので、セカンダリ CIDR を追加して新しいサブネットへ伸ばす。",
+  "source_summary": "サブネット設計を誤りアプリ用サブネットの IP が枯渇した。既存のインスタンスを停止せずにアドレス空間を拡張したい。正解は VPC にセカンダリ CIDR ブロックを追加し、新しいサブネットを作成してそこへリソースを追加していくこと。VPC は作成後にセカンダリ CIDR ブロック(主 CIDR と重複せず制約に合致する範囲)を追加でき、そこに新しいサブネットを作成して拡張する。既存のサブネットや VPC の CIDR そのものは変更・縮小できない。VPC の作り直しは影響が大きく、ピアリング構成は運用が複雑になる。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "アプリ用サブネットの IP が枯渇・既存インスタンスは停止できない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "VPC",
+      "label": "既存の VPC(主 CIDR)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SUB1",
+      "label": "既存サブネット(枯渇・インスタンスは稼働したまま)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "Q",
+      "label": "既存の CIDR を変えるか、新しい CIDR を足すか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ADD",
+      "label": "VPC にセカンダリ CIDR ブロックを追加する(主 CIDR と重複しない範囲)",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "SUB2",
+      "label": "追加した範囲に新しいサブネットを作る",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NEWRES",
+      "label": "以後のリソースは新しいサブネットへ追加していく",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "RESIZE",
+      "label": "既存サブネットの CIDR をより大きなプレフィックスへ変更する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "VPCCIDR",
+      "label": "VPC の主 CIDR を /16 から /12 へ変更する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "REBUILD",
+      "label": "新しい VPC を作り直しピアリングで旧 VPC と接続する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "VPC",
+      "to": "SUB1",
+      "verb": "含む",
+      "direction": "one-way",
+      "kind": "include"
+    },
+    {
+      "from": "SUB1",
+      "to": "REQ",
+      "verb": "枯渇している",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "ADD",
+      "verb": "新しい CIDR を足す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ADD",
+      "to": "SUB2",
+      "verb": "新しいサブネットを作る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "SUB2",
+      "to": "NEWRES",
+      "verb": "ここへ足していく",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "RESIZE",
+      "verb": "既存サブネットの CIDR は変更できない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "VPCCIDR",
+      "verb": "主 CIDR そのものは変更できない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "REBUILD",
+      "verb": "影響が大きく運用も複雑になる",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "OK",
+      "label": "足す — 既存を触らずに拡張する",
+      "members": [
+        "ADD",
+        "SUB2",
+        "NEWRES"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "変える・作り直す — 取れない手",
+      "members": [
+        "RESIZE",
+        "VPCCIDR",
+        "REBUILD"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「既存の CIDR を変えるか、新しい CIDR を足すか」の 1 問で、追加の案と変更・作り直しの案に振り分ける",
+    "包含: VPC の枠の中に主 CIDR とセカンダリ CIDR を並べ、それぞれの下にサブネットをぶら下げて拡張の姿を見せる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。包含は拡張後の構造を示せるが、この問題が問うているのは構造ではなく「変更はできず追加だけができる」という可否の線引きで、誤答 3 つもすべてその線の外側にある。1 つの問いで変更側と追加側に切れば、判断軸がそのまま図の骨になる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解となる拡張の手順、矩形(白)=既存の VPC とサブネット、矩形(グレー)=取れない手。グループ化は subgraph の枠のみ。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=既存を止めずに拡張できる操作、白=現状の構成、グレー=できない/影響が大きい案、青=要件と判断軸。",
+    "line_semantics": "実線矢印=判断の進行と拡張の手順、破線矢印=取れない手への分岐、実線の無向線=包含関係。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ太字相当(枠線を太くする)、他は標準。"
+  },
+  "open_questions": [
+    "セカンダリ CIDR に付く制約(主 CIDR と重複しない・使える範囲がある)は解説の記述どおり一言に留めた。具体的な制約値は解説にないため描いていない。",
+    "既存サブネットの枯渇そのものは解消しない(新規リソースを新サブネットへ寄せる)点を NEWRES ノードで表しているが、既存リソースの移設については解説が触れていないため描いていない。"
+  ],
+  "mermaid": "flowchart TB\n    VPC[\"既存の VPC(主 CIDR)\"]:::svc\n    SUB1[\"既存のアプリ用サブネット<br/>IP が枯渇・インスタンスは稼働中\"]:::svc\n    REQ[\"既存インスタンスを停止せずに<br/>アドレス空間を拡張したい\"]:::req\n    Q{\"既存の CIDR を変えるか<br/>新しい CIDR を足すか?\"}:::judge\n\n    subgraph OK[\"足す — 既存を触らずに拡張する\"]\n        ADD[\"VPC にセカンダリ CIDR ブロックを追加<br/>主 CIDR と重複しない範囲\"]:::best\n        SUB2[\"追加した範囲に新しいサブネットを作る\"]:::best\n        NEWRES[\"以後のリソースは新しいサブネットへ<br/>既存は停止せずに済む\"]:::best\n        ADD --> SUB2 --> NEWRES\n    end\n\n    subgraph NG[\"変える・作り直す — 取れない手\"]\n        RESIZE[\"既存サブネットの CIDR を広げる<br/>サブネットの CIDR は変更できない\"]:::alt\n        VPCCIDR[\"主 CIDR を /16 から /12 へ変更する<br/>VPC の CIDR そのものは変更できない\"]:::alt\n        REBUILD[\"VPC を作り直しピアリングで接続する<br/>影響が大きく運用も複雑になる\"]:::alt\n    end\n\n    VPC --- SUB1\n    SUB1 --> REQ --> Q\n    Q -->|\"足す\"| ADD\n    Q -.->|\"変える\"| NG"
+}

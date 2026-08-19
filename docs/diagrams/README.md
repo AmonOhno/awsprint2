@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 183 問 / 全 400 問
+収録: 193 問 / 全 400 問
 
 ---
 
@@ -9330,3 +9330,531 @@ flowchart TB
 **解説**: Global Accelerator は静的エニーキャスト IP を提供し、ユーザーは最寄りの AWS エッジで TCP を終端して AWS バックボーン経由で最適なリージョンへ転送されるため、接続確立が速く、フェイルオーバーも DNS に依存せず数十秒以内に完了します。Route 53 は DNS ベースであり、クライアントやリゾルバのキャッシュによって TTL どおりに切り替わらないことがあります。CloudFront は静的/HTTP キャッシュ配信が主目的です。
 
 **確認事項**: 「TCP 接続の確立を高速化」は最寄りエッジでの TCP 終端として 1 ノードに書いたが、判断の分岐には使っていない。誤答がこの条件だけでは落ちないため、主軸を DNS 依存の有無に絞っている。 / 3 リージョンは 1 ノードにまとめて描いている。リージョンごとのエンドポイントグループやトラフィックダイヤルは解説の範囲外のため描いていない。
+
+---
+
+## net51 — ネットワーク / level 3
+
+**問題**: Route 53 で、プライマリ(東京 ALB)がヘルスチェック失敗した場合にセカンダリ(大阪 ALB)へ切り替えたい。加えて、東京が生きていてもアプリの依存する外部決済 API が落ちている場合はフェイルオーバーさせたい。最適な構成はどれか?
+
+**正解**: アプリ側の /health が依存関係を検査するようにし、計算済みヘルスチェック(複数のヘルスチェックを AND/OR で組み合わせる)でフェイルオーバーレコードを制御する
+
+**他の選択肢**: ALB のターゲットグループのヘルスチェックのしきい値を厳しくする / Route 53 のレイテンシールーティングに変更し、遅い方を自動的に外させる / CloudWatch アラームを作成し、アラーム時に Lambda で DNS レコードを書き換える
+
+**図解の主メッセージ**: DNS を切り替えたいなら、外部依存の状態まで映した判定を Route 53 のヘルスチェックに載せる。
+
+**採用パターン**: 分岐(判断フロー)。レイヤー図はターゲットグループのヘルスチェックが DNS に効かない理由をきれいに描けるが、レイテンシールーティングや Lambda 案が層に収まらず 1 枚に載らない。「外部依存の状態を判定に含められるか」という 1 つの問いから分ければ、判断軸と誤答 3 つの落ちどころを同じ図で言える。(候補: 分岐(判断フロー): 「DNS の切り替え判定に外部依存を含められるか」の 1 問で、計算済みヘルスチェックの案と含められない案に振り分ける / レイヤー図: DNS(Route 53)/ ロードバランサー(ALB)/ アプリ(/health)の 3 層を積み、どの層のヘルスチェックが何に効くかを示す)
+
+```mermaid
+flowchart TB
+    REQ["プライマリ(東京 ALB)の障害で大阪 ALB へ切り替えたい<br/>東京が生きていても外部決済 API が落ちたら切り替えたい"]:::req
+    Q{"DNS の切り替え判定に<br/>外部依存の状態を<br/>含められるか?"}:::judge
+
+    subgraph OK["計算済みヘルスチェックで判定を組み立てる"]
+        HEALTH["アプリの /health が<br/>依存する外部決済 API まで検査する"]:::best
+        CALC["計算済みヘルスチェック<br/>子ヘルスチェックを AND/OR で集約"]:::best
+        FO["フェイルオーバーレコードが<br/>セカンダリ(大阪 ALB)へ切り替わる"]:::best
+        HEALTH --> CALC --> FO
+    end
+
+    subgraph NG["DNS の切り替え判定にならない案"]
+        TG["ターゲットグループのしきい値を厳しくする<br/>ALB 内部の振り分けにしか効かない"]:::alt
+        LAT["レイテンシールーティングに変更する<br/>依存の障害を判定に使えない"]:::alt
+        LMD["CloudWatch アラーム + Lambda で書き換える<br/>切り替えを自前で実装することになる"]:::alt
+    end
+
+    NOTE["CloudWatch アラームも<br/>ヘルスチェックのソースにできる"]:::note
+
+    REQ --> Q
+    Q -->|"含められる"| HEALTH
+    Q -.->|"含められない"| NG
+    CALC -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net51.svg`](../../web/diagrams/net51.svg)
+
+**解説**: Route 53 の計算済みヘルスチェック(Calculated Health Check)は複数の子ヘルスチェックの結果を論理演算で集約でき、CloudWatch アラームをヘルスチェックのソースにすることもできます。アプリの /health エンドポイントで依存サービスの状態を反映させれば、外部依存の障害でもフェイルオーバーが働きます。ターゲットグループのヘルスチェックは ALB 内部の振り分けに影響するだけで DNS レベルの切り替えは行いません。
+
+**確認事項**: 計算済みヘルスチェックの AND/OR のどちらを使うかは解説が指定していないため、「論理演算で集約する」までにとどめて具体式は描いていない。 / CloudWatch アラームをソースにできる点は注釈に置き、Lambda で書き換える誤答との対比には使っていない(解説がその比較まではしていないため)。
+
+---
+
+## net52 — ネットワーク / level 3
+
+**問題**: Route 53 のフェイルオーバー構成で、プライマリの ALB が完全に停止した際にヘルスチェックが失敗しない事象が起きた。ヘルスチェックは ALB の DNS 名に対する HTTP 200 判定で、パスは / を指定している。ALB は停止しているが、Route 53 のヘルスチェッカーは 200 を受け取っていた。考えられる原因はどれか?
+
+**正解**: / が CloudFront やメンテナンスページなど別の経路から 200 を返しており、実際のアプリの状態を反映していないため
+
+**他の選択肢**: Route 53 のヘルスチェックは 30 秒間隔でしか実行できず、検知が遅れているため / ALB のヘルスチェックとの二重定義により、Route 53 側が無効化されるため / フェイルオーバーレコードではヘルスチェックが評価されないため
+
+**図解の主メッセージ**: 200 を返したのがアプリでないなら、そのヘルスチェックは障害を見ていない。
+
+**採用パターン**: 経路図(直列)。この問題は選択ではなく原因の特定なので、判断フローにすると「アプリか?」という問いの答えが図の外にあることになる。リクエストが実処理の手前で折り返している経路をそのまま描けば、なぜ 200 が返り続けたのかが矢印の届く先だけで言える。(候補: 経路図(直列): ヘルスチェッカーのリクエストがどこで折り返して 200 になるかを左から右へたどり、アプリに届いていないことを見せる / 分岐(判断フロー): 「200 を返したのはアプリか」の 1 問で、原因の候補 4 つに振り分ける)
+
+```mermaid
+flowchart TB
+    HC["Route 53 ヘルスチェッカー<br/>ALB の DNS 名の / が HTTP 200 かを見る"]:::req
+
+    subgraph NOW["いま起きていること — / への 200"]
+        EDGE["CloudFront やメンテナンスページなど<br/>別の経路が / に応答している"]:::svc
+        OK200["アプリを経ずに 200 が返る"]:::svc
+        RESULT["ヘルスチェックは正常のまま<br/>フェイルオーバーが起きない"]:::alt
+        EDGE --> OK200 --> RESULT
+    end
+
+    APP["停止している ALB とアプリの実処理"]:::alt
+    FIX["依存関係を含む専用の /health<br/>キャッシュされない設定にする"]:::best
+    INTERVAL["検知が遅れているから<br/>という説明"]:::alt
+    NOTE["ヘルスチェック間隔は<br/>標準 30 秒・高速 10 秒を選べる"]:::note
+
+    HC -->|"/ を叩く"| EDGE
+    EDGE -.->|"届かない"| APP
+    HC -->|"監視先を変更"| FIX
+    FIX -->|"実状を返す"| APP
+    INTERVAL -.->|"原因ではない"| RESULT
+    INTERVAL -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net52.svg`](../../web/diagrams/net52.svg)
+
+**解説**: ヘルスチェック対象のパスがアプリの実処理を経ない(CDN やロードバランサーの固定レスポンス、静的ページ等)場合、アプリが死んでいても 200 が返り続けて障害を検知できません。依存関係を含む専用の /health エンドポイントを用意し、キャッシュされない設定にするのが定石です。なお Route 53 のヘルスチェック間隔は標準 30 秒・高速 10 秒を選択できます。
+
+**確認事項**: 誤答のうち「二重定義で無効化される」「フェイルオーバーレコードでは評価されない」は解説が仕様として否定していないため図に描かず、原因として否定できる「検知の遅れ」だけを残した。 / CloudFront とメンテナンスページは 1 ノードにまとめている(どちらも「アプリを経ない固定レスポンス」という同じ役割のため)。
+
+---
+
+## net53 — ネットワーク / level 3
+
+**問題**: 新サービスを段階的に公開するため、まず日本のユーザーの 10%、次に 50%、最後に全体へ広げたい。地域と割合の両方で制御したい。Route 53 で最も適切な構成はどれか?
+
+**正解**: 位置情報ルーティングで日本向けレコードを作り、そのレコードのターゲットとして加重ルーティングのエイリアス(新旧 10:90 等)を参照させる(ルーティングポリシーの入れ子)
+
+**他の選択肢**: 加重ルーティングのみを使い、重みを 10 に設定する / 位置情報ルーティングのみを使い、日本向けに新サービスを指定する / レイテンシールーティングと加重ルーティングを同一レコード名・同一タイプで併用する
+
+**図解の主メッセージ**: 地域と割合の両方を効かせるには、位置情報で絞ってからその配下で加重に渡す 2 段構えにする。
+
+**採用パターン**: 直列(2 段の絞り込み)。マトリクスは 2 つの軸があること自体は示せるが、この問題の肝である「順番に絞る(入れ子)」という構造が象限では表せない。名前解決が上から下へ 2 段で決まる様子をそのまま直列に描けば、なぜ 1 つのレコードで混在させられないのかも同じ図で言える。(候補: 直列(2 段の絞り込み): ユーザー → 位置情報で日本を選ぶ → エイリアスで加重へ渡す → 新旧に振り分ける、と上から下へたどる / マトリクス: 地域(日本/その他)× 割合(新/旧)の 2 軸に 4 象限を置き、どの案がどの軸を押さえられるかを配置する)
+
+```mermaid
+flowchart TB
+    REQ["新サービスを段階公開したい<br/>日本のユーザーの 10% → 50% → 全体<br/>地域と割合の両方で制御する"]:::req
+    USER["ユーザーの名前解決"]:::svc
+
+    subgraph NEST["ルーティングポリシーの入れ子 — 2 段で絞る"]
+        GEO["第1段: 位置情報ルーティング<br/>日本向けレコードを選ぶ"]:::best
+        ALIAS["エイリアスで加重レコードを参照する"]:::best
+        WGT["第2段: 加重ルーティング<br/>新旧を 10:90 で振り分ける"]:::best
+        GEO --> ALIAS --> WGT
+    end
+
+    NEW["新サービス<br/>重みを 10 → 50 → 100 と上げる"]:::svc
+    OLD["旧サービス"]:::svc
+
+    subgraph NG["片方の軸しか効かない案"]
+        ONLYW["加重ルーティングのみ・重み 10<br/>地域を限定できない"]:::alt
+        ONLYG["位置情報ルーティングのみ<br/>割合を制御できない"]:::alt
+        MIX["同一レコード名・同一タイプで<br/>レイテンシーと加重を併用<br/>ポリシーは混在できない"]:::alt
+    end
+
+    REQ --> GEO
+    USER --> GEO
+    WGT -->|"10%"| NEW
+    WGT -->|"90%"| OLD
+    REQ -.->|"軸が足りない"| NG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net53.svg`](../../web/diagrams/net53.svg)
+
+**解説**: Route 53 はトラフィックフロー(またはエイリアスによる参照)でルーティングポリシーを入れ子にでき、「位置情報で日本を選択 → その配下で加重により 10% を新サービスへ」といった多段制御が可能です。単一のレコードセットで異なるルーティングポリシーを同名・同タイプで混在させることはできません。加重のみでは地域を限定できず、位置情報のみでは割合制御ができません。
+
+**確認事項**: 解説はトラフィックフローとエイリアス参照の両方を入れ子の手段として挙げているが、図では選択肢の文面に合わせてエイリアス参照だけを描いた。トラフィックフローを問う問題を足す場合は分岐が要る。 / 10% → 50% → 全体の段階は「重みを上げていく」と 1 ノードに畳んでいる。段階ごとの状態遷移を見せるなら別図に分けるべき。
+
+---
+
+## net54 — ネットワーク / level 3
+
+**問題**: 社内の Windows ドメイン参加サーバー群を VPC へ移行した後、オンプレミス由来の内部ドメイン(ad.example.com)を VPC 内から解決できるが、VPC エンドポイント経由の S3 アクセスができなくなった。DHCP オプションセットで DNS サーバーをオンプレミスのドメインコントローラーのみに設定している。最適な解決策はどれか?
+
+**正解**: ドメインコントローラー側で AWS 関連ドメインのフォワーダーを VPC の .2 リゾルバ(Amazon Provided DNS)へ設定するか、Route 53 Resolver の転送ルールで ad.example.com のみオンプレへ転送し DHCP は AmazonProvidedDNS に戻す
+
+**他の選択肢**: S3 のエンドポイントをゲートウェイ型に変更する / VPC の enableDnsSupport を無効化する / EC2 の hosts ファイルに S3 エンドポイントの IP を静的に記載する
+
+**図解の主メッセージ**: AWS のサービス名は VPC の .2 リゾルバで解決させ、社内ドメインだけをオンプレへ転送する。
+
+**採用パターン**: 原因 → 分岐。対比は 2 つの経路をきれいに並べられるが、正解が「DC 側にフォワーダー」と「Resolver の転送ルール」の 2 通りあるため右側が二重になり、誤答 3 つの置き場も無くなる。原因を 1 本の線でたどってから 1 つの問いで分ければ、どちらの直し方も同じ分岐の下に並べられる。(候補: 原因 → 分岐: いま起きている名前解決の流れをたどって原因を出し、「.2 リゾルバで解決できるか」の 1 問で対策と誤答に振り分ける / 対比(現状と修正後): 左に「DNS = DC のみ」の解決経路、右に「既定は .2 + 社内ドメインだけ転送」の解決経路を並べて見比べる)
+
+```mermaid
+flowchart TB
+    NOW["DHCP オプションセットで<br/>DNS をオンプレの DC のみに設定"]:::req
+    S3NAME["EC2 が S3 のサービス名を問い合わせる"]:::alt
+    PUBIP["パブリック IP に解決され<br/>VPC エンドポイントを経由しない"]:::alt
+    Q{"AWS のサービス名を<br/>VPC の .2 リゾルバで<br/>解決できるか?"}:::judge
+
+    subgraph FIX["解決先を用途で振り分ける(どちらでも成立)"]
+        FWD["DC 側で AWS 関連ドメインのフォワーダーを<br/>VPC の .2(Amazon Provided DNS)へ向ける"]:::best
+        RULE["Route 53 Resolver の転送ルールで<br/>ad.example.com のみオンプレへ転送し<br/>DHCP は AmazonProvidedDNS に戻す"]:::best
+        PDNS["インターフェース型エンドポイントの<br/>プライベート DNS が効く"]:::best
+    end
+
+    subgraph NG["DNS の向き先を直さない案"]
+        GW["S3 をゲートウェイ型に変更する"]:::alt
+        DNSOFF["enableDnsSupport を無効化する"]:::alt
+        HOSTS["hosts に IP を静的記載する<br/>IP 変動に耐えられない"]:::alt
+    end
+
+    NOW --> S3NAME --> PUBIP --> Q
+    Q -->|"できる"| FWD --> PDNS
+    Q -->|"できる"| RULE --> PDNS
+    Q -.->|"向き先が同じ"| NG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net54.svg`](../../web/diagrams/net54.svg)
+
+**解説**: インターフェース型 VPC エンドポイントのプライベート DNS は VPC の Route 53 Resolver(CIDR の .2)によって解決されるため、DNS を外部のみに向けると AWS サービス名がパブリック IP に解決され、エンドポイント経由になりません。Resolver の条件付き転送ルールで社内ドメインだけをオンプレへ転送し、既定は AmazonProvidedDNS を使うのが正しい設計です。hosts の静的記載は IP 変動に耐えられません。
+
+**確認事項**: ゲートウェイ型への変更と enableDnsSupport の無効化は、解説が個別に反証していないため「DNS の向き先を直していない」という共通の理由でグループにまとめている。個別の理由を描くには解説の追記が要る。 / 正解の 2 通り(DC 側フォワーダー / Resolver 転送ルール)はどちらも同じ結果に合流させた。選び分けの基準は解説にないため描いていない。
+
+---
+
+## net55 — ネットワーク / level 3
+
+**問題**: 1 つのアカウントで作成した VPC のサブネットを、Organizations 内の複数の開発アカウントへ提供し、各アカウントは自分のリソースだけを管理させたい。VPC・NAT・エンドポイントの重複作成を避けてコストを下げたい。最適な方法はどれか?
+
+**正解**: AWS Resource Access Manager(RAM)で VPC 共有(サブネットの共有)を行い、参加アカウントは共有サブネットにリソースを作成する
+
+**他の選択肢**: 各アカウントに VPC を作り、Transit Gateway で相互接続する / 各アカウントに VPC を作り、VPC ピアリングでフルメッシュに接続する / IAM のクロスアカウントロールで開発者に VPC オーナーアカウントへスイッチさせる
+
+**図解の主メッセージ**: NAT やエンドポイントを重複させたくないなら、VPC をつなぐのではなくサブネットを共有する。
+
+**採用パターン**: 分岐(判断フロー)。包含は共有の姿そのものは直感的だが、誤答 3 つ(TGW・ピアリング・スイッチロール)が枠の外に浮いてしまう。「VPC を配るか共有するか」という 1 つの問いから分ければ、共有の中身も落ちる案も同じ図に収まり、判断軸が一言で言える。(候補: 分岐(判断フロー): 「各アカウントに VPC を作るか、1 つの VPC を共有するか」の 1 問で、RAM による共有と接続でつなぐ案に振り分ける / 包含: オーナーの VPC という 1 つの枠の中に、各アカウントが作る EC2/ENI を入れ子で描き、NAT とエンドポイントが枠に 1 組しかないことを見せる)
+
+```mermaid
+flowchart TB
+    REQ["Organizations 内の複数の開発アカウントへ<br/>ネットワークを提供したい<br/>VPC・NAT・エンドポイントの重複を避けたい"]:::req
+    Q{"各アカウントに VPC を作るか<br/>1 つの VPC を共有するか?"}:::judge
+
+    subgraph SHARE["VPC 共有 — 共有インフラは 1 組だけ"]
+        OWNER["オーナーアカウントの VPC<br/>NAT ゲートウェイ・VPC エンドポイントは 1 組"]:::best
+        RAM["AWS RAM でサブネットを共有する"]:::best
+        DEVA["開発アカウント A<br/>共有サブネットに自分の EC2/ENI を作る"]:::svc
+        DEVB["開発アカウント B<br/>共有サブネットに自分の EC2/ENI を作る"]:::svc
+        OWNER --> RAM
+        RAM --> DEVA
+        RAM --> DEVB
+    end
+
+    subgraph NG["重複や管理の集中が起きる案"]
+        TGW["各アカウントに VPC + Transit Gateway<br/>リソースの重複とデータ転送料金"]:::alt
+        PEER["各アカウントに VPC + ピアリングでフルメッシュ<br/>リソースの重複とデータ転送料金"]:::alt
+        ROLE["クロスアカウントロールでスイッチさせる<br/>各アカウントが自分のリソースを持てない"]:::alt
+    end
+
+    NOTE["ネットワークの管理は<br/>オーナーアカウントに集約される"]:::note
+
+    REQ --> Q
+    Q -->|"共有する"| OWNER
+    Q -.->|"VPC を配る"| NG
+    RAM -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net55.svg`](../../web/diagrams/net55.svg)
+
+**解説**: VPC 共有は RAM を用いてサブネットを他アカウントへ共有する機能で、参加アカウントは共有サブネット内に自分の EC2 や ENI を作成でき、NAT ゲートウェイや VPC エンドポイントなどの共有インフラを重複作成せずに済みます。ネットワークの管理はオーナーアカウントに集約されます。TGW やピアリングでもつながりますが、リソースの重複とデータ転送料金が発生します。
+
+**確認事項**: 参加アカウントは 2 つだけ描いている(数を問う問題ではないため)。実際の Organizations の規模は解説の範囲外。 / スイッチロール案が落ちる理由は解説になく、問題文の「各アカウントは自分のリソースだけを管理させたい」から書いている。ここを厳密にするなら解説の追記が要る。
+
+---
+
+## net56 — ネットワーク / level 3
+
+**問題**: VPC のサブネット設計を誤り、アプリケーション用サブネットの IP が枯渇した。既存のインスタンスを停止せずにアドレス空間を拡張したい。適切な対応はどれか?
+
+**正解**: VPC にセカンダリ CIDR ブロックを追加し、新しいサブネットを作成してそこへリソースを追加していく
+
+**他の選択肢**: 既存サブネットの CIDR をより大きなプレフィックスへ変更する / VPC の主 CIDR を /16 から /12 へ変更する / 新しい VPC を作り直し、ピアリングで旧 VPC と接続する
+
+**図解の主メッセージ**: 既存の CIDR は変えられないので、セカンダリ CIDR を追加して新しいサブネットへ伸ばす。
+
+**採用パターン**: 分岐(判断フロー)。包含は拡張後の構造を示せるが、この問題が問うているのは構造ではなく「変更はできず追加だけができる」という可否の線引きで、誤答 3 つもすべてその線の外側にある。1 つの問いで変更側と追加側に切れば、判断軸がそのまま図の骨になる。(候補: 分岐(判断フロー): 「既存の CIDR を変えるか、新しい CIDR を足すか」の 1 問で、追加の案と変更・作り直しの案に振り分ける / 包含: VPC の枠の中に主 CIDR とセカンダリ CIDR を並べ、それぞれの下にサブネットをぶら下げて拡張の姿を見せる)
+
+```mermaid
+flowchart TB
+    VPC["既存の VPC(主 CIDR)"]:::svc
+    SUB1["既存のアプリ用サブネット<br/>IP が枯渇・インスタンスは稼働中"]:::svc
+    REQ["既存インスタンスを停止せずに<br/>アドレス空間を拡張したい"]:::req
+    Q{"既存の CIDR を変えるか<br/>新しい CIDR を足すか?"}:::judge
+
+    subgraph OK["足す — 既存を触らずに拡張する"]
+        ADD["VPC にセカンダリ CIDR ブロックを追加<br/>主 CIDR と重複しない範囲"]:::best
+        SUB2["追加した範囲に新しいサブネットを作る"]:::best
+        NEWRES["以後のリソースは新しいサブネットへ<br/>既存は停止せずに済む"]:::best
+        ADD --> SUB2 --> NEWRES
+    end
+
+    subgraph NG["変える・作り直す — 取れない手"]
+        RESIZE["既存サブネットの CIDR を広げる<br/>サブネットの CIDR は変更できない"]:::alt
+        VPCCIDR["主 CIDR を /16 から /12 へ変更する<br/>VPC の CIDR そのものは変更できない"]:::alt
+        REBUILD["VPC を作り直しピアリングで接続する<br/>影響が大きく運用も複雑になる"]:::alt
+    end
+
+    VPC --- SUB1
+    SUB1 --> REQ --> Q
+    Q -->|"足す"| ADD
+    Q -.->|"変える"| NG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net56.svg`](../../web/diagrams/net56.svg)
+
+**解説**: VPC は作成後にセカンダリ CIDR ブロック(主 CIDR と重複せず、制約に合致する範囲)を追加でき、そこに新しいサブネットを作成して拡張します。既存のサブネットや VPC の CIDR そのものは変更・縮小できません。VPC の作り直しは影響が大きく、ピアリング構成は運用が複雑になります。
+
+**確認事項**: セカンダリ CIDR に付く制約(主 CIDR と重複しない・使える範囲がある)は解説の記述どおり一言に留めた。具体的な制約値は解説にないため描いていない。 / 既存サブネットの枯渇そのものは解消しない(新規リソースを新サブネットへ寄せる)点を NEWRES ノードで表しているが、既存リソースの移設については解説が触れていないため描いていない。
+
+---
+
+## net57 — ネットワーク / level 3
+
+**問題**: 自社が SaaS 提供者として、顧客の VPC から自社サービスへプライベートに接続させたい。顧客数は数百で、顧客ごとに承認制にしたい。また接続元の顧客アカウントを識別してテナント分離したい。最適な構成はどれか?
+
+**正解**: NLB の前段に VPC エンドポイントサービスを作成し、許可プリンシパルで顧客アカウントを承認、プロキシプロトコル v2 のエンドポイント ID から顧客を識別する
+
+**他の選択肢**: 顧客ごとに VPC ピアリングを設定し、ルートテーブルを個別に管理する / パブリックな ALB を用意し、顧客ごとの API キーで識別する / 顧客ごとに Site-to-Site VPN を張り、BGP で経路を交換する
+
+**図解の主メッセージ**: 顧客ごとに経路を作らず、NLB 前段のエンドポイントサービス 1 つで承認と識別をまかなう。
+
+**採用パターン**: 経路図(直列)。この問題の要件は承認制とテナント識別の 2 つで、どちらも「経路上のどの部品が担うか」を示さないと答えにならない。分岐だと正解が 1 ノードに潰れて 2 要件の担い手が見えない。1 本の経路に沿って承認と識別の位置を置き、顧客ごとに経路を作る案は横に並べて落とす。(候補: 経路図(直列): 顧客エンドポイント → エンドポイントサービス(承認)→ NLB → プロキシプロトコル v2(識別)と 1 本でたどり、2 つの要件が経路上のどこで満たされるかを示す / 分岐(判断フロー): 「顧客ごとに経路を作るか、公開口を 1 つにするか」の 1 問で正解と誤答に振り分ける)
+
+```mermaid
+flowchart TB
+    REQ["数百の顧客からプライベートに接続させたい<br/>顧客ごとに承認制<br/>接続元の顧客を識別してテナント分離"]:::req
+    CUST["顧客 VPC のインターフェースエンドポイント<br/>数百アカウント"]:::svc
+
+    subgraph PL["PrivateLink — 公開口は 1 つ、承認と識別はその上で"]
+        EPS["VPC エンドポイントサービス<br/>AcceptanceRequired + 許可プリンシパルで承認"]:::best
+        NLB["NLB(自社サービスのバックエンド)"]:::best
+        PPV2["プロキシプロトコル v2 に含まれる<br/>VPC エンドポイント ID"]:::best
+        TENANT["接続元テナントを識別して分離する"]:::best
+        EPS --> NLB --> PPV2 --> TENANT
+    end
+
+    subgraph NG["顧客ごとに経路を作る案"]
+        PEER["顧客ごとに VPC ピアリング<br/>数百規模で管理と CIDR が破綻"]:::alt
+        VPN["顧客ごとに Site-to-Site VPN + BGP<br/>数百規模で管理と CIDR が破綻"]:::alt
+        PUB["パブリック ALB + API キー<br/>プライベート接続にならない"]:::alt
+    end
+
+    NOTE["顧客と自社の CIDR が<br/>重複していても問題にならない"]:::note
+
+    REQ --> EPS
+    CUST -->|"接続要求"| EPS
+    REQ -.->|"個別に張る"| NG
+    EPS -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net57.svg`](../../web/diagrams/net57.svg)
+
+**解説**: PrivateLink のエンドポイントサービスは NLB(または GWLB)をバックエンドに公開し、AcceptanceRequired と許可プリンシパルにより顧客ごとの承認制を実現でき、CIDR 重複も問題になりません。NLB のプロキシプロトコル v2 には VPC エンドポイント ID が含まれるため、接続元テナントの識別に利用できます。ピアリングや VPN は数百規模では管理・CIDR の面で破綻します。
+
+**確認事項**: 解説にある GWLB をバックエンドにする選択肢は、問題文が NLB を前提にしているため描いていない。 / パブリック ALB 案が落ちる理由は解説になく、問題文の「プライベートに接続させたい」から書いている。
+
+---
+
+## net58 — ネットワーク / level 3
+
+**問題**: ALB を使う Web アプリで、HTTPS 通信をバックエンドまで暗号化し(エンドツーエンド)、かつクライアント証明書による相互 TLS(mTLS)認証を行いたい。ALB の機能で実現できる構成はどれか?
+
+**正解**: ALB の HTTPS リスナーで相互認証(mTLS)を有効にし、ターゲットグループのプロトコルを HTTPS にしてバックエンドへも TLS で転送する
+
+**他の選択肢**: NLB で TLS パススルーし、EC2 上で mTLS を終端する以外に方法はない / ALB では mTLS はサポートされないため、CloudFront で終端する必要がある / ALB の HTTP リスナーで X-Forwarded-Client-Cert ヘッダーを付与して EC2 に検証させる
+
+**図解の主メッセージ**: mTLS はリスナーの相互認証、バックエンドまでの暗号化はターゲットグループの HTTPS で、どちらも ALB で決まる。
+
+**採用パターン**: 経路図(直列 + 2 つの設定箇所)。要件が「認証」と「暗号化」の 2 つあり、それぞれ設定する場所が違うことがこの問題の答えそのものなので、通信経路の上で担当箇所を分けて置くのが最短で伝わる。分岐にすると 2 つの設定が 1 ノードに潰れて、どちらの要件がどこで満たされるかが言えなくなる。(候補: 経路図(直列 + 2 つの設定箇所): クライアントから背後まで 1 本でたどり、リスナー側とターゲットグループ側に要件を割り当てる / 分岐(判断フロー): 「ALB で mTLS を終端できるか」の 1 問で正解と誤答に振り分ける)
+
+```mermaid
+flowchart TB
+    REQ["HTTPS をバックエンドまで暗号化したい<br/>クライアント証明書で相互 TLS 認証もしたい"]:::req
+    CLIENT["クライアント<br/>クライアント証明書を提示"]:::svc
+
+    subgraph FRONT["リスナー側 — 誰を通すか(mTLS)"]
+        LISTENER["ALB の HTTPS リスナーで<br/>相互認証(mTLS)を有効にする"]:::best
+        TRUST["検証モード: 信頼ストア<br/>(ACM 経由の CA バンドル)で検証"]:::best
+        HEADER["証明書情報をヘッダーで<br/>バックエンドへ渡す"]:::best
+        LISTENER --> TRUST --> HEADER
+    end
+
+    subgraph BACK["ターゲットグループ側 — どう運ぶか(再暗号化)"]
+        TG["ターゲットグループのプロトコルを<br/>HTTPS にする"]:::best
+        BACKEND["バックエンドまで TLS で転送される"]:::best
+        TG --> BACKEND
+    end
+
+    subgraph NG["ALB では実現できないという前提の案"]
+        NLB["NLB で TLS パススルーし EC2 で終端<br/>L7 のルーティングや検証ができない"]:::alt
+        CF["ALB は非対応なので CloudFront で終端<br/>ALB は mTLS に対応している"]:::alt
+        XFCC["HTTP リスナー + X-Forwarded-Client-Cert<br/>HTTP では暗号化されない"]:::alt
+    end
+
+    CLIENT --> LISTENER
+    REQ --> LISTENER
+    REQ --> TG
+    LISTENER -->|"転送"| TG
+    REQ -.->|"前提が誤り"| NG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net58.svg`](../../web/diagrams/net58.svg)
+
+**解説**: ALB は HTTPS リスナーでの相互 TLS 認証(パススルーモードと検証モード)をサポートし、検証モードでは信頼ストア(ACM 経由でアップロードした CA バンドル)に基づいてクライアント証明書を検証し、証明書情報をヘッダーでバックエンドに渡せます。ターゲットグループのプロトコルを HTTPS にすればバックエンドまで暗号化されます。NLB での TLS パススルーも選択肢ですが、L7 のルーティングや検証は行えません。
+
+**確認事項**: mTLS のパススルーモードは解説に名前だけあるため、図では検証モード側だけを描いている(要件の「認証を行う」に直結するのは検証モードのため)。 / X-Forwarded-Client-Cert 案が落ちる理由は解説になく、問題文の「エンドツーエンドで暗号化したい」から書いている。
+
+---
+
+## net59 — ネットワーク / level 3
+
+**問題**: WebSocket を用いるリアルタイム通知機能を ALB 配下で運用している。接続が 60 秒程度で切断される事象が多発し、クライアントが再接続を繰り返している。アプリはキープアライブを送っていない。最も適切な対処はどれか?
+
+**正解**: ALB のアイドルタイムアウトを想定接続時間に合わせて延長し、併せてアプリ側で定期的な ping/pong を実装する
+
+**他の選択肢**: ALB をやめて NLB に置き換え、TCP パススルーにする / ターゲットグループの登録解除の遅延を延長する / スティッキーセッションを有効にして同じターゲットへ固定する
+
+**図解の主メッセージ**: 無通信で切られているので、アイドルタイムアウトの延長と ping/pong の両方で手当てする。
+
+**採用パターン**: 因果 + 合流。タイムラインは 60 秒という数字の意味を直感的に見せられるが、誤答 3 つを時間軸上に置けない。原因を 1 本の線で示してから 2 つの対処に分け、同じ結果へ合流させれば「片方だけでは足りない」という解説の要点がそのまま形になる。(候補: 因果 + 合流: 「無通信 → 上限超過 → 切断」という原因の線を引き、そこから 2 つの対処へ分けて 1 つの結果へ合流させる / タイムライン: 接続開始から 60 秒までの無通信区間と、ping/pong が入る場合の区間を時間軸に並べて比較する)
+
+```mermaid
+flowchart TB
+    WS["ALB 配下の WebSocket 接続<br/>アプリはキープアライブを送っていない"]:::req
+    IDLE["アイドルタイムアウト(既定 60 秒)を<br/>超える無通信が続く"]:::alt
+    CUT["接続が閉じられ<br/>クライアントが再接続を繰り返す"]:::alt
+
+    subgraph FIX["無通信を作らない × 上限を上げる(両方やる)"]
+        EXT["ALB のアイドルタイムアウトを<br/>想定接続時間に合わせて延長する<br/>最大 4000 秒"]:::best
+        PING["アプリ側で定期的な<br/>ping/pong を実装する"]:::best
+        KEEP["無通信の時間が上限に達せず<br/>接続が保たれる"]:::best
+        EXT --> KEEP
+        PING --> KEEP
+    end
+
+    subgraph NG["原因に当たっていない案"]
+        NLB["NLB に置き換え TCP パススルー<br/>解決し得るが L7 ルーティングと WAF を失う"]:::alt
+        DEREG["登録解除の遅延を延長する<br/>無通信切断とは無関係"]:::alt
+        STICKY["スティッキーセッションを有効にする<br/>無通信切断とは無関係"]:::alt
+    end
+
+    WS --> IDLE --> CUT
+    CUT -->|"上限を上げる"| EXT
+    CUT -->|"無通信を消す"| PING
+    CUT -.->|"効かない"| NG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net59.svg`](../../web/diagrams/net59.svg)
+
+**解説**: ALB のアイドルタイムアウト(既定 60 秒)を超えて無通信が続くと接続が閉じられるため、長時間の WebSocket 接続ではタイムアウトの延長(最大 4000 秒)と、アプリ層での定期的なキープアライブ(ping/pong)の双方を行うのが正解です。NLB への置換でも解決し得ますが L7 ルーティングや WAF が使えなくなります。登録解除の遅延やスティッキーは無通信切断とは無関係です。
+
+**確認事項**: 「想定接続時間に合わせて延長する」の具体値は解説になく、上限の 4000 秒だけを添えている。 / NLB 案は解説が「解決し得る」と認めているため、他の 2 つと同じグレーで並べつつ理由の書き分けで区別している。落ち方の違いを図形で分けるかは今後の検討事項。
+
+---
+
+## net60 — ネットワーク / level 3
+
+**問題**: オンプレミスと VPC を Site-to-Site VPN で接続しているが、単一トンネルあたり約 1.25 Gbps の帯域上限がボトルネックになっている。Direct Connect の導入は予算承認待ちである。VPN のまま帯域を拡張する最適な方法はどれか?
+
+**正解**: Transit Gateway に複数の VPN 接続をアタッチして ECMP(等コストマルチパス)を有効にし、複数トンネルで負荷分散する
+
+**他の選択肢**: 同じ仮想プライベートゲートウェイに 2 本目の VPN 接続を追加する / VPN トンネルの MTU を拡張してスループットを上げる / アクセラレーテッド VPN を有効化すれば単一トンネルの上限が撤廃される
+
+**図解の主メッセージ**: VPN の帯域を足し算にできるのは、ECMP に対応する Transit Gateway にアタッチしたときだけ。
+
+**採用パターン**: 分岐(判断フロー)。対比は VGW と TGW の違いを最も直接に見せられるが、MTU 拡張とアクセラレーテッド VPN の 2 案がどちらの列にも属さず居場所を失う。「アタッチ先が ECMP に対応しているか」という 1 つの問いから分ければ、VGW もその他 2 案も同じ「上限が残る側」として 1 枚に収まる。(候補: 分岐(判断フロー): 「アタッチ先が ECMP に対応しているか」の 1 問で、TGW の案と上限が残る案に振り分ける / 対比(左右 2 列): 左に VGW + VPN 2 本(束ねられず 1 本ぶんのまま)、右に TGW + VPN 複数(ECMP で束ねる)を並べて帯域の違いを見比べる)
+
+```mermaid
+flowchart TB
+    REQ["Site-to-Site VPN の単一トンネル<br/>約 1.25 Gbps の上限がボトルネック<br/>Direct Connect は予算承認待ち"]:::req
+    Q{"VPN のアタッチ先は<br/>ECMP に対応しているか?"}:::judge
+
+    subgraph OK["Transit Gateway — トンネルを束ねられる"]
+        TGW["Transit Gateway に<br/>複数の VPN 接続をアタッチする"]:::best
+        ECMP["ECMP(等コストマルチパス)を有効にする"]:::best
+        AGG["複数トンネルに分散して帯域が集約される"]:::best
+        TGW --> ECMP --> AGG
+    end
+
+    subgraph NG["トンネルあたりの上限が残る案"]
+        VGW["同じ VGW に 2 本目の VPN を追加する<br/>VGW は ECMP に対応せず帯域は増えない"]:::alt
+        MTU["VPN トンネルの MTU を拡張する"]:::alt
+        ACC["アクセラレーテッド VPN を有効化する<br/>トンネルあたりの上限は変わらない"]:::alt
+    end
+
+    NOTE["アクセラレーテッド VPN は<br/>Global Accelerator 経由で経路品質を改善するもの"]:::note
+
+    REQ --> Q
+    Q -->|"対応する"| TGW
+    Q -.->|"対応しない"| NG
+    ACC -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net60.svg`](../../web/diagrams/net60.svg)
+
+**解説**: Transit Gateway 経由の VPN は ECMP をサポートしており、複数の VPN 接続(複数トンネル)にトラフィックを分散させて帯域を集約できます。仮想プライベートゲートウェイ(VGW)は ECMP に対応していないため、単純に VPN を追加しても帯域は増えません。アクセラレーテッド VPN は Global Accelerator 経由で経路品質を改善しますがトンネルあたりの上限自体は変わりません。
+
+**確認事項**: MTU 拡張が落ちる理由は解説が個別に述べていないため、「トンネルあたりの上限は変わらない」という共通の理由でグループにまとめている。 / Direct Connect は予算承認待ちという前提として要件側に置き、選択肢としては描いていない。
