@@ -1,0 +1,136 @@
+{
+  "question_id": "net63",
+  "purpose": "固定 IP を維持したまま ALB へ移行できるかどうかが、「固定 IP を ALB 自身に持たせるか、前段の層に持たせるか」で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAP レベル)を学習中で、Global Accelerator の名前は知っているが、静的 IP を保ったまま L7 の機能を使う手段として結び付いていない人。",
+  "message": "固定 IP は ALB 自身には持たせられないので、静的エニーキャスト IP を持つ Global Accelerator を前段に置いて ALB を登録する。",
+  "source_summary": "クライアントに配布した固定 IP(2 つ)を維持しながら、バックエンドを ALB へ移行したい。ALB の IP は変動するため、クライアント側のファイアウォール設定を変えずに移行する必要がある。正解は AWS Global Accelerator を作成し、静的エニーキャスト IP をエンドポイントとして公開したうえで ALB をエンドポイントに登録すること。Global Accelerator は 2 つの静的エニーキャスト IP を提供し、ALB・NLB・EC2・Elastic IP をエンドポイントとして登録できるため、固定 IP を維持したまま ALB の L7 機能を利用できる。NLB のターゲットに ALB を登録する構成も可能だが、ヘルスチェックや保持すべきクライアント IP の扱いに制約がある。ALB に Elastic IP は割り当てられない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "配布済みの固定 IP 2 つを維持したまま ALB へ移行する(クライアントのファイアウォール設定は変えない)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "固定 IP をどこで持たせるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "EIP",
+      "label": "ALB に Elastic IP を直接割り当てる(割り当てられない)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "GA",
+      "label": "AWS Global Accelerator(2 つの静的エニーキャスト IP を提供)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "EP",
+      "label": "ALB をエンドポイントに登録する",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "KEEP",
+      "label": "固定 IP を維持したまま ALB の L7 機能を利用できる",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "NLB",
+      "label": "NLB に Elastic IP を割り当て ALB をターゲットに登録する(制約が残る)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "R53",
+      "label": "Route 53 のエイリアスレコードで ALB を指し TTL を 0 にする",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "EIP",
+      "verb": "ALB 自身に持たせようとする",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "GA",
+      "verb": "前段の層に持たせる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "GA",
+      "to": "EP",
+      "verb": "ALB を登録する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "EP",
+      "to": "KEEP",
+      "verb": "要件を満たす",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "NLB",
+      "verb": "別の前段を置こうとする",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "R53",
+      "verb": "名前解決で吸収しようとする",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "OK",
+      "label": "前段に静的 IP を持つ層を置く",
+      "members": ["GA", "EP", "KEEP"]
+    },
+    {
+      "id": "NG",
+      "label": "固定 IP の維持にならない / 制約が残る案",
+      "members": ["EIP", "NLB", "R53"]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「固定 IP をどこで持たせるか」の 1 問で、ALB 自身に持たせる案と前段に置く案に振り分ける",
+    "レイヤー(構成図): クライアント → 固定 IP の層 → ALB → ターゲット と縦に積み、固定 IP の層に何が入るかを比べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。レイヤー図は「前段に一枚挟む」という構成そのものを見せられるが、ALB に EIP を割り当てる案と Route 53 の案は層として描けず、なぜ外れるかを図に残せない。「固定 IP をどこで持たせるか」の 1 問から分ければ、4 択すべてを同じ 1 枚に置ける。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "Route 53 の案が外れる理由は解説が個別に述べていないため、問題文が与える前提(ALB の IP は変動する)の範囲で「IP は固定されない」とだけ書き、それ以上の理由は足していない。",
+    "Global Accelerator が NLB・EC2・Elastic IP も登録できる点は、この問題の判断には効かないので図から省いている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"配布済みの固定 IP 2 つを維持したまま ALB へ移行する<br/>クライアントのファイアウォール設定は変えない\"]:::req\n    Q{\"固定 IP を<br/>どこで持たせるか?\"}:::judge\n\n    subgraph OK[\"前段に静的 IP を持つ層を置く\"]\n        GA[\"AWS Global Accelerator<br/>2 つの静的エニーキャスト IP を提供する\"]:::best\n        EP[\"ALB をエンドポイントに登録する\"]:::best\n        KEEP[\"固定 IP を維持したまま<br/>ALB の L7 機能を利用できる\"]:::best\n        GA --> EP --> KEEP\n    end\n\n    subgraph NG[\"固定 IP の維持にならない / 制約が残る案\"]\n        EIP[\"ALB に Elastic IP を直接割り当てる<br/>ALB に EIP は割り当てられない\"]:::alt\n        NLB[\"NLB に EIP を割り当て ALB をターゲットに登録する<br/>ヘルスチェックとクライアント IP の扱いに制約\"]:::alt\n        R53[\"Route 53 エイリアス + TTL 0<br/>名前解決であって IP は固定されない\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"前段に置く\"| GA\n    Q -.->|\"ALB 自身に\"| NG"
+}

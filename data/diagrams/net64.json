@@ -1,0 +1,149 @@
+{
+  "question_id": "net64",
+  "purpose": "オンプレミスからインターフェースエンドポイントを使えない原因が「プライベート DNS 名は VPC 内の Resolver でしか解けない」ことにあると示し、対処が名前解決の経路づくりだと 1 枚で伝える。",
+  "audience": "AWS 認定(SAP レベル)を学習中で、インターフェースエンドポイントとゲートウェイエンドポイントの違いは知っているが、ハイブリッド環境での名前解決の経路を組み立てられていない人。",
+  "message": "プライベート DNS 名は VPC 内の Route 53 Resolver でしか解けないので、オンプレの問い合わせをインバウンドエンドポイント経由でそこへ届ける。",
+  "source_summary": "S3 のインターフェース型 VPC エンドポイントを作りプライベート DNS を有効にしたが、オンプレミスから Direct Connect 経由で使おうとすると名前解決できない。正解は Route 53 Resolver のインバウンドエンドポイントを VPC に作成し、オンプレミス DNS から該当ドメインのクエリを転送すること(オンプレ DNS に条件付きフォワーダーを設定)。インターフェースエンドポイントのプライベート DNS 名は VPC 内の Route 53 Resolver でしか解決できない。ゲートウェイ型エンドポイントは VPC 内からのみ利用可能でオンプレミスからは使えない。hosts の静的設定は保守性・可用性に欠ける。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "S3 インターフェースエンドポイント(プライベート DNS 有効)をオンプレミスから Direct Connect 経由で使いたいが名前解決できない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "プライベート DNS 名はどこでなら解決できるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ONLY",
+      "label": "VPC 内の Route 53 Resolver でしか解決できない",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "FWD",
+      "label": "オンプレミス DNS に条件付きフォワーダーを設定する",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "IN",
+      "label": "Route 53 Resolver のインバウンドエンドポイントを VPC に作成する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ENI",
+      "label": "エンドポイントの ENI の IP が返り、Direct Connect 経由で到達できる",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "HOSTS",
+      "label": "オンプレミスの hosts ファイルに IP を直書きする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "GW",
+      "label": "S3 のゲートウェイ型エンドポイントに切り替える",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "PUB",
+      "label": "パブリック VIF を作成して S3 のパブリックエンドポイントへ接続する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "ONLY",
+      "verb": "解決できる場所を確かめる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ONLY",
+      "to": "FWD",
+      "verb": "そこへ問い合わせを届ける",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "FWD",
+      "to": "IN",
+      "verb": "クエリを転送する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "IN",
+      "to": "ENI",
+      "verb": "名前を解決して IP を返す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "HOSTS",
+      "verb": "解決を静的に置き換えようとする",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "GW",
+      "verb": "エンドポイントの種類を変えようとする",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "PUB",
+      "verb": "エンドポイントを使わずに接続しようとする",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "WAY",
+      "label": "オンプレの問い合わせを VPC の Resolver へ届ける",
+      "members": ["FWD", "IN", "ENI"]
+    },
+    {
+      "id": "NG",
+      "label": "エンドポイントの名前解決を解決しない案",
+      "members": ["HOSTS", "GW", "PUB"]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「プライベート DNS 名はどこでなら解決できるか」の 1 問で、Resolver へ届ける案とそれ以外の 3 案に振り分ける",
+    "直列(名前解決の経路): オンプレ DNS → 条件付きフォワーダー → インバウンドエンドポイント → ENI の IP、とクエリの旅路を 1 本の線で追う"
+  ],
+  "selected_pattern": "分岐(判断フロー)。直列はクエリの経路を最も具体的に見せられるが、誤答 3 案が経路上に置けず、なぜ外れるかが図に残らない。「どこでなら解決できるか」の 1 問で分けたうえで、正解側の内部を直列で描けば、経路の具体性と 4 択の比較を 1 枚に同居させられる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=前提として押さえる事実、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、白=前提事実、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・名前解決の流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "パブリック VIF の案が外れる理由を解説は個別に述べていないため、選択肢名だけを置き、理由はグループの見出し(エンドポイントの名前解決を解決しない案)に委ねている。",
+    "解決後に実際のトラフィックが Direct Connect のどの VIF を通るかは解説の範囲外なので、図では「ENI の IP が返る」までで止めている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"S3 インターフェースエンドポイント(プライベート DNS 有効)<br/>オンプレミスから Direct Connect 経由で使いたい<br/>オンプレミスからは名前解決できない\"]:::req\n    Q{\"プライベート DNS 名は<br/>どこでなら解決できるか?\"}:::judge\n    ONLY[\"VPC 内の Route 53 Resolver でしか解決できない\"]:::svc\n\n    subgraph WAY[\"オンプレの問い合わせを VPC の Resolver へ届ける\"]\n        FWD[\"オンプレミス DNS に<br/>条件付きフォワーダーを設定する\"]:::best\n        IN[\"Route 53 Resolver の<br/>インバウンドエンドポイントを VPC に作成する\"]:::best\n        ENI[\"エンドポイントの ENI の IP が返る\"]:::best\n        FWD -->|\"クエリ転送\"| IN --> ENI\n    end\n\n    subgraph NG[\"エンドポイントの名前解決を解決しない案\"]\n        HOSTS[\"オンプレミスの hosts に IP を直書きする<br/>保守性・可用性に欠ける\"]:::alt\n        GW[\"ゲートウェイ型エンドポイントに切り替える<br/>VPC 内からのみ利用できる\"]:::alt\n        PUB[\"パブリック VIF で<br/>S3 のパブリックエンドポイントへ接続する\"]:::alt\n    end\n\n    REQ --> Q\n    Q --> ONLY\n    ONLY --> FWD\n    Q -.->|\"別の手を打つ\"| NG"
+}

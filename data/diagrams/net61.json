@@ -1,0 +1,136 @@
+{
+  "question_id": "net61",
+  "purpose": "「到達可能な経路が無いこと」を証明できるかどうかが、根拠を通信の実績に取るか構成情報の経路解析に取るかで決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAP レベル)を学習中で、フローログ・Config・Reachability Analyzer の名前は知っているが、監査で「経路が無いこと」を示す道具として使い分けられていない人。",
+  "message": "経路が無いことを証明できるのは、パケットを流さず構成情報から到達性を解析する Reachability Analyzer だけ。",
+  "source_summary": "構成変更のたびに「インターネットから到達可能な経路が意図せず存在しないこと」を、実際にパケットを流さずに証明したい。正解は VPC Reachability Analyzer(組織全体の分析には Network Access Analyzer)。Reachability Analyzer は ENI・IGW・TGW などの構成情報から送信元と送信先の到達可否をパケットを流さずに解析し、遮断している要素(SG/NACL/ルート)まで示す。Network Access Analyzer はアクセススコープを定義して「インターネットから DB サブネットへ到達可能な経路」などを組織的に検出できる。フローログは実績のみ、Config ルールは設定の断片的な検査にとどまる。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "構成変更のたびに、インターネットから到達可能な経路が無いことを証明したい(パケットは流さない)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "証明の根拠をどこから取るか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "RA",
+      "label": "VPC Reachability Analyzer(構成情報から到達可否を静的に解析)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "BLOCK",
+      "label": "遮断している要素(SG / NACL / ルート)まで示される",
+      "type": "data",
+      "priority": "primary"
+    },
+    {
+      "id": "NAA",
+      "label": "Network Access Analyzer(アクセススコープを定義して組織的に経路を検出)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "FL",
+      "label": "VPC フローログの解析(到達の実績しか分からない)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CFG",
+      "label": "AWS Config ルールで 0.0.0.0/0 を検出(設定の断片的な検査)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "INS",
+      "label": "Inspector のネットワーク到達性評価を全インスタンスで実行",
+      "type": "artifact",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "RA",
+      "verb": "構成情報から経路を解析する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "RA",
+      "to": "BLOCK",
+      "verb": "遮断要素まで示す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "RA",
+      "to": "NAA",
+      "verb": "組織全体の分析へ広げる",
+      "direction": "one-way",
+      "kind": "other"
+    },
+    {
+      "from": "Q",
+      "to": "FL",
+      "verb": "実績や設定から取ろうとする",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "CFG",
+      "verb": "実績や設定から取ろうとする",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "INS",
+      "verb": "個々のインスタンスで評価しようとする",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "OK",
+      "label": "構成情報から経路を解析する",
+      "members": ["RA", "BLOCK", "NAA"]
+    },
+    {
+      "id": "NG",
+      "label": "経路そのものは示せない案",
+      "members": ["FL", "CFG", "INS"]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「証明の根拠をどこから取るか」の 1 問で、構成解析の案と実績・設定検査の案に振り分ける",
+    "対比(左右 2 列): 左に「実績を見る道具」(フローログ)、右に「構成を解析する道具」(Reachability Analyzer)を並べ、証明できる範囲の違いを見比べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。対比は 2 者の違いを最も直接に見せられるが、Config ルールと Inspector の 2 案がどちらの列にも収まらない。「証明の根拠をどこから取るか」という 1 つの問いから分ければ、実績・設定検査・インスタンス単位の評価をまとめて「経路そのものは示せない側」に置ける。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "Inspector のネットワーク到達性評価が落ちる理由を解説は個別に述べていないため、選択肢名だけを置き、理由はグループの見出し(経路そのものは示せない案)に委ねている。",
+    "Network Access Analyzer は「組織全体の分析には」という補足の位置づけなので、正解の中心(Reachability Analyzer)から破線で伸ばす形にしている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"構成変更のたびに<br/>「インターネットから到達可能な経路が無い」ことを証明したい<br/>実際にパケットは流さない\"]:::req\n    Q{\"証明の根拠を<br/>どこから取るか?\"}:::judge\n\n    subgraph OK[\"構成情報から経路を解析する\"]\n        RA[\"VPC Reachability Analyzer<br/>送信元と送信先の到達可否を静的に解析する\"]:::best\n        BLOCK[\"遮断している要素(SG / NACL / ルート)まで示す\"]:::best\n        NAA[\"Network Access Analyzer<br/>アクセススコープを定義して経路を検出する\"]:::best\n        RA --> BLOCK\n    end\n\n    subgraph NG[\"経路そのものは示せない案\"]\n        FL[\"VPC フローログの解析<br/>到達の実績しか分からない\"]:::alt\n        CFG[\"Config ルールで 0.0.0.0/0 を検出<br/>設定の断片的な検査にとどまる\"]:::alt\n        INS[\"Inspector のネットワーク到達性評価を<br/>全インスタンスで実行する\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"構成から解析\"| RA\n    Q -.->|\"実績や設定から\"| NG\n    RA -.->|\"組織全体は\"| NAA"
+}

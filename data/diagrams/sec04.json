@@ -1,0 +1,104 @@
+{
+  "question_id": "sec04",
+  "purpose": "認証情報の保存先の選択が「自動ローテーションを内蔵しているか」で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Secrets Manager とパラメータストアの名前は知っているが、自動ローテーションの有無で選び分けられていない人。",
+  "message": "自動ローテーションが要るなら、それを内蔵する Secrets Manager を選ぶ。",
+  "source_summary": "データベースの認証情報を安全に保存し、自動ローテーションもさせたい。最も適切なサービスを問う。正解は AWS Secrets Manager。シークレットの保存に加え、RDS などの認証情報の自動ローテーション機能を内蔵する。パラメータストアも SecureString で秘密情報を保存できるが、ローテーションは自前実装(Lambda)が必要。S3(SSE-KMS)や EC2 のユーザーデータは保存はできてもローテーションの仕組みを持たない。『自動ローテーション』がキーワードなら Secrets Manager を選ぶ。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "DB の認証情報を安全に保存し、自動ローテーションもさせたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "自動ローテーションを内蔵しているか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "SM",
+      "label": "AWS Secrets Manager(保存 + RDS 等の自動ローテーションを内蔵)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "PS",
+      "label": "パラメータストア(SecureString)。保存はできるがローテーションは自前実装(Lambda)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "S3",
+      "label": "S3 バケット(SSE-KMS 暗号化)。ローテーションの仕組みなし",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "UD",
+      "label": "EC2 のユーザーデータ。平文で残りローテーションもなし",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "SM",
+      "verb": "内蔵している",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "PS",
+      "verb": "保存は可だが自前実装が要る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "S3",
+      "verb": "ローテーションの仕組みなし",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "UD",
+      "verb": "ローテーションの仕組みなし",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "保存はできても自動ローテーションが無い案",
+      "members": ["PS", "S3", "UD"]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「自動ローテーションを内蔵しているか」の 1 問で、Secrets Manager と残り 3 案に振り分ける",
+    "対比(2 段階): 「保存できるか」と「自動ローテーションできるか」の 2 軸で 4 案を並べ、両方満たすものを選ぶ"
+  ],
+  "selected_pattern": "分岐(判断フロー)。4 案とも保存自体はできるため『保存できるか』の軸はほぼ差がつかず、差がつくのは『自動ローテーションを内蔵するか』の 1 点。ここを単一の判断ポイントに固定すれば、キーワード(自動ローテーション)から即断できる形になる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "EC2 ユーザーデータが平文で残る点は一般に知られた性質だが、解説は『ローテーションを持たない』ことを主眼にしているため、図でも自動ローテーションの有無を主たる理由として置いている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"DB の認証情報を安全に保存し<br/>自動ローテーションもさせたい\"]:::req\n    Q{\"自動ローテーションを<br/>内蔵しているか?\"}:::judge\n    SM[\"AWS Secrets Manager<br/>保存 + RDS 等の自動ローテーションを内蔵\"]:::best\n\n    subgraph NG[\"保存はできても自動ローテーションが無い案\"]\n        PS[\"パラメータストア(SecureString)<br/>ローテーションは自前実装(Lambda)\"]:::alt\n        S3[\"S3 バケット(SSE-KMS)<br/>ローテーションの仕組みなし\"]:::alt\n        UD[\"EC2 のユーザーデータ<br/>平文で残りローテーションもなし\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"内蔵している\"| SM\n    Q -.->|\"内蔵しない\"| NG"
+}

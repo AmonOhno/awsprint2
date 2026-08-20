@@ -1,0 +1,118 @@
+{
+  "question_id": "net66",
+  "purpose": "組織全体へファイアウォールポリシーを効かせられるかどうかが、道具に「継続的な強制力(新規リソースへの自動適用と逸脱修復)」があるかで決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAP レベル)を学習中で、Config・StackSets・SCP は使えるが、Organizations 全体へファイアウォールを一元強制する道具として Firewall Manager が結び付いていない人。",
+  "message": "全アカウントにファイアウォールを強制し新規にも自動適用できるのは、継続的な強制力を持つ Firewall Manager だけ。",
+  "source_summary": "組織の全アカウント・全 VPC に共通のファイアウォールポリシー(必須のセキュリティグループ規則、Network Firewall のルールグループ、WAF の Web ACL)を強制適用し、新規アカウントにも自動適用したい。正解は AWS Firewall Manager を Organizations と連携させ、セキュリティポリシーを定義して自動適用・逸脱の自動修復を行うこと。Firewall Manager は WAF の Web ACL、Shield Advanced、Network Firewall、Route 53 Resolver DNS Firewall、セキュリティグループの共通ポリシーを一元適用し、新規アカウント・新規リソースにも自動適用して逸脱を検出・修復する。Config は評価と修復、StackSets は配布のみで継続的な強制力に欠け、SCP は API の許可/拒否であってポリシーの中身の適用はできない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "全アカウント・全 VPC に共通のファイアウォールポリシー(SG 規則 / Network Firewall / WAF)を強制し、新規アカウントにも自動適用したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "新規リソースまで継続的に強制できるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "FMS",
+      "label": "AWS Firewall Manager を Organizations と連携する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "APPLY",
+      "label": "共通ポリシーを一元適用し、新規リソースへ自動適用・逸脱を自動修復する",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "CFG",
+      "label": "AWS Config のコンフォーマンスパック(評価と修復のみ)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SS",
+      "label": "CloudFormation StackSets で SG を配布(配布のみ)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SCP",
+      "label": "SCP で SG の変更を禁止(API の許可/拒否のみ)",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "FMS",
+      "verb": "できる道具を選ぶ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "FMS",
+      "to": "APPLY",
+      "verb": "要件を満たす",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "CFG",
+      "verb": "強制力が足りない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SS",
+      "verb": "強制力が足りない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SCP",
+      "verb": "中身の適用はできない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "継続的な強制力に欠ける / 中身は適用できない案",
+      "members": ["CFG", "SS", "SCP"]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「新規リソースまで継続的に強制できるか」の 1 問で、Firewall Manager と残り 3 案に振り分ける",
+    "対比(左右 2 列): 「配布・評価・禁止どまり」の 3 案と「継続的に強制する」Firewall Manager を並べ、できる範囲を見比べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。対比でも仕分けは見せられるが、3 つの誤答が「できないこと」の種類(配布のみ・評価のみ・API 制御のみ)がそれぞれ違い、単純な 2 列より判断ポイントから枝分かれさせた方が「継続的な強制」という 1 つの軸で外れることが伝わる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "Firewall Manager が扱える対象(Shield Advanced や DNS Firewall など)は解説にあるが、この問題の判断軸(継続的な強制)には効かないので図では問題文が挙げる 3 種にとどめた。",
+    "3 つの誤答が外れる理由はそれぞれ異なるが、共通の見出し(継続的な強制力に欠ける / 中身は適用できない案)でまとめつつ、各ノードに個別の限界を短く添えている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"全アカウント・全 VPC に共通のファイアウォールポリシー<br/>(SG 規則 / Network Firewall / WAF)を強制したい<br/>新規アカウントにも自動適用したい\"]:::req\n    Q{\"新規リソースまで<br/>継続的に強制できるか?\"}:::judge\n    FMS[\"AWS Firewall Manager を<br/>Organizations と連携する\"]:::best\n    APPLY[\"共通ポリシーを一元適用<br/>新規リソースへ自動適用し逸脱を自動修復する\"]:::best\n\n    subgraph NG[\"継続的な強制力に欠ける / 中身は適用できない案\"]\n        CFG[\"Config コンフォーマンスパック<br/>評価と修復にとどまる\"]:::alt\n        SS[\"CloudFormation StackSets<br/>配布のみで継続的な強制力がない\"]:::alt\n        SCP[\"SCP で SG 変更を禁止<br/>API の許可/拒否でありポリシーの中身は適用できない\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"できる\"| FMS --> APPLY\n    Q -.->|\"できない\"| NG"
+}

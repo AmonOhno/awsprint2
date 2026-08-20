@@ -1,0 +1,104 @@
+{
+  "question_id": "sec03",
+  "purpose": "SQLi / XSS から Web アプリを守る道具の選択が、「アプリ層(L7)のリクエスト内容を検査するか」という役割の違いで決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、WAF・Shield・GuardDuty・Inspector の名前は知っているが、役割の違いで選び分けられていない人。",
+  "message": "SQLi / XSS はアプリ層の攻撃なので、L7 のリクエストを検査する WAF を ALB / CloudFront に組み合わせる。",
+  "source_summary": "Web アプリを SQL インジェクションや XSS から保護したい。ALB や CloudFront に組み合わせるべきサービスを問う。正解は AWS WAF。WAF は Web アプリケーションファイアウォールで、SQLi/XSS 対策のマネージドルールや IP・レートベースのルールを ALB・CloudFront・API Gateway に適用できる。Shield は DDoS 対策(Standard は無料で自動適用)、GuardDuty は脅威検知、Inspector は脆弱性スキャンと、それぞれ役割が異なる。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "Web アプリを SQLi / XSS から守りたい(ALB / CloudFront に組み合わせる)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "アプリ層(L7)のリクエスト内容を検査する道具か?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "WAF",
+      "label": "AWS WAF(SQLi/XSS のマネージドルール、IP・レートベースのルール)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "SHIELD",
+      "label": "Shield Standard(DDoS 対策・無料で自動適用)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "GD",
+      "label": "GuardDuty(脅威検知)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "INS",
+      "label": "Inspector(脆弱性スキャン)",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "WAF",
+      "verb": "リクエストを検査する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "SHIELD",
+      "verb": "DDoS 対策で役割が違う",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "GD",
+      "verb": "脅威検知で役割が違う",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "INS",
+      "verb": "脆弱性スキャンで役割が違う",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "役割が違うサービス(SQLi/XSS は防げない)",
+      "members": ["SHIELD", "GD", "INS"]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「L7 のリクエストを検査する道具か」の 1 問で、WAF と役割の違う 3 サービスに振り分ける",
+    "対比(役割の一覧表): 4 サービスを「対象の脅威 × 役割」で並べ、SQLi/XSS に当たるものを選ぶ"
+  ],
+  "selected_pattern": "分岐(判断フロー)。表でも役割の違いは見せられるが、問われているのは「どれを選ぶか」の一点なので、判断軸(L7 のリクエストを検査するか)を明示して 1 問で振り分ける方が、解答時の思考をそのままなぞれて速い。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "各誤答サービスの本来の役割は解説どおり 1 語で添えるにとどめ、それぞれの詳細機能は判断に不要なので描いていない。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"Web アプリを SQLi / XSS から守りたい<br/>ALB / CloudFront に組み合わせる\"]:::req\n    Q{\"アプリ層(L7)の<br/>リクエスト内容を検査する道具か?\"}:::judge\n    WAF[\"AWS WAF<br/>SQLi/XSS のマネージドルール<br/>IP・レートベースのルール\"]:::best\n\n    subgraph NG[\"役割が違うサービス(SQLi/XSS は防げない)\"]\n        SHIELD[\"Shield Standard<br/>DDoS 対策・無料で自動適用\"]:::alt\n        GD[\"GuardDuty<br/>脅威検知\"]:::alt\n        INS[\"Inspector<br/>脆弱性スキャン\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"検査する\"| WAF\n    Q -.->|\"役割が違う\"| NG"
+}

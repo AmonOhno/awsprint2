@@ -1,0 +1,162 @@
+{
+  "question_id": "net62",
+  "purpose": "フローログには拒否した主体が記録されないという事実を出発点に、SG のステートフル性から NACL 起因を推測し、Reachability Analyzer で確定させるという流れを 1 枚で示す。",
+  "audience": "AWS 認定(SAP レベル)を学習中で、VPC フローログを読んだことはあるが、REJECT の原因を SG と NACL に切り分ける手順を持っていない人。",
+  "message": "拒否した主体はフローログに残らないので、SG のステートフル性から NACL 起因を推測し、Reachability Analyzer で確定させる。",
+  "source_summary": "VPC フローログに REJECT が大量に記録されているが、セキュリティグループとネットワーク ACL のどちらで拒否されたかが判別できない。正解は「フローログには拒否した主体は記録されない。セキュリティグループはステートフルで戻りが自動許可されるため、インバウンドは通ったのに戻りが REJECT で記録される場合は NACL 起因と推測でき、Reachability Analyzer で経路要素を特定するのが確実である」。フローログの action は ACCEPT / REJECT のみ。ログ形式のカスタマイズで SG/NACL を出せるわけではなく、フローログは SG の拒否のみを記録するわけでもなく、集約間隔を 1 分に変えても拒否理由は記録されない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "フローログに REJECT が大量に出ており、SG と NACL のどちらで拒否されたか判別したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "フローログに拒否した主体は残るか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "NO",
+      "label": "残らない(action は ACCEPT / REJECT のみ)",
+      "type": "data",
+      "priority": "primary"
+    },
+    {
+      "id": "STATE",
+      "label": "セキュリティグループはステートフルで、許可した通信の戻りは REJECT にならない",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "GUESS",
+      "label": "インバウンドは通ったのに戻りが REJECT なら NACL 起因と推測できる",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "RA",
+      "label": "Reachability Analyzer で経路上の遮断要素を特定する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "FMT",
+      "label": "ログ形式をカスタマイズして action に SG/NACL を出す",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ONLY",
+      "label": "フローログは SG の拒否のみを記録すると理解する",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "INT",
+      "label": "集約間隔を 1 分に変更する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "推測の根拠はステートフル / ステートレスの違いだけなので、断定には解析が要る",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "NO",
+      "verb": "残らないと確認する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "NO",
+      "to": "STATE",
+      "verb": "別の手がかりを探す",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "STATE",
+      "to": "GUESS",
+      "verb": "戻りの REJECT から推測する",
+      "direction": "one-way",
+      "kind": "cause"
+    },
+    {
+      "from": "GUESS",
+      "to": "RA",
+      "verb": "推測を解析で確定させる",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "FMT",
+      "verb": "ログ設定で判別できると考える",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "ONLY",
+      "verb": "記録範囲を誤解する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "INT",
+      "verb": "粒度を上げれば出ると考える",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "GUESS",
+      "to": "NOTE",
+      "verb": "推測の限界を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "WAY",
+      "label": "ログから推測し、解析で確定させる",
+      "members": ["STATE", "GUESS", "RA"]
+    },
+    {
+      "id": "NG",
+      "label": "ログの設定をいじっても判別できない案",
+      "members": ["FMT", "ONLY", "INT"]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「フローログに拒否した主体は残るか」の 1 問で、推測 + 解析の道と、ログ設定をいじる 3 案に振り分ける",
+    "直列(推論の連鎖): 「主体は残らない → SG はステートフル → 戻りの REJECT なら NACL → 解析で確定」を 1 本の線でつなぐ"
+  ],
+  "selected_pattern": "分岐(判断フロー)。直列は推論の筋道だけを見せるには最短だが、誤答 3 案(ログ形式・記録範囲・集約間隔)を線上に置けず、なぜそれらが外れるのかが図に残らない。「拒否した主体は残るか」の 1 問から分ければ、正解側の推論の連鎖を保ったまま、ログ設定に手を入れる 3 案を同じ 1 枚に並べられる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス・一般の構成要素、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、白=前提として押さえる事実、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・推論の連鎖、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "「インバウンドは通ったのに戻りが REJECT」というパターンの判定は、解説の文言どおり推測どまりとして描いている(断定に見えないよう注釈を添えた)。",
+    "集約間隔の選択肢は問題文では「1 分間隔に変更」とだけあり、なぜ拒否理由が出ないかは解説が個別に述べていないため、グループの見出しで理由をまとめている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"フローログに REJECT が大量に出ている<br/>SG と NACL のどちらで拒否されたか判別したい\"]:::req\n    Q{\"フローログに<br/>拒否した主体は残るか?\"}:::judge\n    NO[\"残らない<br/>action は ACCEPT / REJECT のみ\"]:::svc\n\n    subgraph WAY[\"ログから推測し、解析で確定させる\"]\n        STATE[\"SG はステートフル<br/>許可した通信の戻りが REJECT になることはない\"]:::best\n        GUESS[\"インバウンドは通ったのに戻りが REJECT<br/>→ NACL 起因と推測できる\"]:::best\n        RA[\"Reachability Analyzer で<br/>経路上の遮断要素を特定する\"]:::best\n        STATE --> GUESS --> RA\n    end\n\n    subgraph NG[\"ログの設定をいじっても判別できない案\"]\n        FMT[\"ログ形式をカスタマイズして<br/>action に SG/NACL を出す\"]:::alt\n        ONLY[\"フローログは SG の拒否のみを記録すると理解する\"]:::alt\n        INT[\"集約間隔を 1 分に変更する\"]:::alt\n    end\n\n    NOTE[\"推測の根拠はステートフル / ステートレスの違いだけ<br/>断定には経路の解析が要る\"]:::note\n\n    REQ --> Q\n    Q -->|\"残らない\"| NO\n    NO --> STATE\n    Q -.->|\"残ると考える\"| NG\n    GUESS -.- NOTE"
+}

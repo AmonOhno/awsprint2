@@ -1,0 +1,117 @@
+{
+  "question_id": "sec01",
+  "purpose": "EC2 から S3 へアクセスするときの認証情報の扱いが、「長期キーを持たせるか、一時的な認証情報を自動で受け取るか」で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、IAM ロールとアクセスキーの名前は知っているが、EC2 での使い分けの鉄則を言語化できていない人。",
+  "message": "EC2 には長期キーを埋め込まず、一時認証情報が自動ローテーションされる IAM ロール(インスタンスプロファイル)を使う。",
+  "source_summary": "EC2 上のアプリケーションから S3 バケットへアクセスする際の認証情報の扱いのベストプラクティスを問う。正解は IAM ロールを EC2 インスタンスプロファイルとしてアタッチすること。一時的な認証情報が自動でローテーションされ、キーの漏洩リスクや管理負荷がなくなる。IAM ユーザーのアクセスキーを設定ファイルに保存する・ルートユーザーのキーを環境変数に置くのは漏洩事故の典型原因で避けるべき。S3 の全公開は認証を無くすもので論外。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "EC2 上のアプリから S3 へアクセスする認証情報の扱い(ベストプラクティス)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "認証情報を長期キーとして持たせるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ROLE",
+      "label": "IAM ロールをインスタンスプロファイルとしてアタッチする",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "TEMP",
+      "label": "一時認証情報が自動ローテーションされ、漏洩リスクと管理負荷が消える",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "KEY",
+      "label": "IAM ユーザーのアクセスキーを設定ファイルに保存する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ROOT",
+      "label": "ルートユーザーのアクセスキーを環境変数に置く",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "OPEN",
+      "label": "S3 バケットを全公開にして認証を不要にする",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "ROLE",
+      "verb": "持たせない(ロールで受け取る)",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ROLE",
+      "to": "TEMP",
+      "verb": "自動で受け取る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "KEY",
+      "verb": "長期キーを埋め込む",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "ROOT",
+      "verb": "長期キーを埋め込む",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "OPEN",
+      "verb": "認証そのものを外す",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "長期キーの埋め込み / 認証を外す案(漏洩の典型)",
+      "members": ["KEY", "ROOT", "OPEN"]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「長期キーとして持たせるか」の 1 問で、ロールで受け取る案と長期キー・全公開の 3 案に振り分ける",
+    "対比(左右 2 列): 「長期キーを持つ」3 案と「一時認証情報を受け取る」ロールを並べ、漏洩リスクの差を見比べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。対比でも良し悪しは見せられるが、全公開の案は「キーを持つ/持たない」の軸にうまく乗らない。「長期キーとして持たせるか」という 1 問から分ければ、キー埋め込み 2 案と全公開を同じ「持たせる/認証を外す」側にまとめて 4 択を 1 枚に置ける。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "3 つの誤答は解説上いずれも「漏洩・避けるべき」でまとめられているため、共通の見出しに置きつつ各ノードに具体を短く添えている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"EC2 上のアプリから S3 へアクセスする<br/>認証情報の扱い(ベストプラクティス)\"]:::req\n    Q{\"認証情報を<br/>長期キーとして持たせるか?\"}:::judge\n    ROLE[\"IAM ロールを<br/>インスタンスプロファイルとしてアタッチする\"]:::best\n    TEMP[\"一時認証情報が自動ローテーション<br/>漏洩リスクと管理負荷が消える\"]:::best\n\n    subgraph NG[\"長期キーの埋め込み / 認証を外す案(漏洩の典型)\"]\n        KEY[\"IAM ユーザーのアクセスキーを<br/>設定ファイルに保存する\"]:::alt\n        ROOT[\"ルートユーザーのアクセスキーを<br/>環境変数に置く\"]:::alt\n        OPEN[\"S3 バケットを全公開にして<br/>認証を不要にする\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"持たせない\"| ROLE --> TEMP\n    Q -.->|\"持たせる / 外す\"| NG"
+}

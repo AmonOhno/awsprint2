@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 193 問 / 全 400 問
+収録: 203 問 / 全 400 問
 
 ---
 
@@ -9858,3 +9858,476 @@ flowchart TB
 **解説**: Transit Gateway 経由の VPN は ECMP をサポートしており、複数の VPN 接続(複数トンネル)にトラフィックを分散させて帯域を集約できます。仮想プライベートゲートウェイ(VGW)は ECMP に対応していないため、単純に VPN を追加しても帯域は増えません。アクセラレーテッド VPN は Global Accelerator 経由で経路品質を改善しますがトンネルあたりの上限自体は変わりません。
 
 **確認事項**: MTU 拡張が落ちる理由は解説が個別に述べていないため、「トンネルあたりの上限は変わらない」という共通の理由でグループにまとめている。 / Direct Connect は予算承認待ちという前提として要件側に置き、選択肢としては描いていない。
+
+---
+
+## net61 — ネットワーク / level 3
+
+**問題**: セキュリティ監査で「インターネットから到達可能な経路が意図せず存在しないこと」を、構成変更のたびに証明したい。実際にパケットを流さずに到達性を検証したい。最適なサービスはどれか?
+
+**正解**: VPC Reachability Analyzer(および組織全体の分析には Network Access Analyzer)で送信元・送信先間の到達性を静的に解析する
+
+**他の選択肢**: VPC フローログを解析して到達実績を確認する / AWS Config のルールでセキュリティグループの 0.0.0.0/0 を検出する / Inspector のネットワーク到達性評価をすべてのインスタンスで実行する
+
+**図解の主メッセージ**: 経路が無いことを証明できるのは、パケットを流さず構成情報から到達性を解析する Reachability Analyzer だけ。
+
+**採用パターン**: 分岐(判断フロー)。対比は 2 者の違いを最も直接に見せられるが、Config ルールと Inspector の 2 案がどちらの列にも収まらない。「証明の根拠をどこから取るか」という 1 つの問いから分ければ、実績・設定検査・インスタンス単位の評価をまとめて「経路そのものは示せない側」に置ける。(候補: 分岐(判断フロー): 「証明の根拠をどこから取るか」の 1 問で、構成解析の案と実績・設定検査の案に振り分ける / 対比(左右 2 列): 左に「実績を見る道具」(フローログ)、右に「構成を解析する道具」(Reachability Analyzer)を並べ、証明できる範囲の違いを見比べる)
+
+```mermaid
+flowchart TB
+    REQ["構成変更のたびに<br/>「インターネットから到達可能な経路が無い」ことを証明したい<br/>実際にパケットは流さない"]:::req
+    Q{"証明の根拠を<br/>どこから取るか?"}:::judge
+
+    subgraph OK["構成情報から経路を解析する"]
+        RA["VPC Reachability Analyzer<br/>送信元と送信先の到達可否を静的に解析する"]:::best
+        BLOCK["遮断している要素(SG / NACL / ルート)まで示す"]:::best
+        NAA["Network Access Analyzer<br/>アクセススコープを定義して経路を検出する"]:::best
+        RA --> BLOCK
+    end
+
+    subgraph NG["経路そのものは示せない案"]
+        FL["VPC フローログの解析<br/>到達の実績しか分からない"]:::alt
+        CFG["Config ルールで 0.0.0.0/0 を検出<br/>設定の断片的な検査にとどまる"]:::alt
+        INS["Inspector のネットワーク到達性評価を<br/>全インスタンスで実行する"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"構成から解析"| RA
+    Q -.->|"実績や設定から"| NG
+    RA -.->|"組織全体は"| NAA
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net61.svg`](../../web/diagrams/net61.svg)
+
+**解説**: Reachability Analyzer は ENI・IGW・TGW などの構成情報から送信元と送信先の間の到達可否をパケットを流さずに解析し、遮断している要素(SG/NACL/ルート)まで示します。Network Access Analyzer はアクセススコープを定義して「インターネットから DB サブネットへ到達可能な経路」などを組織的に検出できます。フローログは実績のみ、Config ルールは設定の断片的な検査にとどまります。
+
+**確認事項**: Inspector のネットワーク到達性評価が落ちる理由を解説は個別に述べていないため、選択肢名だけを置き、理由はグループの見出し(経路そのものは示せない案)に委ねている。 / Network Access Analyzer は「組織全体の分析には」という補足の位置づけなので、正解の中心(Reachability Analyzer)から破線で伸ばす形にしている。
+
+---
+
+## net62 — ネットワーク / level 3
+
+**問題**: VPC フローログを分析していると、REJECT が大量に記録されているが、ログのどのフィールドを見てもセキュリティグループとネットワーク ACL のどちらで拒否されたかが判別できない。正しい理解と対応はどれか?
+
+**正解**: フローログには拒否した主体は記録されない。セキュリティグループはステートフルで戻りが自動許可されるため、インバウンドは通ったのに戻りが REJECT で記録される場合は NACL 起因と推測でき、Reachability Analyzer で経路要素を特定するのが確実である
+
+**他の選択肢**: action フィールドに SG/NACL の区別が記録されるため、ログ形式をカスタマイズすれば判別できる / フローログはセキュリティグループの拒否のみを記録し、NACL の拒否は記録されない / フローログを 1 分間隔に変更すれば拒否理由が記録される
+
+**図解の主メッセージ**: 拒否した主体はフローログに残らないので、SG のステートフル性から NACL 起因を推測し、Reachability Analyzer で確定させる。
+
+**採用パターン**: 分岐(判断フロー)。直列は推論の筋道だけを見せるには最短だが、誤答 3 案(ログ形式・記録範囲・集約間隔)を線上に置けず、なぜそれらが外れるのかが図に残らない。「拒否した主体は残るか」の 1 問から分ければ、正解側の推論の連鎖を保ったまま、ログ設定に手を入れる 3 案を同じ 1 枚に並べられる。(候補: 分岐(判断フロー): 「フローログに拒否した主体は残るか」の 1 問で、推測 + 解析の道と、ログ設定をいじる 3 案に振り分ける / 直列(推論の連鎖): 「主体は残らない → SG はステートフル → 戻りの REJECT なら NACL → 解析で確定」を 1 本の線でつなぐ)
+
+```mermaid
+flowchart TB
+    REQ["フローログに REJECT が大量に出ている<br/>SG と NACL のどちらで拒否されたか判別したい"]:::req
+    Q{"フローログに<br/>拒否した主体は残るか?"}:::judge
+    NO["残らない<br/>action は ACCEPT / REJECT のみ"]:::svc
+
+    subgraph WAY["ログから推測し、解析で確定させる"]
+        STATE["SG はステートフル<br/>許可した通信の戻りが REJECT になることはない"]:::best
+        GUESS["インバウンドは通ったのに戻りが REJECT<br/>→ NACL 起因と推測できる"]:::best
+        RA["Reachability Analyzer で<br/>経路上の遮断要素を特定する"]:::best
+        STATE --> GUESS --> RA
+    end
+
+    subgraph NG["ログの設定をいじっても判別できない案"]
+        FMT["ログ形式をカスタマイズして<br/>action に SG/NACL を出す"]:::alt
+        ONLY["フローログは SG の拒否のみを記録すると理解する"]:::alt
+        INT["集約間隔を 1 分に変更する"]:::alt
+    end
+
+    NOTE["推測の根拠はステートフル / ステートレスの違いだけ<br/>断定には経路の解析が要る"]:::note
+
+    REQ --> Q
+    Q -->|"残らない"| NO
+    NO --> STATE
+    Q -.->|"残ると考える"| NG
+    GUESS -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net62.svg`](../../web/diagrams/net62.svg)
+
+**解説**: VPC フローログの action は ACCEPT / REJECT のみで、どの制御で拒否されたかは記録されません。セキュリティグループはステートフルなので許可された通信の戻りが REJECT になることはなく、そうしたパターンが見えるならステートレスな NACL が原因と推定できます。確実な特定には Reachability Analyzer で経路上の遮断要素を解析します。
+
+**確認事項**: 「インバウンドは通ったのに戻りが REJECT」というパターンの判定は、解説の文言どおり推測どまりとして描いている(断定に見えないよう注釈を添えた)。 / 集約間隔の選択肢は問題文では「1 分間隔に変更」とだけあり、なぜ拒否理由が出ないかは解説が個別に述べていないため、グループの見出しで理由をまとめている。
+
+---
+
+## net63 — ネットワーク / level 3
+
+**問題**: クライアントに配布した固定 IP(2 つ)を維持しながら、バックエンドを ALB へ移行したい。ALB の IP は変動するため、クライアント側のファイアウォール設定を変えずに移行する必要がある。最適な構成はどれか?
+
+**正解**: AWS Global Accelerator を作成し、静的エニーキャスト IP をエンドポイントとして公開したうえで ALB をエンドポイントに登録する
+
+**他の選択肢**: NLB を作成して Elastic IP を割り当て、ターゲットとして ALB を登録する / ALB に Elastic IP を直接割り当てる / Route 53 のエイリアスレコードで ALB を指し、TTL を 0 にする
+
+**図解の主メッセージ**: 固定 IP は ALB 自身には持たせられないので、静的エニーキャスト IP を持つ Global Accelerator を前段に置いて ALB を登録する。
+
+**採用パターン**: 分岐(判断フロー)。レイヤー図は「前段に一枚挟む」という構成そのものを見せられるが、ALB に EIP を割り当てる案と Route 53 の案は層として描けず、なぜ外れるかを図に残せない。「固定 IP をどこで持たせるか」の 1 問から分ければ、4 択すべてを同じ 1 枚に置ける。(候補: 分岐(判断フロー): 「固定 IP をどこで持たせるか」の 1 問で、ALB 自身に持たせる案と前段に置く案に振り分ける / レイヤー(構成図): クライアント → 固定 IP の層 → ALB → ターゲット と縦に積み、固定 IP の層に何が入るかを比べる)
+
+```mermaid
+flowchart TB
+    REQ["配布済みの固定 IP 2 つを維持したまま ALB へ移行する<br/>クライアントのファイアウォール設定は変えない"]:::req
+    Q{"固定 IP を<br/>どこで持たせるか?"}:::judge
+
+    subgraph OK["前段に静的 IP を持つ層を置く"]
+        GA["AWS Global Accelerator<br/>2 つの静的エニーキャスト IP を提供する"]:::best
+        EP["ALB をエンドポイントに登録する"]:::best
+        KEEP["固定 IP を維持したまま<br/>ALB の L7 機能を利用できる"]:::best
+        GA --> EP --> KEEP
+    end
+
+    subgraph NG["固定 IP の維持にならない / 制約が残る案"]
+        EIP["ALB に Elastic IP を直接割り当てる<br/>ALB に EIP は割り当てられない"]:::alt
+        NLB["NLB に EIP を割り当て ALB をターゲットに登録する<br/>ヘルスチェックとクライアント IP の扱いに制約"]:::alt
+        R53["Route 53 エイリアス + TTL 0<br/>名前解決であって IP は固定されない"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"前段に置く"| GA
+    Q -.->|"ALB 自身に"| NG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net63.svg`](../../web/diagrams/net63.svg)
+
+**解説**: Global Accelerator は 2 つの静的エニーキャスト IP を提供し、ALB・NLB・EC2・Elastic IP をエンドポイントとして登録できるため、固定 IP を維持したまま ALB の L7 機能を利用できます。NLB のターゲットに ALB を登録する構成も可能ですが、ヘルスチェックや保持すべきクライアント IP の扱いに制約があり、Global Accelerator の方が標準的です。ALB に Elastic IP は割り当てられません。
+
+**確認事項**: Route 53 の案が外れる理由は解説が個別に述べていないため、問題文が与える前提(ALB の IP は変動する)の範囲で「IP は固定されない」とだけ書き、それ以上の理由は足していない。 / Global Accelerator が NLB・EC2・Elastic IP も登録できる点は、この問題の判断には効かないので図から省いている。
+
+---
+
+## net64 — ネットワーク / level 3
+
+**問題**: S3 のインターフェース型 VPC エンドポイントを作成し、プライベート DNS を有効にした。その後、オンプレミスから Direct Connect 経由で同じ S3 エンドポイントを使いたいが、オンプレミスからは名前解決できない。最適な対応はどれか?
+
+**正解**: Route 53 Resolver のインバウンドエンドポイントを VPC に作成し、オンプレミス DNS から該当ドメインのクエリを転送する
+
+**他の選択肢**: オンプレミス側の hosts ファイルにエンドポイントの IP を記載する / S3 のゲートウェイ型エンドポイントに切り替える / パブリック VIF を作成して S3 のパブリックエンドポイントへ接続する
+
+**図解の主メッセージ**: プライベート DNS 名は VPC 内の Route 53 Resolver でしか解けないので、オンプレの問い合わせをインバウンドエンドポイント経由でそこへ届ける。
+
+**採用パターン**: 分岐(判断フロー)。直列はクエリの経路を最も具体的に見せられるが、誤答 3 案が経路上に置けず、なぜ外れるかが図に残らない。「どこでなら解決できるか」の 1 問で分けたうえで、正解側の内部を直列で描けば、経路の具体性と 4 択の比較を 1 枚に同居させられる。(候補: 分岐(判断フロー): 「プライベート DNS 名はどこでなら解決できるか」の 1 問で、Resolver へ届ける案とそれ以外の 3 案に振り分ける / 直列(名前解決の経路): オンプレ DNS → 条件付きフォワーダー → インバウンドエンドポイント → ENI の IP、とクエリの旅路を 1 本の線で追う)
+
+```mermaid
+flowchart TB
+    REQ["S3 インターフェースエンドポイント(プライベート DNS 有効)<br/>オンプレミスから Direct Connect 経由で使いたい<br/>オンプレミスからは名前解決できない"]:::req
+    Q{"プライベート DNS 名は<br/>どこでなら解決できるか?"}:::judge
+    ONLY["VPC 内の Route 53 Resolver でしか解決できない"]:::svc
+
+    subgraph WAY["オンプレの問い合わせを VPC の Resolver へ届ける"]
+        FWD["オンプレミス DNS に<br/>条件付きフォワーダーを設定する"]:::best
+        IN["Route 53 Resolver の<br/>インバウンドエンドポイントを VPC に作成する"]:::best
+        ENI["エンドポイントの ENI の IP が返る"]:::best
+        FWD -->|"クエリ転送"| IN --> ENI
+    end
+
+    subgraph NG["エンドポイントの名前解決を解決しない案"]
+        HOSTS["オンプレミスの hosts に IP を直書きする<br/>保守性・可用性に欠ける"]:::alt
+        GW["ゲートウェイ型エンドポイントに切り替える<br/>VPC 内からのみ利用できる"]:::alt
+        PUB["パブリック VIF で<br/>S3 のパブリックエンドポイントへ接続する"]:::alt
+    end
+
+    REQ --> Q
+    Q --> ONLY
+    ONLY --> FWD
+    Q -.->|"別の手を打つ"| NG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net64.svg`](../../web/diagrams/net64.svg)
+
+**解説**: インターフェースエンドポイントのプライベート DNS 名は VPC 内の Route 53 Resolver でしか解決できないため、オンプレミスからはインバウンドリゾルバーエンドポイントを経由して名前解決させる必要があります(オンプレ DNS に条件付きフォワーダーを設定)。ゲートウェイ型エンドポイントは VPC 内からのみ利用可能でオンプレミスからは使えません。hosts の静的設定は保守性・可用性に欠けます。
+
+**確認事項**: パブリック VIF の案が外れる理由を解説は個別に述べていないため、選択肢名だけを置き、理由はグループの見出し(エンドポイントの名前解決を解決しない案)に委ねている。 / 解決後に実際のトラフィックが Direct Connect のどの VIF を通るかは解説の範囲外なので、図では「ENI の IP が返る」までで止めている。
+
+---
+
+## net65 — ネットワーク / level 3
+
+**問題**: 同一 VPC 内の 2 台の EC2 間で 100 Gbps 級のネットワーク性能が必要な HPC アプリを稼働させる。既にクラスタープレイスメントグループを使い、対応インスタンスタイプを選択している。さらにスループットを引き出すために確認すべき設定はどれか?
+
+**正解**: 拡張ネットワーキング(ENA)が有効で、必要に応じて EFA を使用し、ジャンボフレーム(MTU 9001)が有効になっていること
+
+**他の選択肢**: インスタンスがパブリックサブネットにあり、パブリック IP が付与されていること / セキュリティグループのルール数を最小化すること / ネットワーク ACL でエフェメラルポート範囲を広げること
+
+**図解の主メッセージ**: スループットを決めるのは ENA / EFA とジャンボフレームであり、パブリック IP や SG・NACL の設定ではない。
+
+**採用パターン**: 対比(左右 2 列)。この問題は手順でも経路でもなく「どれが効くか」の仕分けなので、効く 3 項目と効かない 3 項目を 2 列に並べるのが最短で読める。レイヤー図は層の上下関係という追加の解読を求めるうえ、パブリック IP・SG・NACL を同じ層に置く根拠が解説にない。(候補: 対比(左右 2 列): 「スループットに効く設定」と「効かない設定」を並べ、確認すべき項目を見比べる / レイヤー(層): インスタンスタイプ → インターフェース(ENA/EFA)→ フレーム(MTU)→ アクセス制御 と積み、効く層を塗り分ける)
+
+```mermaid
+flowchart TB
+    REQ["同一 VPC 内の EC2 間で 100 Gbps 級が必要な HPC<br/>クラスタープレイスメントグループと<br/>対応インスタンスタイプは設定済み"]:::req
+    Q{"スループットを<br/>決めているのは何か?"}:::judge
+
+    subgraph OK["インターフェースの機能とフレームサイズ"]
+        ENA["拡張ネットワーキング(ENA)が有効であること"]:::best
+        EFA["HPC の集団通信には EFA を使用する"]:::best
+        MTU["ジャンボフレーム(MTU 9001)を有効にする<br/>パケット数が減りスループットが上がる"]:::best
+    end
+
+    subgraph NG["スループットに実質影響しない設定"]
+        PUB["パブリックサブネットに置き<br/>パブリック IP を付与する"]:::alt
+        SG["セキュリティグループのルール数を最小化する"]:::alt
+        NACL["ネットワーク ACL で<br/>エフェメラルポート範囲を広げる"]:::alt
+    end
+
+    NOTE["MTU 9001 が使えるのは同一 VPC 内とピアリング内<br/>インターネットゲートウェイ経由は 1500 に制限"]:::note
+
+    REQ --> Q
+    Q -->|"効く設定"| OK
+    Q -.->|"効かない設定"| NG
+    MTU -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net65.svg`](../../web/diagrams/net65.svg)
+
+**解説**: 高スループットには ENA による拡張ネットワーキングが前提で、HPC の集団通信には EFA が有効です。同一 VPC 内(およびピアリング内)ではジャンボフレーム(MTU 9001)が利用でき、パケット数を減らしてスループットを高めます(インターネットゲートウェイ経由は 1500 に制限)。パブリック IP の有無や SG のルール数はスループットに実質影響しません。
+
+**確認事項**: NACL のエフェメラルポート範囲を広げる案が落ちる理由は解説が個別に述べていないため、パブリック IP・SG と同じ「実質影響しない設定」としてまとめている。 / ENA / EFA / MTU の 3 項目は解説上どれが先という順序が無いため、判断ポイントから並列に置き、直列にはしていない。
+
+---
+
+## net66 — ネットワーク / level 3
+
+**問題**: 組織の全アカウント・全 VPC に対して、共通のファイアウォールポリシー(必須のセキュリティグループ規則、Network Firewall のルールグループ、WAF の Web ACL)を強制的に適用し、新規アカウントにも自動適用したい。最適なサービスはどれか?
+
+**正解**: AWS Firewall Manager を Organizations と連携させ、セキュリティポリシーを定義して自動適用・逸脱の自動修復を行う
+
+**他の選択肢**: AWS Config のコンフォーマンスパックを全アカウントへデプロイする / CloudFormation StackSets で各アカウントにセキュリティグループを配布する / Service Control Policy(SCP)でセキュリティグループの変更を禁止する
+
+**図解の主メッセージ**: 全アカウントにファイアウォールを強制し新規にも自動適用できるのは、継続的な強制力を持つ Firewall Manager だけ。
+
+**採用パターン**: 分岐(判断フロー)。対比でも仕分けは見せられるが、3 つの誤答が「できないこと」の種類(配布のみ・評価のみ・API 制御のみ)がそれぞれ違い、単純な 2 列より判断ポイントから枝分かれさせた方が「継続的な強制」という 1 つの軸で外れることが伝わる。(候補: 分岐(判断フロー): 「新規リソースまで継続的に強制できるか」の 1 問で、Firewall Manager と残り 3 案に振り分ける / 対比(左右 2 列): 「配布・評価・禁止どまり」の 3 案と「継続的に強制する」Firewall Manager を並べ、できる範囲を見比べる)
+
+```mermaid
+flowchart TB
+    REQ["全アカウント・全 VPC に共通のファイアウォールポリシー<br/>(SG 規則 / Network Firewall / WAF)を強制したい<br/>新規アカウントにも自動適用したい"]:::req
+    Q{"新規リソースまで<br/>継続的に強制できるか?"}:::judge
+    FMS["AWS Firewall Manager を<br/>Organizations と連携する"]:::best
+    APPLY["共通ポリシーを一元適用<br/>新規リソースへ自動適用し逸脱を自動修復する"]:::best
+
+    subgraph NG["継続的な強制力に欠ける / 中身は適用できない案"]
+        CFG["Config コンフォーマンスパック<br/>評価と修復にとどまる"]:::alt
+        SS["CloudFormation StackSets<br/>配布のみで継続的な強制力がない"]:::alt
+        SCP["SCP で SG 変更を禁止<br/>API の許可/拒否でありポリシーの中身は適用できない"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"できる"| FMS --> APPLY
+    Q -.->|"できない"| NG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/net66.svg`](../../web/diagrams/net66.svg)
+
+**解説**: Firewall Manager は Organizations 全体に対して WAF の Web ACL、Shield Advanced、Network Firewall、Route 53 Resolver DNS Firewall、セキュリティグループの共通ポリシーを一元適用し、新規アカウント・新規リソースにも自動適用して逸脱を検出・修復します。Config は評価と修復、StackSets は配布のみで継続的な強制力に欠け、SCP は API の許可/拒否であってポリシーの中身の適用はできません。
+
+**確認事項**: Firewall Manager が扱える対象(Shield Advanced や DNS Firewall など)は解説にあるが、この問題の判断軸(継続的な強制)には効かないので図では問題文が挙げる 3 種にとどめた。 / 3 つの誤答が外れる理由はそれぞれ異なるが、共通の見出し(継続的な強制力に欠ける / 中身は適用できない案)でまとめつつ、各ノードに個別の限界を短く添えている。
+
+---
+
+## sec01 — セキュリティ・IAM / level 1
+
+**問題**: EC2 上のアプリケーションから S3 バケットへアクセスする際の認証情報の扱いとして、ベストプラクティスはどれか?
+
+**正解**: IAM ロールを EC2 インスタンスプロファイルとしてアタッチする
+
+**他の選択肢**: IAM ユーザーのアクセスキーをアプリの設定ファイルに保存する / ルートユーザーのアクセスキーを環境変数に設定する / S3 バケットを全公開にして認証を不要にする
+
+**図解の主メッセージ**: EC2 には長期キーを埋め込まず、一時認証情報が自動ローテーションされる IAM ロール(インスタンスプロファイル)を使う。
+
+**採用パターン**: 分岐(判断フロー)。対比でも良し悪しは見せられるが、全公開の案は「キーを持つ/持たない」の軸にうまく乗らない。「長期キーとして持たせるか」という 1 問から分ければ、キー埋め込み 2 案と全公開を同じ「持たせる/認証を外す」側にまとめて 4 択を 1 枚に置ける。(候補: 分岐(判断フロー): 「長期キーとして持たせるか」の 1 問で、ロールで受け取る案と長期キー・全公開の 3 案に振り分ける / 対比(左右 2 列): 「長期キーを持つ」3 案と「一時認証情報を受け取る」ロールを並べ、漏洩リスクの差を見比べる)
+
+```mermaid
+flowchart TB
+    REQ["EC2 上のアプリから S3 へアクセスする<br/>認証情報の扱い(ベストプラクティス)"]:::req
+    Q{"認証情報を<br/>長期キーとして持たせるか?"}:::judge
+    ROLE["IAM ロールを<br/>インスタンスプロファイルとしてアタッチする"]:::best
+    TEMP["一時認証情報が自動ローテーション<br/>漏洩リスクと管理負荷が消える"]:::best
+
+    subgraph NG["長期キーの埋め込み / 認証を外す案(漏洩の典型)"]
+        KEY["IAM ユーザーのアクセスキーを<br/>設定ファイルに保存する"]:::alt
+        ROOT["ルートユーザーのアクセスキーを<br/>環境変数に置く"]:::alt
+        OPEN["S3 バケットを全公開にして<br/>認証を不要にする"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"持たせない"| ROLE --> TEMP
+    Q -.->|"持たせる / 外す"| NG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec01.svg`](../../web/diagrams/sec01.svg)
+
+**解説**: EC2 には IAM ロール(インスタンスプロファイル)を使うのが鉄則です。一時的な認証情報が自動でローテーションされ、キーの漏洩リスクや管理負荷がなくなります。長期アクセスキーの埋め込みは漏洩事故の典型原因で、ルートユーザーのキー作成はそもそも避けるべきです。
+
+**確認事項**: 3 つの誤答は解説上いずれも「漏洩・避けるべき」でまとめられているため、共通の見出しに置きつつ各ノードに具体を短く添えている。
+
+---
+
+## sec02 — セキュリティ・IAM / level 1
+
+**問題**: IAM ポリシーの評価ロジックとして正しいのはどれか?
+
+**正解**: 明示的な Deny は、いかなる Allow よりも常に優先される
+
+**他の選択肢**: Allow と Deny が競合した場合は Allow が優先される / ポリシーは上から順に評価され、最初にマッチしたルールが適用される / デフォルトはすべて許可で、Deny を書いた操作のみ拒否される
+
+**図解の主メッセージ**: IAM の評価は暗黙の Deny から始まり、明示的な Deny はどんな Allow よりも常に優先される。
+
+**採用パターン**: 直列 + 分岐(判断フロー)。階層図は優先順位の強弱を一目にできるが、正解の核心である『評価の順序(まず Allow、次に Deny で上書き)』の動きが見えない。2 つの問いを順に通すフローにすると、明示的 Deny が最後に評価されて必ず拒否に落ちる構造がそのまま図に出る。(候補: 直列 + 分岐(判断フロー): 暗黙 Deny → Allow あるか → Deny あるか、と 2 つの問いを順に通し、明示的 Deny が最後に勝つ形にする / 階層(優先順位の 3 段): 明示的 Deny > 明示的 Allow > 暗黙の Deny を上下に積み、強い順を見せる)
+
+```mermaid
+flowchart TB
+    REQ["ある操作への<br/>アクセス可否を評価する"]:::req
+    DEF["① デフォルトは暗黙の Deny<br/>何も無ければ拒否"]:::svc
+    Q1{"② 明示的な<br/>Allow があるか?"}:::judge
+    Q2{"③ 明示的な<br/>Deny があるか?"}:::judge
+    DENY["拒否<br/>明示的 Deny は Allow を必ず覆す"]:::alt
+    ALLOW["許可"]:::best
+    NOTE["この順序は SCP・バケットポリシーなど<br/>他ポリシーとの組み合わせでも同じ"]:::note
+
+    REQ --> DEF --> Q1
+    Q1 -->|"なし"| DENY
+    Q1 -->|"あり"| Q2
+    Q2 -->|"あり"| DENY
+    Q2 -->|"なし"| ALLOW
+    DENY -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec02.svg`](../../web/diagrams/sec02.svg)
+
+**解説**: IAM の評価は「デフォルト拒否(暗黙の Deny)→ 明示的 Allow があれば許可 → ただし明示的 Deny があれば必ず拒否」という順序です。明示的 Deny は絶対で、どんな Allow でも覆せません。この原則は SCP・バケットポリシーなど他のポリシーとの組み合わせでも同様です。
+
+**確認事項**: 拒否の結着ノード(DENY)は『Allow なし』と『明示的 Deny あり』の 2 経路が合流する。両者は理由が異なるが、結果は同じ拒否なので 1 ノードにまとめている。 / 誤答選択肢(Allow 優先・最初のマッチ・デフォルト許可)は評価規則そのものの否定であり、図に置くと規則の流れを壊すため、あえてノード化していない。
+
+---
+
+## sec03 — セキュリティ・IAM / level 2
+
+**問題**: Web アプリを SQL インジェクションやクロスサイトスクリプティング(XSS)から保護したい。どのサービスを ALB や CloudFront に組み合わせるべきか?
+
+**正解**: AWS WAF
+
+**他の選択肢**: AWS Shield Standard / Amazon GuardDuty / Amazon Inspector
+
+**図解の主メッセージ**: SQLi / XSS はアプリ層の攻撃なので、L7 のリクエストを検査する WAF を ALB / CloudFront に組み合わせる。
+
+**採用パターン**: 分岐(判断フロー)。表でも役割の違いは見せられるが、問われているのは「どれを選ぶか」の一点なので、判断軸(L7 のリクエストを検査するか)を明示して 1 問で振り分ける方が、解答時の思考をそのままなぞれて速い。(候補: 分岐(判断フロー): 「L7 のリクエストを検査する道具か」の 1 問で、WAF と役割の違う 3 サービスに振り分ける / 対比(役割の一覧表): 4 サービスを「対象の脅威 × 役割」で並べ、SQLi/XSS に当たるものを選ぶ)
+
+```mermaid
+flowchart TB
+    REQ["Web アプリを SQLi / XSS から守りたい<br/>ALB / CloudFront に組み合わせる"]:::req
+    Q{"アプリ層(L7)の<br/>リクエスト内容を検査する道具か?"}:::judge
+    WAF["AWS WAF<br/>SQLi/XSS のマネージドルール<br/>IP・レートベースのルール"]:::best
+
+    subgraph NG["役割が違うサービス(SQLi/XSS は防げない)"]
+        SHIELD["Shield Standard<br/>DDoS 対策・無料で自動適用"]:::alt
+        GD["GuardDuty<br/>脅威検知"]:::alt
+        INS["Inspector<br/>脆弱性スキャン"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"検査する"| WAF
+    Q -.->|"役割が違う"| NG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec03.svg`](../../web/diagrams/sec03.svg)
+
+**解説**: WAF は Web アプリケーションファイアウォールで、SQLi/XSS 対策のマネージドルールや IP・レートベースのルールを ALB、CloudFront、API Gateway に適用できます。Shield は DDoS 対策(Standard は無料で自動適用)、GuardDuty は脅威検知、Inspector は脆弱性スキャンと、それぞれ役割が異なります。
+
+**確認事項**: 各誤答サービスの本来の役割は解説どおり 1 語で添えるにとどめ、それぞれの詳細機能は判断に不要なので描いていない。
+
+---
+
+## sec04 — セキュリティ・IAM / level 2
+
+**問題**: データベースの認証情報を安全に保存し、自動ローテーションもさせたい。最も適切なサービスはどれか?
+
+**正解**: AWS Secrets Manager
+
+**他の選択肢**: Systems Manager パラメータストア(標準パラメータ) / S3 バケット(SSE-KMS 暗号化) / EC2 のユーザーデータ
+
+**図解の主メッセージ**: 自動ローテーションが要るなら、それを内蔵する Secrets Manager を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。4 案とも保存自体はできるため『保存できるか』の軸はほぼ差がつかず、差がつくのは『自動ローテーションを内蔵するか』の 1 点。ここを単一の判断ポイントに固定すれば、キーワード(自動ローテーション)から即断できる形になる。(候補: 分岐(判断フロー): 「自動ローテーションを内蔵しているか」の 1 問で、Secrets Manager と残り 3 案に振り分ける / 対比(2 段階): 「保存できるか」と「自動ローテーションできるか」の 2 軸で 4 案を並べ、両方満たすものを選ぶ)
+
+```mermaid
+flowchart TB
+    REQ["DB の認証情報を安全に保存し<br/>自動ローテーションもさせたい"]:::req
+    Q{"自動ローテーションを<br/>内蔵しているか?"}:::judge
+    SM["AWS Secrets Manager<br/>保存 + RDS 等の自動ローテーションを内蔵"]:::best
+
+    subgraph NG["保存はできても自動ローテーションが無い案"]
+        PS["パラメータストア(SecureString)<br/>ローテーションは自前実装(Lambda)"]:::alt
+        S3["S3 バケット(SSE-KMS)<br/>ローテーションの仕組みなし"]:::alt
+        UD["EC2 のユーザーデータ<br/>平文で残りローテーションもなし"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"内蔵している"| SM
+    Q -.->|"内蔵しない"| NG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec04.svg`](../../web/diagrams/sec04.svg)
+
+**解説**: Secrets Manager はシークレットの保存に加え、RDS などの認証情報の自動ローテーション機能を内蔵しています。パラメータストアも SecureString で秘密情報を保存できますが、ローテーションは自前実装(Lambda)が必要です。「自動ローテーション」がキーワードなら Secrets Manager を選びます。
+
+**確認事項**: EC2 ユーザーデータが平文で残る点は一般に知られた性質だが、解説は『ローテーションを持たない』ことを主眼にしているため、図でも自動ローテーションの有無を主たる理由として置いている。

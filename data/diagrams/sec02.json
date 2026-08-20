@@ -1,0 +1,119 @@
+{
+  "question_id": "sec02",
+  "purpose": "IAM のアクセス可否が「暗黙の Deny → 明示的 Allow → 明示的 Deny」の順で決まり、明示的 Deny が最後に必ず勝つことを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Allow / Deny の言葉は知っているが、競合したときにどちらが勝つかの評価順序を正確に覚えていない人。",
+  "message": "IAM の評価は暗黙の Deny から始まり、明示的な Deny はどんな Allow よりも常に優先される。",
+  "source_summary": "IAM ポリシーの評価ロジックとして正しいものを問う。正解は「明示的な Deny は、いかなる Allow よりも常に優先される」。評価は『デフォルト拒否(暗黙の Deny)→ 明示的 Allow があれば許可 → ただし明示的 Deny があれば必ず拒否』の順序で、明示的 Deny は絶対でどんな Allow でも覆せない。Allow と Deny の競合で Allow が勝つ・上から順に最初のマッチが適用される・デフォルト許可、はいずれも誤り。この原則は SCP・バケットポリシーなど他のポリシーとの組み合わせでも同様。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "ある操作へのアクセス可否を評価する",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "DEF",
+      "label": "① デフォルトは暗黙の Deny(何も無ければ拒否)",
+      "type": "concept",
+      "priority": "primary"
+    },
+    {
+      "id": "Q1",
+      "label": "② 明示的な Allow があるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "Q2",
+      "label": "③ 明示的な Deny があるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "DENY",
+      "label": "拒否(明示的 Deny は Allow を必ず覆す)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "ALLOW",
+      "label": "許可",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "この順序は SCP・バケットポリシーなど他ポリシーとの組み合わせでも同じ",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "DEF",
+      "verb": "まず暗黙の Deny から",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "DEF",
+      "to": "Q1",
+      "verb": "Allow を探す",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q1",
+      "to": "DENY",
+      "verb": "なし → 拒否のまま",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q1",
+      "to": "Q2",
+      "verb": "あり → Deny を確認",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q2",
+      "to": "DENY",
+      "verb": "あり → 必ず拒否",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q2",
+      "to": "ALLOW",
+      "verb": "なし → 許可",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "DENY",
+      "to": "NOTE",
+      "verb": "適用範囲を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "直列 + 分岐(判断フロー): 暗黙 Deny → Allow あるか → Deny あるか、と 2 つの問いを順に通し、明示的 Deny が最後に勝つ形にする",
+    "階層(優先順位の 3 段): 明示的 Deny > 明示的 Allow > 暗黙の Deny を上下に積み、強い順を見せる"
+  ],
+  "selected_pattern": "直列 + 分岐(判断フロー)。階層図は優先順位の強弱を一目にできるが、正解の核心である『評価の順序(まず Allow、次に Deny で上書き)』の動きが見えない。2 つの問いを順に通すフローにすると、明示的 Deny が最後に評価されて必ず拒否に落ちる構造がそのまま図に出る。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=評価の対象・前提、菱形(青)=判断ポイント、白=評価規則、緑=許可の結着、グレー=拒否の結着、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "青=判断軸、白=規則、緑=許可、グレー=拒否、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=評価の進行、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノード(明示的 Deny による拒否)のみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "拒否の結着ノード(DENY)は『Allow なし』と『明示的 Deny あり』の 2 経路が合流する。両者は理由が異なるが、結果は同じ拒否なので 1 ノードにまとめている。",
+    "誤答選択肢(Allow 優先・最初のマッチ・デフォルト許可)は評価規則そのものの否定であり、図に置くと規則の流れを壊すため、あえてノード化していない。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"ある操作への<br/>アクセス可否を評価する\"]:::req\n    DEF[\"① デフォルトは暗黙の Deny<br/>何も無ければ拒否\"]:::svc\n    Q1{\"② 明示的な<br/>Allow があるか?\"}:::judge\n    Q2{\"③ 明示的な<br/>Deny があるか?\"}:::judge\n    DENY[\"拒否<br/>明示的 Deny は Allow を必ず覆す\"]:::alt\n    ALLOW[\"許可\"]:::best\n    NOTE[\"この順序は SCP・バケットポリシーなど<br/>他ポリシーとの組み合わせでも同じ\"]:::note\n\n    REQ --> DEF --> Q1\n    Q1 -->|\"なし\"| DENY\n    Q1 -->|\"あり\"| Q2\n    Q2 -->|\"あり\"| DENY\n    Q2 -->|\"なし\"| ALLOW\n    DENY -.- NOTE"
+}

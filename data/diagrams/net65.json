@@ -1,0 +1,149 @@
+{
+  "question_id": "net65",
+  "purpose": "EC2 間のスループットを決めているのがネットワークインターフェースの機能とフレームサイズであって、IP の付与やアクセス制御の設定ではないことを 1 枚で示す。",
+  "audience": "AWS 認定(SAP レベル)を学習中で、プレイスメントグループまでは押さえたが、そこから先にスループットを引き出す設定項目を挙げられない人。",
+  "message": "スループットを決めるのは ENA / EFA とジャンボフレームであり、パブリック IP や SG・NACL の設定ではない。",
+  "source_summary": "同一 VPC 内の 2 台の EC2 間で 100 Gbps 級の性能が必要な HPC アプリを稼働させる。クラスタープレイスメントグループと対応インスタンスタイプは選択済み。正解は「拡張ネットワーキング(ENA)が有効で、必要に応じて EFA を使用し、ジャンボフレーム(MTU 9001)が有効になっていること」。高スループットには ENA による拡張ネットワーキングが前提で、HPC の集団通信には EFA が有効。同一 VPC 内(およびピアリング内)ではジャンボフレーム(MTU 9001)が利用でき、パケット数を減らしてスループットを高める(インターネットゲートウェイ経由は 1500 に制限)。パブリック IP の有無やセキュリティグループのルール数はスループットに実質影響しない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "同一 VPC 内の EC2 間で 100 Gbps 級が必要な HPC(クラスタープレイスメントグループと対応インスタンスタイプは設定済み)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "スループットを決めているのは何か?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ENA",
+      "label": "拡張ネットワーキング(ENA)が有効であること",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "EFA",
+      "label": "HPC の集団通信には EFA を使用する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "MTU",
+      "label": "ジャンボフレーム(MTU 9001)を有効にし、パケット数を減らす",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "PUB",
+      "label": "パブリックサブネットに置きパブリック IP を付与する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SG",
+      "label": "セキュリティグループのルール数を最小化する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NACL",
+      "label": "ネットワーク ACL でエフェメラルポート範囲を広げる",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "MTU 9001 が使えるのは同一 VPC 内とピアリング内。インターネットゲートウェイ経由は 1500 に制限される",
+      "type": "other",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "ENA",
+      "verb": "インターフェースの機能を確認する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "EFA",
+      "verb": "集団通信の手段を足す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "MTU",
+      "verb": "フレームサイズを上げる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "PUB",
+      "verb": "到達性の設定を触る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SG",
+      "verb": "アクセス制御を触る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NACL",
+      "verb": "アクセス制御を触る",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "MTU",
+      "to": "NOTE",
+      "verb": "適用範囲を補う",
+      "direction": "none",
+      "kind": "other"
+    }
+  ],
+  "groups": [
+    {
+      "id": "OK",
+      "label": "インターフェースの機能とフレームサイズ",
+      "members": ["ENA", "EFA", "MTU"]
+    },
+    {
+      "id": "NG",
+      "label": "スループットに実質影響しない設定",
+      "members": ["PUB", "SG", "NACL"]
+    }
+  ],
+  "candidate_patterns": [
+    "対比(左右 2 列): 「スループットに効く設定」と「効かない設定」を並べ、確認すべき項目を見比べる",
+    "レイヤー(層): インスタンスタイプ → インターフェース(ENA/EFA)→ フレーム(MTU)→ アクセス制御 と積み、効く層を塗り分ける"
+  ],
+  "selected_pattern": "対比(左右 2 列)。この問題は手順でも経路でもなく「どれが効くか」の仕分けなので、効く 3 項目と効かない 3 項目を 2 列に並べるのが最短で読める。レイヤー図は層の上下関係という追加の解読を求めるうえ、パブリック IP・SG・NACL を同じ層に置く根拠が解説にない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、薄黄=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=スループットに効く設定、グレー=効かない設定、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "NACL のエフェメラルポート範囲を広げる案が落ちる理由は解説が個別に述べていないため、パブリック IP・SG と同じ「実質影響しない設定」としてまとめている。",
+    "ENA / EFA / MTU の 3 項目は解説上どれが先という順序が無いため、判断ポイントから並列に置き、直列にはしていない。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"同一 VPC 内の EC2 間で 100 Gbps 級が必要な HPC<br/>クラスタープレイスメントグループと<br/>対応インスタンスタイプは設定済み\"]:::req\n    Q{\"スループットを<br/>決めているのは何か?\"}:::judge\n\n    subgraph OK[\"インターフェースの機能とフレームサイズ\"]\n        ENA[\"拡張ネットワーキング(ENA)が有効であること\"]:::best\n        EFA[\"HPC の集団通信には EFA を使用する\"]:::best\n        MTU[\"ジャンボフレーム(MTU 9001)を有効にする<br/>パケット数が減りスループットが上がる\"]:::best\n    end\n\n    subgraph NG[\"スループットに実質影響しない設定\"]\n        PUB[\"パブリックサブネットに置き<br/>パブリック IP を付与する\"]:::alt\n        SG[\"セキュリティグループのルール数を最小化する\"]:::alt\n        NACL[\"ネットワーク ACL で<br/>エフェメラルポート範囲を広げる\"]:::alt\n    end\n\n    NOTE[\"MTU 9001 が使えるのは同一 VPC 内とピアリング内<br/>インターネットゲートウェイ経由は 1500 に制限\"]:::note\n\n    REQ --> Q\n    Q -->|\"効く設定\"| OK\n    Q -.->|\"効かない設定\"| NG\n    MTU -.- NOTE"
+}
