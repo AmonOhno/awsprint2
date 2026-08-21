@@ -1,0 +1,130 @@
+{
+  "question_id": "sec09",
+  "purpose": "ロール作成を委任しても権限昇格を防げる手段の選択が「作られるロールの権限上限を縛れるか」で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、アクセス許可の境界と SCP の役割の違いが曖昧な人。",
+  "message": "委任先が作るロールに上限を課せるのはアクセス許可の境界だけなので、境界の付与を強制する。",
+  "source_summary": "開発者に IAM ロールの作成を委任したいが、自分より強い権限を持つロールを作られる権限昇格を防ぎたい。正解はアクセス許可の境界(Permissions Boundary)。ユーザーやロールが持てる権限の上限を定める管理ポリシーで、「作成するロールには必ずこの境界を付ける」ことを条件付きで強制すれば、開発者が自由にロールを作っても境界を超える権限は一切有効にならない。組織全体のガードレールである SCP と混同しないよう注意する。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "開発者に IAM ロールの作成を委任したいが権限昇格は防ぎたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "作られるロールの権限上限を縛れるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "PB",
+      "label": "アクセス許可の境界(Permissions Boundary)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "FORCE",
+      "label": "境界の付与を条件付きで強制する。境界を超える権限は有効にならない",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "KEY",
+      "label": "アクセスキーの無効化",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "INLINE",
+      "label": "インラインポリシーの禁止のみ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "MFA",
+      "label": "MFA の強制",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "SCP は組織全体のガードレール、境界は個々の ID の上限(混同しない)",
+      "type": "concept",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "PB",
+      "verb": "上限を縛れる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "PB",
+      "to": "FORCE",
+      "verb": "強制して効かせる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "KEY",
+      "verb": "上限は縛れない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "INLINE",
+      "verb": "上限は縛れない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "MFA",
+      "verb": "上限は縛れない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "PB",
+      "to": "NOTE",
+      "verb": "補足する",
+      "direction": "one-way",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "作られるロールの権限上限には効かない案",
+      "members": ["KEY", "INLINE", "MFA"]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「作られるロールの権限上限を縛れるか」の 1 問で、境界と残り 3 案に振り分ける",
+    "包含(重なり): 境界という大枠の中に、開発者が作ったロールのポリシーを描き、はみ出した権限が効かないことを示す"
+  ],
+  "selected_pattern": "分岐(判断フロー)。包含図は『実効権限 = ポリシー ∩ 境界』という効き方を直感的に示せるが、残り 3 つの選択肢を同じ絵の中に置く場所がなく、4 択のどれを選ぶかという問いに答えられない。分岐で振り分けたうえで、正解側に『境界を超える権限は有効にならない』というノードを続ければ、効き方も 1 行で補える。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係・注釈の引き出し。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "MFA の強制やアクセスキーの無効化も一般的なセキュリティ対策ではあるが、解説は権限昇格の防止に効くかどうかだけを論点にしているため、図でも良し悪しではなく『上限を縛れるか』の一点で落としている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"開発者に IAM ロールの作成を委任したい<br/>ただし権限昇格は防ぎたい\"]:::req\n    Q{\"作られるロールの<br/>権限上限を縛れるか?\"}:::judge\n    PB[\"アクセス許可の境界<br/>(Permissions Boundary)\"]:::best\n    FORCE[\"境界の付与を条件付きで強制する<br/>境界を超える権限は有効にならない\"]:::best\n    NOTE[\"SCP は組織全体のガードレール<br/>境界は個々の ID の上限(混同しない)\"]:::note\n\n    subgraph NG[\"作られるロールの権限上限には効かない案\"]\n        KEY[\"アクセスキーの無効化\"]:::alt\n        INLINE[\"インラインポリシーの禁止のみ\"]:::alt\n        MFA[\"MFA の強制\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"縛れる\"| PB --> FORCE\n    Q -.->|\"縛れない\"| NG\n    PB -.- NOTE"
+}

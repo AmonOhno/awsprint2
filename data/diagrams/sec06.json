@@ -1,0 +1,130 @@
+{
+  "question_id": "sec06",
+  "purpose": "EC2 上のアプリの認証情報の扱いが「長期のアクセスキーを持たせるかどうか」の 1 点で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(基礎レベル)を学習中で、IAM ロールの存在は知っているが、アクセスキーの置き場所(コード / 環境変数)を比べる問題として読んでしまう人。",
+  "message": "AWS サービスに権限を与えるときは長期キーを置かず、一時認証情報が自動で回る IAM ロールを使う。",
+  "source_summary": "EC2 上のアプリから S3 へアクセスする際の認証情報の管理方法を問う。正解は IAM ロールをインスタンスプロファイルとしてアタッチすること。自動ローテーションされる一時認証情報がメタデータ経由で提供され、キーの保管・漏えいリスクがなくなる。長期アクセスキーの埋め込みは漏えい事故の最大要因。「AWS サービスに権限を与える = IAM ロール」は全分野に共通する大原則。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "EC2 上のアプリから S3 へアクセスする認証情報の管理方法",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "長期のアクセスキーをインスタンスに持たせるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ROLE",
+      "label": "IAM ロールをインスタンスプロファイルとしてアタッチする",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "TEMP",
+      "label": "メタデータ経由で一時認証情報が渡り、自動ローテーションされる",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "SRC",
+      "label": "アクセスキーをソースコードに記述する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ENV",
+      "label": "アクセスキーを環境変数に設定する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ROOT",
+      "label": "ルートユーザーのキーを使う",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "AWS サービスに権限を与える = IAM ロール(全分野共通の原則)",
+      "type": "concept",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "ROLE",
+      "verb": "持たせない",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ROLE",
+      "to": "TEMP",
+      "verb": "結果として得られる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "SRC",
+      "verb": "長期キーを持たせてしまう",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "ENV",
+      "verb": "長期キーを持たせてしまう",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "ROOT",
+      "verb": "長期キーを持たせてしまう",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "ROLE",
+      "to": "NOTE",
+      "verb": "補足する",
+      "direction": "one-way",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "長期キーを持たせる案(漏えいの最大要因)",
+      "members": ["SRC", "ENV", "ROOT"]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「長期キーを持たせるか」の 1 問で、IAM ロールと残り 3 案に振り分ける",
+    "対比(置き場所の比較): コード / 環境変数 / ルートキー / ロールの 4 案を横に並べ、危険度の順に並べ替える"
+  ],
+  "selected_pattern": "分岐(判断フロー)。対比だと『どこに置くのが一番マシか』という置き場所の比較に見えてしまい、正解の理由(そもそもキーを置かない)がぼやける。『長期キーを持たせるか』の 1 問に固定すれば、置き場所の違う 3 案がまとめて同じ側に落ち、キーを持たない道だけが残る構造が一目で分かる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係・注釈の引き出し。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "ルートユーザーのキーは長期キーであることに加えて権限が過大だが、解説は長期キーの埋め込みを主たる論点にしているため、図でも他の 2 案と同じ枝にまとめている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"EC2 上のアプリから S3 へアクセスする<br/>認証情報の管理方法\"]:::req\n    Q{\"長期のアクセスキーを<br/>インスタンスに持たせるか?\"}:::judge\n    ROLE[\"IAM ロールを<br/>インスタンスプロファイルとしてアタッチする\"]:::best\n    TEMP[\"メタデータ経由で一時認証情報<br/>自動ローテーションされ保管が不要\"]:::best\n    NOTE[\"AWS サービスに権限を与える = IAM ロール\"]:::note\n\n    subgraph NG[\"長期キーを持たせる案(漏えいの最大要因)\"]\n        SRC[\"アクセスキーをソースコードに記述する\"]:::alt\n        ENV[\"アクセスキーを環境変数に設定する\"]:::alt\n        ROOT[\"ルートユーザーのキーを使う\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"持たせない\"| ROLE --> TEMP\n    Q -.->|\"持たせる\"| NG\n    ROLE -.- NOTE"
+}

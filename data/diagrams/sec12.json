@@ -1,0 +1,148 @@
+{
+  "question_id": "sec12",
+  "purpose": "カスタマーマネージドキーの正誤判定が「利用者が制御できる領域か、KMS が渡さない領域か」の線引きで決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、CMK でできること(キーポリシー・自動ローテーション)とできないこと(平文エクスポート・即時削除)が混ざっている人。",
+  "message": "CMK は利用者がキーポリシーと自動ローテーションを制御できる鍵だが、キーマテリアルの持ち出しと即時削除はできない。",
+  "source_summary": "KMS のカスタマーマネージドキー(CMK)について正しい説明を問う。正解はキーポリシーでアクセス制御でき、自動ローテーション(年 1 回)を有効化できること。カスタマーマネージドキーはキーポリシーによる細かなアクセス制御・無効化・自動ローテーション設定が可能で、利用履歴は CloudTrail に記録される。キーマテリアルは KMS(HSM)から平文でエクスポートされない。削除は誤削除防止のため 7〜30 日の待機期間を経て実行される。AWS マネージドキーはこれらの制御ができない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "カスタマーマネージドキー(CMK)について正しい説明はどれか",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "利用者が制御できる領域か?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "POL",
+      "label": "キーポリシーでアクセス制御できる",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ROT",
+      "label": "自動ローテーション(年 1 回)を有効化できる",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "LOG",
+      "label": "利用履歴は CloudTrail に記録される",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "EXP",
+      "label": "キーマテリアルを平文でエクスポートして配布する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DEL",
+      "label": "削除は即時に実行される",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SAME",
+      "label": "AWS マネージドキーと機能は完全に同一",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "削除は 7〜30 日の待機期間を経る。AWS マネージドキーはこれらを制御できない",
+      "type": "concept",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "POL",
+      "verb": "制御できる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "ROT",
+      "verb": "制御できる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "LOG",
+      "verb": "制御の結果として残る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "EXP",
+      "verb": "KMS が渡さない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "DEL",
+      "verb": "仕様が異なる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SAME",
+      "verb": "事実と異なる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "DEL",
+      "to": "NOTE",
+      "verb": "補足する",
+      "direction": "one-way",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [
+    {
+      "id": "OK",
+      "label": "利用者が制御できる(正しい説明)",
+      "members": ["POL", "ROT", "LOG"]
+    },
+    {
+      "id": "NG",
+      "label": "KMS の仕様上できない / 事実と異なる",
+      "members": ["EXP", "DEL", "SAME"]
+    }
+  ],
+  "candidate_patterns": [
+    "対比(できる / できない の 2 枠): 判断軸を 1 つ置き、CMK の性質を制御できる側とできない側に振り分ける",
+    "中心放射: 中心に CMK を置き、周囲に性質を放射状に並べて可否の印を付ける"
+  ],
+  "selected_pattern": "対比(できる / できない の 2 枠)。中心放射は性質を数多く並べられるが、正誤の判定は各枝に付けた印を 1 つずつ読む必要があり、この設問の核心である『どこまでが利用者の制御範囲か』という線引きが見えない。制御できる側とできない側の 2 枠に分ければ、線引きそのものが図の骨格になり、正しい説明がどちらの枠に入るかで即断できる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係・注釈の引き出し。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "CloudTrail への記録は選択肢そのものではなく解説中の補足のため、正解の枠内に置きつつ緑(正解につながる構成要素)ではなく白(一般の構成要素)にして、選択肢と補足の役割を分けている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"カスタマーマネージドキー(CMK)について<br/>正しい説明はどれか\"]:::req\n    Q{\"利用者が<br/>制御できる領域か?\"}:::judge\n    NOTE[\"削除は 7〜30 日の待機期間を経る<br/>AWS マネージドキーはこれらを制御できない\"]:::note\n\n    subgraph OK[\"利用者が制御できる(正しい説明)\"]\n        POL[\"キーポリシーでアクセス制御できる\"]:::best\n        ROT[\"自動ローテーション(年 1 回)を<br/>有効化できる\"]:::best\n        LOG[\"利用履歴は CloudTrail に記録される\"]:::svc\n    end\n\n    subgraph NG[\"KMS の仕様上できない / 事実と異なる\"]\n        EXP[\"キーマテリアルを平文で<br/>エクスポートして配布する\"]:::alt\n        DEL[\"削除は即時に実行される\"]:::alt\n        SAME[\"AWS マネージドキーと機能は完全に同一\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"できる\"| OK\n    Q -.->|\"できない\"| NG\n    NG -.- NOTE"
+}

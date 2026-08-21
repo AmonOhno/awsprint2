@@ -1,0 +1,130 @@
+{
+  "question_id": "sec14",
+  "purpose": "DB パスワードの保管先の選択が「自動ローテーションを標準機能として持つか、自前で作るか」で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Parameter Store でも SecureString で秘密情報を置けるため、Secrets Manager との差を保管機能の有無だと思っている人。",
+  "message": "90 日ごとの自動ローテーションを標準機能で回せるのは Secrets Manager なので、保管先はそこにする。",
+  "source_summary": "RDS の DB パスワードを安全に保管し、90 日ごとの自動ローテーションも行いたい。正解は AWS Secrets Manager。シークレットの保管に加え、RDS・Redshift 等との統合による自動ローテーション(Lambda で実行)を標準サポートする。Parameter Store は無料で設定値・シークレットを保管できるが、自動ローテーション機能は組み込まれていない。「自動ローテーション要件 = Secrets Manager」が決め手。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "RDS の DB パスワードを安全に保管し、90 日ごとに自動ローテーションしたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "自動ローテーションを標準機能で回せるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "SM",
+      "label": "AWS Secrets Manager",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ROT",
+      "label": "RDS・Redshift 等との統合で、ローテーションを Lambda が実行する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "PS",
+      "label": "Parameter Store(標準)。保管はできるがローテーションは組み込まれていない",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "S3",
+      "label": "S3 に暗号化して保存する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ENV",
+      "label": "環境変数に直接設定する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "自動ローテーション要件 = Secrets Manager",
+      "type": "concept",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "SM",
+      "verb": "標準機能で回せる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "SM",
+      "to": "ROT",
+      "verb": "統合して実行する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "PS",
+      "verb": "自前実装が必要になる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "S3",
+      "verb": "自前実装が必要になる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "ENV",
+      "verb": "保管としても不適切",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "SM",
+      "to": "NOTE",
+      "verb": "補足する",
+      "direction": "one-way",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "保管はできても自動ローテーションが標準では回らない案",
+      "members": ["PS", "S3", "ENV"]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「自動ローテーションを標準機能で回せるか」の 1 問で、Secrets Manager と残り 3 案に振り分ける",
+    "対比(コストと機能): Parameter Store と Secrets Manager を左右に並べ、料金と自動ローテーションの有無を突き合わせる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。対比は Parameter Store が無料である点との天秤を示せるが、設問は 90 日ごとの自動ローテーションを要件として明示しており、料金を持ち出すと判断軸がぶれる。要件として与えられた自動ローテーションを標準機能で満たせるかの 1 問に固定すれば、残り 3 案がまとめて同じ側に落ちる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係・注釈の引き出し。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "環境変数に直接設定する案は、ローテーション以前に保管方法として不適切という別の理由でも落ちる。図では判断軸を 1 本に保つため他の 2 案と同じ枝に置き、グループのラベルで『保管はできても』と括っている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"RDS の DB パスワードを安全に保管し<br/>90 日ごとに自動ローテーションしたい\"]:::req\n    Q{\"自動ローテーションを<br/>標準機能で回せるか?\"}:::judge\n    SM[\"AWS Secrets Manager\"]:::best\n    ROT[\"RDS・Redshift 等との統合で<br/>ローテーションを Lambda が実行する\"]:::best\n    NOTE[\"自動ローテーション要件 = Secrets Manager\"]:::note\n\n    subgraph NG[\"保管はできても自動ローテーションが標準では回らない案\"]\n        PS[\"Parameter Store(標準)<br/>組み込みのローテーション機能なし\"]:::alt\n        S3[\"S3 に暗号化して保存する\"]:::alt\n        ENV[\"環境変数に直接設定する\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"回せる\"| SM --> ROT\n    Q -.->|\"自前実装\"| NG\n    SM -.- NOTE"
+}

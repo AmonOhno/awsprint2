@@ -1,0 +1,130 @@
+{
+  "question_id": "sec11",
+  "purpose": "SSO のサービス選択が「認証する相手は社内の従業員か、アプリの一般ユーザーか」で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(基礎レベル)を学習中で、IAM Identity Center と Cognito のどちらが従業員向けかを取り違えやすい人。",
+  "message": "社内従業員の複数アカウント SSO は、AD / 外部 IdP と連携して一元管理する IAM Identity Center を使う。",
+  "source_summary": "社員が既存の Active Directory の認証情報を使い、複数の AWS アカウントへシングルサインオンでアクセスできるようにしたい。正解は IAM Identity Center(旧 AWS SSO)。複数アカウントへの SSO を一元管理するサービスで、Active Directory や外部 IdP(SAML/OIDC)と連携し、アカウント × 権限セットの割り当てで統制する。社内従業員のアクセス管理は Identity Center、アプリの一般ユーザー認証は Cognito、という使い分けが重要。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "社員が既存 AD の認証情報で複数の AWS アカウントへ SSO したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "認証する相手は社内の従業員か?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "IDC",
+      "label": "IAM Identity Center(旧 AWS SSO)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ASSIGN",
+      "label": "AD / 外部 IdP(SAML・OIDC)と連携し、アカウント × 権限セットで割り当てる",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "IAMU",
+      "label": "IAM ユーザーをアカウントごとに作成(一元管理にならない)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "COG",
+      "label": "Amazon Cognito(アプリの一般ユーザー認証)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "KMS",
+      "label": "AWS KMS(暗号化キーの管理)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "従業員 = Identity Center、アプリの一般ユーザー = Cognito",
+      "type": "concept",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "IDC",
+      "verb": "従業員である",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "IDC",
+      "to": "ASSIGN",
+      "verb": "連携して割り当てる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "IAMU",
+      "verb": "SSO の一元管理にならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "COG",
+      "verb": "対象がアプリの一般ユーザー",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "KMS",
+      "verb": "用途が認証ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "IDC",
+      "to": "NOTE",
+      "verb": "補足する",
+      "direction": "one-way",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "用途が違う / 一元管理にならない案",
+      "members": ["IAMU", "COG", "KMS"]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「認証する相手は従業員か」の 1 問で、Identity Center と残り 3 案に振り分ける",
+    "対比(2 列): 左に『社内従業員のアクセス管理』、右に『アプリの一般ユーザー認証』を置き、代表サービスを並べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。対比は Identity Center と Cognito の使い分けを鮮明にできるが、残る 2 案(IAM ユーザーの個別作成・KMS)がどちらの列にも収まらず 4 択の図として成立しない。『認証する相手は誰か』の 1 問で振り分けたうえで、使い分けの要点は注釈に置く方が単純に読める。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係・注釈の引き出し。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "KMS は認証と無関係な選択肢だが、他の 2 案と落ちる理由(用途が違う)の粒度が異なる。図では選択肢ラベルに用途を併記して、なぜ落ちるかが読めるようにしている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"社員が既存 AD の認証情報で<br/>複数の AWS アカウントへ SSO したい\"]:::req\n    Q{\"認証する相手は<br/>社内の従業員か?\"}:::judge\n    IDC[\"IAM Identity Center(旧 AWS SSO)\"]:::best\n    ASSIGN[\"AD / 外部 IdP(SAML・OIDC)と連携し<br/>アカウント × 権限セットで割り当てる\"]:::best\n    NOTE[\"従業員 = Identity Center<br/>アプリの一般ユーザー = Cognito\"]:::note\n\n    subgraph NG[\"用途が違う / 一元管理にならない案\"]\n        IAMU[\"IAM ユーザーをアカウントごとに作成<br/>(一元管理にならない)\"]:::alt\n        COG[\"Amazon Cognito<br/>(アプリの一般ユーザー認証)\"]:::alt\n        KMS[\"AWS KMS<br/>(暗号化キーの管理)\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"従業員\"| IDC --> ASSIGN\n    Q -.->|\"該当しない\"| NG\n    IDC -.- NOTE"
+}

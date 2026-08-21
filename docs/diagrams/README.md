@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 203 問 / 全 400 問
+収録: 213 問 / 全 400 問
 
 ---
 
@@ -10331,3 +10331,471 @@ flowchart TB
 **解説**: Secrets Manager はシークレットの保存に加え、RDS などの認証情報の自動ローテーション機能を内蔵しています。パラメータストアも SecureString で秘密情報を保存できますが、ローテーションは自前実装(Lambda)が必要です。「自動ローテーション」がキーワードなら Secrets Manager を選びます。
 
 **確認事項**: EC2 ユーザーデータが平文で残る点は一般に知られた性質だが、解説は『ローテーションを持たない』ことを主眼にしているため、図でも自動ローテーションの有無を主たる理由として置いている。
+
+---
+
+## sec05 — セキュリティ・IAM / level 2
+
+**問題**: AWS Organizations で複数アカウントを管理している。特定の OU 配下の全アカウントで、特定リージョンの利用を禁止したい。何を使うべきか?
+
+**正解**: サービスコントロールポリシー(SCP)
+
+**他の選択肢**: 各アカウントの IAM ユーザーポリシー / AWS Config ルール / リソースベースポリシー
+
+**図解の主メッセージ**: 予防的に、しかも OU 配下へ一括で効かせられるのは SCP だけなので SCP を使う。
+
+**採用パターン**: 2 段の分岐(判断フロー)。マトリクスは 4 案の位置関係を一望できるが、軸の読み取りが要る上に Config だけが『検知』側に落ちる非対称な配置になる。脱落理由が Config(検知しかできない)と IAM / リソースベース(適用範囲が足りない)で別物なので、その 2 つを順に問う判断フローにすると、どの案がどの理由で落ちるかが読み解きなしで分かる。(候補: 2 段の分岐(判断フロー): 「予防できるか」→「一括で効くか」の順に問い、脱落する理由を枝ごとに分ける / マトリクス: 「予防 / 検知」×「組織全体 / 個別」の 2 軸に 4 案を配置し、左上に入るものを選ぶ)
+
+```mermaid
+flowchart TB
+    REQ["特定 OU 配下の全アカウントで<br/>特定リージョンの利用を禁止したい"]:::req
+    Q1{"予防的に<br/>禁止できるか?"}:::judge
+    Q2{"OU 配下へ<br/>一括で効くか?"}:::judge
+    SCP["サービスコントロールポリシー(SCP)<br/>OU / アカウントに許可の上限を課す"]:::best
+    COND["aws:RequestedRegion 条件で<br/>リージョンを一括制限"]:::best
+    CFG["AWS Config ルール<br/>検知はできるが禁止はできない"]:::alt
+    NOTE["SCP はルートユーザーにも効く"]:::note
+
+    subgraph NG["アカウント / リソース単位の設定(適用漏れが出る)"]
+        IAM["各アカウントの IAM ユーザーポリシー"]:::alt
+        RES["リソースベースポリシー"]:::alt
+    end
+
+    REQ --> Q1
+    Q1 -.->|"検知のみ"| CFG
+    Q1 -->|"予防できる"| Q2
+    Q2 -.->|"個別設定"| NG
+    Q2 -->|"一括で効く"| SCP --> COND
+    SCP -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec05.svg`](../../web/diagrams/sec05.svg)
+
+**解説**: SCP は Organizations の OU やアカウントに適用する「許可の上限(ガードレール)」で、aws:RequestedRegion 条件でリージョン制限を一括適用できます。SCP は root ユーザーにも効きます。IAM ポリシーはアカウントごとの設定が必要で漏れが生じやすく、Config は検知はできても予防的な禁止はできません。
+
+**確認事項**: 解説は SCP が root ユーザーにも効く点を挙げているが、これは IAM ポリシーとの差を示す補足であり判断軸そのものではないため、注釈(note)に置いて主フローからは外している。
+
+---
+
+## sec06 — セキュリティ・IAM / level 1
+
+**問題**: EC2 上のアプリから S3 へアクセスする際、認証情報の管理方法として最も安全なのはどれか?
+
+**正解**: IAM ロールをインスタンスプロファイルとしてアタッチする
+
+**他の選択肢**: アクセスキーをソースコードに記述する / アクセスキーを環境変数に設定する / ルートユーザーのキーを使う
+
+**図解の主メッセージ**: AWS サービスに権限を与えるときは長期キーを置かず、一時認証情報が自動で回る IAM ロールを使う。
+
+**採用パターン**: 分岐(判断フロー)。対比だと『どこに置くのが一番マシか』という置き場所の比較に見えてしまい、正解の理由(そもそもキーを置かない)がぼやける。『長期キーを持たせるか』の 1 問に固定すれば、置き場所の違う 3 案がまとめて同じ側に落ち、キーを持たない道だけが残る構造が一目で分かる。(候補: 分岐(判断フロー): 「長期キーを持たせるか」の 1 問で、IAM ロールと残り 3 案に振り分ける / 対比(置き場所の比較): コード / 環境変数 / ルートキー / ロールの 4 案を横に並べ、危険度の順に並べ替える)
+
+```mermaid
+flowchart TB
+    REQ["EC2 上のアプリから S3 へアクセスする<br/>認証情報の管理方法"]:::req
+    Q{"長期のアクセスキーを<br/>インスタンスに持たせるか?"}:::judge
+    ROLE["IAM ロールを<br/>インスタンスプロファイルとしてアタッチする"]:::best
+    TEMP["メタデータ経由で一時認証情報<br/>自動ローテーションされ保管が不要"]:::best
+    NOTE["AWS サービスに権限を与える = IAM ロール"]:::note
+
+    subgraph NG["長期キーを持たせる案(漏えいの最大要因)"]
+        SRC["アクセスキーをソースコードに記述する"]:::alt
+        ENV["アクセスキーを環境変数に設定する"]:::alt
+        ROOT["ルートユーザーのキーを使う"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"持たせない"| ROLE --> TEMP
+    Q -.->|"持たせる"| NG
+    ROLE -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec06.svg`](../../web/diagrams/sec06.svg)
+
+**解説**: IAM ロールを EC2 にアタッチすると、自動ローテーションされる一時認証情報がメタデータ経由で提供され、キーの保管・漏えいリスクがなくなります。長期アクセスキーの埋め込みは漏えい事故の最大要因です。「AWS サービスに権限を与える = IAM ロール」は全分野に共通する大原則です。
+
+**確認事項**: ルートユーザーのキーは長期キーであることに加えて権限が過大だが、解説は長期キーの埋め込みを主たる論点にしているため、図でも他の 2 案と同じ枝にまとめている。
+
+---
+
+## sec07 — セキュリティ・IAM / level 2
+
+**問題**: 開発アカウントのユーザーが、本番アカウントの特定リソースを一時的に操作できるようにしたい。ベストプラクティスに沿った方法はどれか?
+
+**正解**: 本番アカウントに IAM ロールを作成し、開発アカウントから AssumeRole させる
+
+**他の選択肢**: 本番アカウントに同じ IAM ユーザーを複製する / 本番アカウントのアクセスキーを共有する / ルートユーザーの認証情報を渡す
+
+**図解の主メッセージ**: 別アカウントの操作は認証情報を渡さず、相手側に作った IAM ロールを AssumeRole で一時的に借りる。
+
+**採用パターン**: 分岐 + 直列。対比は考え方の違いを示せるが、正解側で押さえたい『どちらのアカウントにロールを作り、どちら向きに引き受けるか』という向きが左右の並びに埋もれる。分岐で 3 つのアンチパターンを一括で落としたうえで、正解側だけを開発ユーザー → AssumeRole → 本番ロール → 一時認証情報の直列にすると、向きと登場順がそのまま図に出る。(候補: 分岐 + 直列: 「認証情報を渡すか」の 1 問で振り分け、借りる側だけ AssumeRole の流れを直列に描く / 対比(2 列): 左に『複製・共有する世界』、右に『ロールを借りる世界』を並べ、管理対象の数を比べる)
+
+```mermaid
+flowchart TB
+    REQ["開発アカウントのユーザーが<br/>本番アカウントのリソースを一時的に操作したい"]:::req
+    Q{"認証情報を<br/>渡す / 複製するか?"}:::judge
+    DEV["開発アカウントのユーザー"]:::svc
+    STS["STS の AssumeRole を呼ぶ"]:::best
+    ROLE["本番アカウントの IAM ロール<br/>信頼ポリシーで開発アカウントを許可"]:::best
+    TEMP["一時認証情報で対象リソースを操作<br/>切り替え履歴は CloudTrail に残る"]:::best
+
+    subgraph NG["認証情報の複製・共有(アンチパターン)"]
+        DUP["本番アカウントに同じ IAM ユーザーを複製する"]:::alt
+        KEY["本番アカウントのアクセスキーを共有する"]:::alt
+        ROOT["ルートユーザーの認証情報を渡す"]:::alt
+    end
+
+    REQ --> Q
+    Q -.->|"渡す"| NG
+    Q -->|"借りる"| DEV --> STS --> ROLE --> TEMP
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec07.svg`](../../web/diagrams/sec07.svg)
+
+**解説**: クロスアカウントアクセスは、対象アカウントに信頼ポリシー付きの IAM ロールを作成し、STS の AssumeRole で一時認証情報を取得する方式が標準です。認証情報の複製・共有が不要で、CloudTrail に切り替え履歴も残ります。アクセスキーの共有は重大なアンチパターンです。
+
+**確認事項**: 解説は CloudTrail に切り替え履歴が残る点を利点として挙げているため、独立したノードではなく一時認証情報のノードに併記し、判断軸(渡すか借りるか)を主役のまま保っている。
+
+---
+
+## sec08 — セキュリティ・IAM / level 2
+
+**問題**: あるユーザーに S3 の読み取りを許可するポリシーと、同じバケットへのアクセスを明示的に拒否(Deny)するポリシーの両方が適用されている。結果はどうなるか?
+
+**正解**: 明示的な拒否が常に優先されアクセスできない
+
+**他の選択肢**: 許可が優先されアクセスできる / 後から作成されたポリシーが優先される / エラーになり両ポリシーが無効化される
+
+**図解の主メッセージ**: 明示的 Deny はどんな Allow よりも優先されるため、両方あればアクセスは拒否される。
+
+**採用パターン**: 合流(2 入力 → 評価 → 結果)。階層図は優先順位の強弱そのものは示せるが、この問題が問うているのは『両方あるとき何が起きるか』であり、2 つのポリシーが同じ評価に入って一方だけが通るという合流の形の方が設問にそのまま対応する。優先順位は評価ノードのラベルに 1 行で収まるため、段を分けなくても情報は落ちない。(候補: 合流(2 入力 → 評価 → 結果): 2 つのポリシーが同じ評価に入り、優先順位で一方の主張だけが通る / 階層(優先順位のランク図): 明示的 Deny / 明示的 Allow / 暗黙的 Deny を 3 段に積み、上ほど強いことを示す)
+
+```mermaid
+flowchart TB
+    REQ["同じバケットに<br/>Allow と Deny の両方が適用されている"]:::req
+    ALLOW["S3 の読み取りを許可するポリシー<br/>(明示的 Allow)"]:::svc
+    DENY["同じバケットへのアクセスを拒否するポリシー<br/>(明示的 Deny)"]:::svc
+    EVAL{"IAM の評価<br/>明示的 Deny > 明示的 Allow > 暗黙的 Deny"}:::judge
+    RESULT["アクセスできない<br/>明示的 Deny が常に優先される"]:::best
+    MYTH["「後から作った方が勝つ」<br/>「両方無効になる」という順序は無い"]:::note
+    NOTE["1 か所でも明示的 Deny があれば拒否<br/>SCP・バケットポリシーとの組み合わせでも同じ"]:::note
+
+    REQ --> ALLOW
+    REQ --> DENY
+    ALLOW -->|"許可を主張"| EVAL
+    DENY -->|"拒否を主張"| EVAL
+    EVAL --> RESULT
+    EVAL -.- MYTH
+    RESULT -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec08.svg`](../../web/diagrams/sec08.svg)
+
+**解説**: IAM のポリシー評価では「明示的 Deny > 明示的 Allow > 暗黙的 Deny(デフォルト拒否)」の優先順位が絶対です。どこか 1 か所でも明示的 Deny があれば、他でどれだけ許可されていてもアクセスは拒否されます。この評価ロジックは SCP・バケットポリシーを組み合わせた問題でも前提になります。
+
+**確認事項**: 誤答肢の『後から作成されたポリシーが優先』『エラーで両方無効』は実在しない挙動のため、選択肢ノードとして並べるとかえって実在するかのように読める。注釈として『そのような順序は無い』と 1 か所にまとめている。
+
+---
+
+## sec09 — セキュリティ・IAM / level 2
+
+**問題**: 開発者に IAM ロールの作成を委任したいが、自分より強い権限を持つロールを作られる「権限昇格」を防ぎたい。どの機能を使うか?
+
+**正解**: アクセス許可の境界(Permissions Boundary)
+
+**他の選択肢**: アクセスキーの無効化 / インラインポリシーの禁止のみ / MFA の強制
+
+**図解の主メッセージ**: 委任先が作るロールに上限を課せるのはアクセス許可の境界だけなので、境界の付与を強制する。
+
+**採用パターン**: 分岐(判断フロー)。包含図は『実効権限 = ポリシー ∩ 境界』という効き方を直感的に示せるが、残り 3 つの選択肢を同じ絵の中に置く場所がなく、4 択のどれを選ぶかという問いに答えられない。分岐で振り分けたうえで、正解側に『境界を超える権限は有効にならない』というノードを続ければ、効き方も 1 行で補える。(候補: 分岐(判断フロー): 「作られるロールの権限上限を縛れるか」の 1 問で、境界と残り 3 案に振り分ける / 包含(重なり): 境界という大枠の中に、開発者が作ったロールのポリシーを描き、はみ出した権限が効かないことを示す)
+
+```mermaid
+flowchart TB
+    REQ["開発者に IAM ロールの作成を委任したい<br/>ただし権限昇格は防ぎたい"]:::req
+    Q{"作られるロールの<br/>権限上限を縛れるか?"}:::judge
+    PB["アクセス許可の境界<br/>(Permissions Boundary)"]:::best
+    FORCE["境界の付与を条件付きで強制する<br/>境界を超える権限は有効にならない"]:::best
+    NOTE["SCP は組織全体のガードレール<br/>境界は個々の ID の上限(混同しない)"]:::note
+
+    subgraph NG["作られるロールの権限上限には効かない案"]
+        KEY["アクセスキーの無効化"]:::alt
+        INLINE["インラインポリシーの禁止のみ"]:::alt
+        MFA["MFA の強制"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"縛れる"| PB --> FORCE
+    Q -.->|"縛れない"| NG
+    PB -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec09.svg`](../../web/diagrams/sec09.svg)
+
+**解説**: アクセス許可の境界は、ユーザーやロールが持てる権限の上限を定める管理ポリシーです。「作成するロールには必ずこの境界を付ける」ことを条件付きで強制すれば、開発者が自由にロールを作っても境界を超える権限は一切有効になりません。組織全体のガードレールである SCP と混同しないよう注意します。
+
+**確認事項**: MFA の強制やアクセスキーの無効化も一般的なセキュリティ対策ではあるが、解説は権限昇格の防止に効くかどうかだけを論点にしているため、図でも良し悪しではなく『上限を縛れるか』の一点で落としている。
+
+---
+
+## sec10 — セキュリティ・IAM / level 2
+
+**問題**: AWS Organizations 配下の全アカウントで、特定リージョン以外の利用を組織として一律に禁止したい。どの機能を使うか?
+
+**正解**: サービスコントロールポリシー(SCP)
+
+**他の選択肢**: 各アカウントの IAM ポリシーを個別修正 / アクセス許可の境界 / AWS Config ルール
+
+**図解の主メッセージ**: 配下の全アカウント(ルートユーザー含む)にまとめて効くのは SCP だけなので SCP を使う。
+
+**採用パターン**: 分岐(判断フロー)。レイヤー図は各手段の守備範囲を一望できて魅力的だが、Config は『範囲』ではなく『予防か検知か』という別の軸で落ちるため同じ層構造に乗らず、4 案を 1 枚に収めると軸が混ざる。範囲の違いは選択肢ラベルに括弧書きで添えれば足りるので、判断軸を『組織全体に届くか』の 1 問に絞った分岐を採る。(候補: 分岐(判断フロー): 「効く範囲は組織全体か」の 1 問で、SCP と残り 3 案に振り分ける / レイヤー(効く範囲の階層): 組織 / OU / アカウント / 個々の ID の層を積み、各手段がどの層に効くかを重ねる)
+
+```mermaid
+flowchart TB
+    REQ["組織配下の全アカウントで<br/>特定リージョン以外の利用を一律禁止したい"]:::req
+    Q{"効く範囲は<br/>組織全体に届くか?"}:::judge
+    SCP["サービスコントロールポリシー(SCP)<br/>OU / アカウントに権限の上限を課す"]:::best
+    SCOPE["配下の全 IAM ユーザー・ロール<br/>(ルートユーザー含む)に効く"]:::best
+    NOTE["SCP は制限するだけで権限は付与しない<br/>管理アカウント自身には効かない"]:::note
+
+    subgraph NG["範囲が組織全体に届かない案"]
+        IAM["各アカウントの IAM ポリシーを個別修正<br/>(アカウント単位)"]:::alt
+        PB["アクセス許可の境界<br/>(個々の ID の上限)"]:::alt
+        CFG["AWS Config ルール<br/>(検知のみで禁止はできない)"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"届く"| SCP --> SCOPE
+    Q -.->|"届かない"| NG
+    SCP -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec10.svg`](../../web/diagrams/sec10.svg)
+
+**解説**: SCP は Organizations の組織単位(OU)やアカウントに適用するガードレールで、配下の全 IAM ユーザー・ロール(ルートユーザー含む)の権限上限を定めます。リージョン制限やサービス禁止の一括統制に最適です。SCP は権限を「制限」するだけで「付与」はしない点、管理アカウント自身には効かない点が頻出です。
+
+**確認事項**: 解説が挙げる SCP の 2 つの落とし穴(権限を付与しない・管理アカウントには効かない)は、この設問の判断軸ではなく頻出の周辺知識のため、注釈にまとめて主フローから外している。
+
+---
+
+## sec11 — セキュリティ・IAM / level 1
+
+**問題**: 社員が既存の Active Directory の認証情報を使い、複数の AWS アカウントへシングルサインオンでアクセスできるようにしたい。どのサービスが適切か?
+
+**正解**: IAM Identity Center(旧 AWS SSO)
+
+**他の選択肢**: IAM ユーザーをアカウントごとに作成 / Amazon Cognito / AWS KMS
+
+**図解の主メッセージ**: 社内従業員の複数アカウント SSO は、AD / 外部 IdP と連携して一元管理する IAM Identity Center を使う。
+
+**採用パターン**: 分岐(判断フロー)。対比は Identity Center と Cognito の使い分けを鮮明にできるが、残る 2 案(IAM ユーザーの個別作成・KMS)がどちらの列にも収まらず 4 択の図として成立しない。『認証する相手は誰か』の 1 問で振り分けたうえで、使い分けの要点は注釈に置く方が単純に読める。(候補: 分岐(判断フロー): 「認証する相手は従業員か」の 1 問で、Identity Center と残り 3 案に振り分ける / 対比(2 列): 左に『社内従業員のアクセス管理』、右に『アプリの一般ユーザー認証』を置き、代表サービスを並べる)
+
+```mermaid
+flowchart TB
+    REQ["社員が既存 AD の認証情報で<br/>複数の AWS アカウントへ SSO したい"]:::req
+    Q{"認証する相手は<br/>社内の従業員か?"}:::judge
+    IDC["IAM Identity Center(旧 AWS SSO)"]:::best
+    ASSIGN["AD / 外部 IdP(SAML・OIDC)と連携し<br/>アカウント × 権限セットで割り当てる"]:::best
+    NOTE["従業員 = Identity Center<br/>アプリの一般ユーザー = Cognito"]:::note
+
+    subgraph NG["用途が違う / 一元管理にならない案"]
+        IAMU["IAM ユーザーをアカウントごとに作成<br/>(一元管理にならない)"]:::alt
+        COG["Amazon Cognito<br/>(アプリの一般ユーザー認証)"]:::alt
+        KMS["AWS KMS<br/>(暗号化キーの管理)"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"従業員"| IDC --> ASSIGN
+    Q -.->|"該当しない"| NG
+    IDC -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec11.svg`](../../web/diagrams/sec11.svg)
+
+**解説**: IAM Identity Center は複数アカウントへの SSO を一元管理するサービスで、Active Directory や外部 IdP(SAML/OIDC)と連携し、アカウント×権限セットの割り当てで統制します。社内従業員のアクセス管理は Identity Center、アプリの一般ユーザー認証は Cognito、という使い分けが重要です。
+
+**確認事項**: KMS は認証と無関係な選択肢だが、他の 2 案と落ちる理由(用途が違う)の粒度が異なる。図では選択肢ラベルに用途を併記して、なぜ落ちるかが読めるようにしている。
+
+---
+
+## sec12 — セキュリティ・IAM / level 2
+
+**問題**: KMS のカスタマーマネージドキー(CMK)について正しい説明はどれか?
+
+**正解**: キーポリシーでアクセス制御でき、自動ローテーション(年 1 回)を有効化できる
+
+**他の選択肢**: キーマテリアルはリージョン外へエクスポートして自由に配布できる / AWS マネージドキーと機能は完全に同一 / 削除は即時に実行される
+
+**図解の主メッセージ**: CMK は利用者がキーポリシーと自動ローテーションを制御できる鍵だが、キーマテリアルの持ち出しと即時削除はできない。
+
+**採用パターン**: 対比(できる / できない の 2 枠)。中心放射は性質を数多く並べられるが、正誤の判定は各枝に付けた印を 1 つずつ読む必要があり、この設問の核心である『どこまでが利用者の制御範囲か』という線引きが見えない。制御できる側とできない側の 2 枠に分ければ、線引きそのものが図の骨格になり、正しい説明がどちらの枠に入るかで即断できる。(候補: 対比(できる / できない の 2 枠): 判断軸を 1 つ置き、CMK の性質を制御できる側とできない側に振り分ける / 中心放射: 中心に CMK を置き、周囲に性質を放射状に並べて可否の印を付ける)
+
+```mermaid
+flowchart TB
+    REQ["カスタマーマネージドキー(CMK)について<br/>正しい説明はどれか"]:::req
+    Q{"利用者が<br/>制御できる領域か?"}:::judge
+    NOTE["削除は 7〜30 日の待機期間を経る<br/>AWS マネージドキーはこれらを制御できない"]:::note
+
+    subgraph OK["利用者が制御できる(正しい説明)"]
+        POL["キーポリシーでアクセス制御できる"]:::best
+        ROT["自動ローテーション(年 1 回)を<br/>有効化できる"]:::best
+        LOG["利用履歴は CloudTrail に記録される"]:::svc
+    end
+
+    subgraph NG["KMS の仕様上できない / 事実と異なる"]
+        EXP["キーマテリアルを平文で<br/>エクスポートして配布する"]:::alt
+        DEL["削除は即時に実行される"]:::alt
+        SAME["AWS マネージドキーと機能は完全に同一"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"できる"| OK
+    Q -.->|"できない"| NG
+    NG -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec12.svg`](../../web/diagrams/sec12.svg)
+
+**解説**: カスタマーマネージドキーはキーポリシーによる細かなアクセス制御・無効化・自動ローテーション設定が可能で、利用履歴は CloudTrail に記録されます。キーマテリアルは KMS(HSM)から平文でエクスポートされません。削除は誤削除防止のため 7〜30 日の待機期間を経て実行されます。AWS マネージドキーはこれらの制御ができません。
+
+**確認事項**: CloudTrail への記録は選択肢そのものではなく解説中の補足のため、正解の枠内に置きつつ緑(正解につながる構成要素)ではなく白(一般の構成要素)にして、選択肢と補足の役割を分けている。
+
+---
+
+## sec13 — セキュリティ・IAM / level 2
+
+**問題**: KMS で数 GB のファイルを暗号化したい。KMS の直接暗号化 API には 4KB の制限がある。どの方式を使うべきか?
+
+**正解**: エンベロープ暗号化(データキーでデータを暗号化し、データキーを KMS で暗号化)
+
+**他の選択肢**: ファイルを 4KB ずつ分割して Encrypt API を呼ぶ / Base64 エンコードで圧縮する / 暗号化を諦めて ACL で保護する
+
+**図解の主メッセージ**: KMS には大きなデータではなくデータキーだけを通し、データ本体は手元でそのキーを使って暗号化する。
+
+**採用パターン**: 分岐 + 直列。包含図は『エンベロープ(封筒)』という名前の由来をよく表すが、GenerateDataKey → ローカル暗号化 → キーを包む → 復号という時間の流れが消え、どの操作をいつ行うかが読めない。判断軸で 3 つの誤答を落としたうえで、正解側を手順の直列にすれば、名前ではなく操作の順番として覚えられる。(候補: 分岐 + 直列: 「KMS へ通すのはデータか鍵か」で振り分け、鍵を通す側だけ 4 手順の直列で描く / 包含(入れ子): 暗号化データの外側に暗号化済みデータキー、その外側に CMK という入れ子で『封筒』の構造を示す)
+
+```mermaid
+flowchart TB
+    REQ["数 GB のファイルを暗号化したい<br/>KMS の直接暗号化 API は 4KB 制限"]:::req
+    Q{"KMS へ通すのは<br/>データか、鍵か?"}:::judge
+    GEN["GenerateDataKey で<br/>データキーを取得する"]:::best
+    LOCAL["データキーでローカルで<br/>データ本体を暗号化する"]:::best
+    WRAP["データキー自体を CMK で暗号化し<br/>暗号文と一緒に保存する"]:::best
+    DEC["復号時は暗号化済みデータキーを<br/>KMS で復号して使う"]:::best
+    NOTE["S3 の SSE-KMS など AWS サービスの<br/>暗号化も内部的にこの方式"]:::note
+
+    subgraph NG["4KB 制限を越えられない / 暗号化にならない案"]
+        SPLIT["ファイルを 4KB ずつ分割して<br/>Encrypt API を呼ぶ"]:::alt
+        B64["Base64 エンコードで圧縮する"]:::alt
+        ACL["暗号化を諦めて ACL で保護する"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"鍵だけ"| GEN --> LOCAL --> WRAP --> DEC
+    Q -.->|"データごと"| NG
+    DEC -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec13.svg`](../../web/diagrams/sec13.svg)
+
+**解説**: エンベロープ暗号化では、GenerateDataKey で取得したデータキーを使ってローカルで高速にデータを暗号化し、データキー自体を KMS(CMK)で暗号化して暗号文と一緒に保存します。復号時は暗号化済みデータキーを KMS で復号して使います。S3 の SSE-KMS など AWS サービスの暗号化も内部的にこの方式です。
+
+**確認事項**: 誤答肢の落ちる理由は『4KB 制限を越えられない』(分割)と『そもそも暗号化ではない』(Base64・ACL)で異なる。図では枝を分けず、グループのラベルに両方を書いて 1 枚に収めている。
+
+---
+
+## sec14 — セキュリティ・IAM / level 2
+
+**問題**: RDS の DB パスワードを安全に保管し、90 日ごとの自動ローテーションも行いたい。どのサービスが適切か?
+
+**正解**: AWS Secrets Manager
+
+**他の選択肢**: Systems Manager Parameter Store(標準) / S3 に暗号化して保存 / 環境変数に直接設定
+
+**図解の主メッセージ**: 90 日ごとの自動ローテーションを標準機能で回せるのは Secrets Manager なので、保管先はそこにする。
+
+**採用パターン**: 分岐(判断フロー)。対比は Parameter Store が無料である点との天秤を示せるが、設問は 90 日ごとの自動ローテーションを要件として明示しており、料金を持ち出すと判断軸がぶれる。要件として与えられた自動ローテーションを標準機能で満たせるかの 1 問に固定すれば、残り 3 案がまとめて同じ側に落ちる。(候補: 分岐(判断フロー): 「自動ローテーションを標準機能で回せるか」の 1 問で、Secrets Manager と残り 3 案に振り分ける / 対比(コストと機能): Parameter Store と Secrets Manager を左右に並べ、料金と自動ローテーションの有無を突き合わせる)
+
+```mermaid
+flowchart TB
+    REQ["RDS の DB パスワードを安全に保管し<br/>90 日ごとに自動ローテーションしたい"]:::req
+    Q{"自動ローテーションを<br/>標準機能で回せるか?"}:::judge
+    SM["AWS Secrets Manager"]:::best
+    ROT["RDS・Redshift 等との統合で<br/>ローテーションを Lambda が実行する"]:::best
+    NOTE["自動ローテーション要件 = Secrets Manager"]:::note
+
+    subgraph NG["保管はできても自動ローテーションが標準では回らない案"]
+        PS["Parameter Store(標準)<br/>組み込みのローテーション機能なし"]:::alt
+        S3["S3 に暗号化して保存する"]:::alt
+        ENV["環境変数に直接設定する"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"回せる"| SM --> ROT
+    Q -.->|"自前実装"| NG
+    SM -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec14.svg`](../../web/diagrams/sec14.svg)
+
+**解説**: Secrets Manager はシークレットの保管に加え、RDS・Redshift 等との統合による自動ローテーション(Lambda で実行)を標準サポートします。Parameter Store は無料で設定値・シークレットを保管できますが、自動ローテーション機能は組み込まれていません。「自動ローテーション要件 = Secrets Manager」が決め手です。
+
+**確認事項**: 環境変数に直接設定する案は、ローテーション以前に保管方法として不適切という別の理由でも落ちる。図では判断軸を 1 本に保つため他の 2 案と同じ枝に置き、グループのラベルで『保管はできても』と括っている。

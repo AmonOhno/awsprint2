@@ -1,0 +1,143 @@
+{
+  "question_id": "sec05",
+  "purpose": "OU 配下の全アカウントへリージョン制限をかける手段の選択が「予防できるか」と「一括で効くか」の 2 段で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、SCP・IAM ポリシー・Config の名前は知っているが、統制手段としての適用範囲と予防/検知の違いで選び分けられていない人。",
+  "message": "予防的に、しかも OU 配下へ一括で効かせられるのは SCP だけなので SCP を使う。",
+  "source_summary": "特定 OU 配下の全アカウントで特定リージョンの利用を禁止したい。正解は SCP。Organizations の OU やアカウントに適用する許可の上限(ガードレール)で、aws:RequestedRegion 条件でリージョン制限を一括適用でき、root ユーザーにも効く。IAM ポリシーはアカウントごとの設定が必要で漏れが生じやすく、Config は検知はできても予防的な禁止はできない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "特定 OU 配下の全アカウントで特定リージョンの利用を禁止したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q1",
+      "label": "予防的に禁止できるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "Q2",
+      "label": "OU 配下へ一括で効くか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "SCP",
+      "label": "サービスコントロールポリシー(SCP)。OU / アカウントに許可の上限を課す",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "COND",
+      "label": "aws:RequestedRegion 条件でリージョンを一括制限",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "CFG",
+      "label": "AWS Config ルール。検知はできるが禁止はできない",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "IAM",
+      "label": "各アカウントの IAM ユーザーポリシー",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "RES",
+      "label": "リソースベースポリシー",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "SCP はルートユーザーにも効く",
+      "type": "concept",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q1",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q1",
+      "to": "CFG",
+      "verb": "検知しかできない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q1",
+      "to": "Q2",
+      "verb": "予防できる",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q2",
+      "to": "IAM",
+      "verb": "アカウントごとの設定になる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q2",
+      "to": "RES",
+      "verb": "リソース単位にとどまる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q2",
+      "to": "SCP",
+      "verb": "一括で効く",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "SCP",
+      "to": "COND",
+      "verb": "条件キーで実装する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "SCP",
+      "to": "NOTE",
+      "verb": "補足する",
+      "direction": "one-way",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "アカウント / リソース単位の設定(適用漏れが出る)",
+      "members": ["IAM", "RES"]
+    }
+  ],
+  "candidate_patterns": [
+    "2 段の分岐(判断フロー): 「予防できるか」→「一括で効くか」の順に問い、脱落する理由を枝ごとに分ける",
+    "マトリクス: 「予防 / 検知」×「組織全体 / 個別」の 2 軸に 4 案を配置し、左上に入るものを選ぶ"
+  ],
+  "selected_pattern": "2 段の分岐(判断フロー)。マトリクスは 4 案の位置関係を一望できるが、軸の読み取りが要る上に Config だけが『検知』側に落ちる非対称な配置になる。脱落理由が Config(検知しかできない)と IAM / リソースベース(適用範囲が足りない)で別物なので、その 2 つを順に問う判断フローにすると、どの案がどの理由で落ちるかが読み解きなしで分かる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係・注釈の引き出し。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "解説は SCP が root ユーザーにも効く点を挙げているが、これは IAM ポリシーとの差を示す補足であり判断軸そのものではないため、注釈(note)に置いて主フローからは外している。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"特定 OU 配下の全アカウントで<br/>特定リージョンの利用を禁止したい\"]:::req\n    Q1{\"予防的に<br/>禁止できるか?\"}:::judge\n    Q2{\"OU 配下へ<br/>一括で効くか?\"}:::judge\n    SCP[\"サービスコントロールポリシー(SCP)<br/>OU / アカウントに許可の上限を課す\"]:::best\n    COND[\"aws:RequestedRegion 条件で<br/>リージョンを一括制限\"]:::best\n    CFG[\"AWS Config ルール<br/>検知はできるが禁止はできない\"]:::alt\n    NOTE[\"SCP はルートユーザーにも効く\"]:::note\n\n    subgraph NG[\"アカウント / リソース単位の設定(適用漏れが出る)\"]\n        IAM[\"各アカウントの IAM ユーザーポリシー\"]:::alt\n        RES[\"リソースベースポリシー\"]:::alt\n    end\n\n    REQ --> Q1\n    Q1 -.->|\"検知のみ\"| CFG\n    Q1 -->|\"予防できる\"| Q2\n    Q2 -.->|\"個別設定\"| NG\n    Q2 -->|\"一括で効く\"| SCP --> COND\n    SCP -.- NOTE"
+}

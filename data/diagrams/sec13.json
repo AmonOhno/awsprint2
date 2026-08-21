@@ -1,0 +1,156 @@
+{
+  "question_id": "sec13",
+  "purpose": "4KB を超えるデータの暗号化方式の選択が「KMS へ通すのはデータか、鍵か」で決まることと、鍵だけを通す流れを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、エンベロープ暗号化という語は知っているが、どの鍵がどこで使われるかの順番を説明できない人。",
+  "message": "KMS には大きなデータではなくデータキーだけを通し、データ本体は手元でそのキーを使って暗号化する。",
+  "source_summary": "KMS で数 GB のファイルを暗号化したいが、KMS の直接暗号化 API には 4KB の制限がある。正解はエンベロープ暗号化。GenerateDataKey で取得したデータキーを使ってローカルで高速にデータを暗号化し、データキー自体を KMS(CMK)で暗号化して暗号文と一緒に保存する。復号時は暗号化済みデータキーを KMS で復号して使う。S3 の SSE-KMS など AWS サービスの暗号化も内部的にこの方式。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "数 GB のファイルを暗号化したい。KMS の直接暗号化 API は 4KB 制限",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "KMS へ通すのはデータか、鍵か?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "GEN",
+      "label": "GenerateDataKey でデータキーを取得する",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "LOCAL",
+      "label": "データキーでローカルでデータ本体を暗号化する",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "WRAP",
+      "label": "データキー自体を CMK で暗号化し、暗号文と一緒に保存する",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "DEC",
+      "label": "復号時は暗号化済みデータキーを KMS で復号して使う",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "SPLIT",
+      "label": "ファイルを 4KB ずつ分割して Encrypt API を呼ぶ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "B64",
+      "label": "Base64 エンコードで圧縮する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ACL",
+      "label": "暗号化を諦めて ACL で保護する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "S3 の SSE-KMS など AWS サービスの暗号化も内部的にこの方式",
+      "type": "concept",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "GEN",
+      "verb": "鍵だけを通す(エンベロープ暗号化)",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "GEN",
+      "to": "LOCAL",
+      "verb": "取得したキーで暗号化する",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "LOCAL",
+      "to": "WRAP",
+      "verb": "キーを包んで保存する",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "WRAP",
+      "to": "DEC",
+      "verb": "復号時に開く",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "SPLIT",
+      "verb": "データを通そうとする",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "B64",
+      "verb": "暗号化にならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "ACL",
+      "verb": "暗号化しない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "DEC",
+      "to": "NOTE",
+      "verb": "補足する",
+      "direction": "one-way",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "4KB 制限を越えられない / 暗号化にならない案",
+      "members": ["SPLIT", "B64", "ACL"]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐 + 直列: 「KMS へ通すのはデータか鍵か」で振り分け、鍵を通す側だけ 4 手順の直列で描く",
+    "包含(入れ子): 暗号化データの外側に暗号化済みデータキー、その外側に CMK という入れ子で『封筒』の構造を示す"
+  ],
+  "selected_pattern": "分岐 + 直列。包含図は『エンベロープ(封筒)』という名前の由来をよく表すが、GenerateDataKey → ローカル暗号化 → キーを包む → 復号という時間の流れが消え、どの操作をいつ行うかが読めない。判断軸で 3 つの誤答を落としたうえで、正解側を手順の直列にすれば、名前ではなく操作の順番として覚えられる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係・注釈の引き出し。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "誤答肢の落ちる理由は『4KB 制限を越えられない』(分割)と『そもそも暗号化ではない』(Base64・ACL)で異なる。図では枝を分けず、グループのラベルに両方を書いて 1 枚に収めている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"数 GB のファイルを暗号化したい<br/>KMS の直接暗号化 API は 4KB 制限\"]:::req\n    Q{\"KMS へ通すのは<br/>データか、鍵か?\"}:::judge\n    GEN[\"GenerateDataKey で<br/>データキーを取得する\"]:::best\n    LOCAL[\"データキーでローカルで<br/>データ本体を暗号化する\"]:::best\n    WRAP[\"データキー自体を CMK で暗号化し<br/>暗号文と一緒に保存する\"]:::best\n    DEC[\"復号時は暗号化済みデータキーを<br/>KMS で復号して使う\"]:::best\n    NOTE[\"S3 の SSE-KMS など AWS サービスの<br/>暗号化も内部的にこの方式\"]:::note\n\n    subgraph NG[\"4KB 制限を越えられない / 暗号化にならない案\"]\n        SPLIT[\"ファイルを 4KB ずつ分割して<br/>Encrypt API を呼ぶ\"]:::alt\n        B64[\"Base64 エンコードで圧縮する\"]:::alt\n        ACL[\"暗号化を諦めて ACL で保護する\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"鍵だけ\"| GEN --> LOCAL --> WRAP --> DEC\n    Q -.->|\"データごと\"| NG\n    DEC -.- NOTE"
+}

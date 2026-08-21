@@ -1,0 +1,143 @@
+{
+  "question_id": "sec07",
+  "purpose": "クロスアカウントアクセスの設計が「認証情報を渡すか、ロールを借りるか」で決まることと、借りる側の流れを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、AssumeRole という言葉は知っているが、信頼ポリシー付きロールを相手アカウント側に作るという向きが頭に入っていない人。",
+  "message": "別アカウントの操作は認証情報を渡さず、相手側に作った IAM ロールを AssumeRole で一時的に借りる。",
+  "source_summary": "開発アカウントのユーザーが本番アカウントの特定リソースを一時的に操作できるようにしたい。正解は本番アカウントに IAM ロールを作成し、開発アカウントから AssumeRole させる方式。対象アカウントに信頼ポリシー付きの IAM ロールを作り、STS の AssumeRole で一時認証情報を取得するのが標準。認証情報の複製・共有が不要で、CloudTrail に切り替え履歴も残る。アクセスキーの共有は重大なアンチパターン。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "開発アカウントのユーザーが本番アカウントのリソースを一時的に操作したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "認証情報を渡す / 複製するか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "DEV",
+      "label": "開発アカウントのユーザー",
+      "type": "actor",
+      "priority": "primary"
+    },
+    {
+      "id": "STS",
+      "label": "STS の AssumeRole を呼ぶ",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ROLE",
+      "label": "本番アカウントの IAM ロール(信頼ポリシーで開発アカウントを許可)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "TEMP",
+      "label": "一時認証情報で対象リソースを操作。切り替え履歴は CloudTrail に残る",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "DUP",
+      "label": "本番アカウントに同じ IAM ユーザーを複製する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "KEY",
+      "label": "本番アカウントのアクセスキーを共有する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ROOT",
+      "label": "ルートユーザーの認証情報を渡す",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "DEV",
+      "verb": "渡さずに借りる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "DEV",
+      "to": "STS",
+      "verb": "呼び出す",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "STS",
+      "to": "ROLE",
+      "verb": "引き受ける",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "ROLE",
+      "to": "TEMP",
+      "verb": "一時認証情報を返す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "DUP",
+      "verb": "認証情報を複製してしまう",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "KEY",
+      "verb": "認証情報を共有してしまう",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "ROOT",
+      "verb": "認証情報を渡してしまう",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "認証情報の複製・共有(アンチパターン)",
+      "members": ["DUP", "KEY", "ROOT"]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐 + 直列: 「認証情報を渡すか」の 1 問で振り分け、借りる側だけ AssumeRole の流れを直列に描く",
+    "対比(2 列): 左に『複製・共有する世界』、右に『ロールを借りる世界』を並べ、管理対象の数を比べる"
+  ],
+  "selected_pattern": "分岐 + 直列。対比は考え方の違いを示せるが、正解側で押さえたい『どちらのアカウントにロールを作り、どちら向きに引き受けるか』という向きが左右の並びに埋もれる。分岐で 3 つのアンチパターンを一括で落としたうえで、正解側だけを開発ユーザー → AssumeRole → 本番ロール → 一時認証情報の直列にすると、向きと登場順がそのまま図に出る。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係・注釈の引き出し。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "解説は CloudTrail に切り替え履歴が残る点を利点として挙げているため、独立したノードではなく一時認証情報のノードに併記し、判断軸(渡すか借りるか)を主役のまま保っている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"開発アカウントのユーザーが<br/>本番アカウントのリソースを一時的に操作したい\"]:::req\n    Q{\"認証情報を<br/>渡す / 複製するか?\"}:::judge\n    DEV[\"開発アカウントのユーザー\"]:::svc\n    STS[\"STS の AssumeRole を呼ぶ\"]:::best\n    ROLE[\"本番アカウントの IAM ロール<br/>信頼ポリシーで開発アカウントを許可\"]:::best\n    TEMP[\"一時認証情報で対象リソースを操作<br/>切り替え履歴は CloudTrail に残る\"]:::best\n\n    subgraph NG[\"認証情報の複製・共有(アンチパターン)\"]\n        DUP[\"本番アカウントに同じ IAM ユーザーを複製する\"]:::alt\n        KEY[\"本番アカウントのアクセスキーを共有する\"]:::alt\n        ROOT[\"ルートユーザーの認証情報を渡す\"]:::alt\n    end\n\n    REQ --> Q\n    Q -.->|\"渡す\"| NG\n    Q -->|\"借りる\"| DEV --> STS --> ROLE --> TEMP"
+}

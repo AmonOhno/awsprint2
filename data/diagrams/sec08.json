@@ -1,0 +1,118 @@
+{
+  "question_id": "sec08",
+  "purpose": "Allow と Deny が同時に適用されたときの結果が、IAM の評価順の優先順位だけで決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、ポリシーが複数あると『新しい方が勝つ』『許可が勝つ』と直感で答えてしまう人。",
+  "message": "明示的 Deny はどんな Allow よりも優先されるため、両方あればアクセスは拒否される。",
+  "source_summary": "S3 の読み取りを許可するポリシーと、同じバケットを明示的に拒否するポリシーの両方が適用されている場合の結果を問う。正解は明示的な拒否が常に優先されアクセスできない。IAM のポリシー評価では「明示的 Deny > 明示的 Allow > 暗黙的 Deny(デフォルト拒否)」の優先順位が絶対で、どこか 1 か所でも明示的 Deny があれば他でどれだけ許可されていても拒否される。この評価ロジックは SCP・バケットポリシーを組み合わせた問題でも前提になる。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "同じバケットに Allow と Deny の両方が適用されている",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "ALLOW",
+      "label": "S3 の読み取りを許可するポリシー(明示的 Allow)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "DENY",
+      "label": "同じバケットへのアクセスを拒否するポリシー(明示的 Deny)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "EVAL",
+      "label": "IAM の評価: 明示的 Deny > 明示的 Allow > 暗黙的 Deny",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "RESULT",
+      "label": "アクセスできない(明示的 Deny が優先される)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "1 か所でも明示的 Deny があれば拒否。SCP・バケットポリシーとの組み合わせでも同じ",
+      "type": "concept",
+      "priority": "secondary"
+    },
+    {
+      "id": "MYTH",
+      "label": "後から作成したポリシーが勝つ / 許可が勝つ、という順序は無い",
+      "type": "concept",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "ALLOW",
+      "verb": "一方を与える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "REQ",
+      "to": "DENY",
+      "verb": "もう一方を与える",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "ALLOW",
+      "to": "EVAL",
+      "verb": "許可を主張する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "DENY",
+      "to": "EVAL",
+      "verb": "拒否を主張する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "EVAL",
+      "to": "RESULT",
+      "verb": "優先順位で決着する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "EVAL",
+      "to": "MYTH",
+      "verb": "打ち消す",
+      "direction": "one-way",
+      "kind": "annotation"
+    },
+    {
+      "from": "RESULT",
+      "to": "NOTE",
+      "verb": "補足する",
+      "direction": "one-way",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [],
+  "candidate_patterns": [
+    "合流(2 入力 → 評価 → 結果): 2 つのポリシーが同じ評価に入り、優先順位で一方の主張だけが通る",
+    "階層(優先順位のランク図): 明示的 Deny / 明示的 Allow / 暗黙的 Deny を 3 段に積み、上ほど強いことを示す"
+  ],
+  "selected_pattern": "合流(2 入力 → 評価 → 結果)。階層図は優先順位の強弱そのものは示せるが、この問題が問うているのは『両方あるとき何が起きるか』であり、2 つのポリシーが同じ評価に入って一方だけが通るという合流の形の方が設問にそのまま対応する。優先順位は評価ノードのラベルに 1 行で収まるため、段を分けなくても情報は落ちない。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係・注釈の引き出し。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "誤答肢の『後から作成されたポリシーが優先』『エラーで両方無効』は実在しない挙動のため、選択肢ノードとして並べるとかえって実在するかのように読める。注釈として『そのような順序は無い』と 1 か所にまとめている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"同じバケットに<br/>Allow と Deny の両方が適用されている\"]:::req\n    ALLOW[\"S3 の読み取りを許可するポリシー<br/>(明示的 Allow)\"]:::svc\n    DENY[\"同じバケットへのアクセスを拒否するポリシー<br/>(明示的 Deny)\"]:::svc\n    EVAL{\"IAM の評価<br/>明示的 Deny > 明示的 Allow > 暗黙的 Deny\"}:::judge\n    RESULT[\"アクセスできない<br/>明示的 Deny が常に優先される\"]:::best\n    MYTH[\"「後から作った方が勝つ」<br/>「両方無効になる」という順序は無い\"]:::note\n    NOTE[\"1 か所でも明示的 Deny があれば拒否<br/>SCP・バケットポリシーとの組み合わせでも同じ\"]:::note\n\n    REQ --> ALLOW\n    REQ --> DENY\n    ALLOW -->|\"許可を主張\"| EVAL\n    DENY -->|\"拒否を主張\"| EVAL\n    EVAL --> RESULT\n    EVAL -.- MYTH\n    RESULT -.- NOTE"
+}
