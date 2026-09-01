@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 213 問 / 全 400 問
+収録: 223 問 / 全 400 問
 
 ---
 
@@ -10799,3 +10799,506 @@ flowchart TB
 **解説**: Secrets Manager はシークレットの保管に加え、RDS・Redshift 等との統合による自動ローテーション(Lambda で実行)を標準サポートします。Parameter Store は無料で設定値・シークレットを保管できますが、自動ローテーション機能は組み込まれていません。「自動ローテーション要件 = Secrets Manager」が決め手です。
 
 **確認事項**: 環境変数に直接設定する案は、ローテーション以前に保管方法として不適切という別の理由でも落ちる。図では判断軸を 1 本に保つため他の 2 案と同じ枝に置き、グループのラベルで『保管はできても』と括っている。
+
+---
+
+## sec15 — セキュリティ・IAM / level 1
+
+**問題**: アプリの設定値(API の URL、機能フラグなど)を階層構造で一元管理したい。追加コストをかけたくない。どのサービスが適切か?
+
+**正解**: Systems Manager Parameter Store
+
+**他の選択肢**: AWS Secrets Manager / DynamoDB / S3
+
+**図解の主メッセージ**: ローテーション不要な設定値を階層パスで無料管理したいなら、置き場所は Parameter Store になる。
+
+**採用パターン**: 分岐(判断フロー)。テーブルは 4 サービスの機能差を網羅できるが、設問が問うているのは「どれを選ぶか」の 1 点であり、比較項目を並べると判断軸がどれか読み取る手間が増える。定石として与えられている『ローテーションの要否』を 1 問に立てれば、残りの案がまとめて反対側に落ちる。(候補: 分岐(判断フロー): 「自動ローテーションが要るシークレットか」の 1 問で Parameter Store と他 3 案に振り分ける / テーブル: 4 サービス × 階層管理 / 暗号化 / 自動ローテーション / 料金 の比較表)
+
+```mermaid
+flowchart TB
+    REQ["アプリの設定値(API の URL・機能フラグ)を<br/>階層構造で一元管理したい<br/>追加コストは避けたい"]:::req
+    Q{"自動ローテーションが要る<br/>シークレットか?"}:::judge
+    PS["Systems Manager Parameter Store"]:::best
+    PATH["/app/prod/db-url のような階層パスで管理でき<br/>標準パラメータは無料"]:::best
+    SEC["SecureString なら KMS 暗号化で<br/>軽微なシークレットも置ける"]:::best
+    SM["AWS Secrets Manager<br/>自動ローテーションが要る DB 認証情報向け"]:::alt
+    NOTE["設定値 = Parameter Store<br/>ローテーション要 = Secrets Manager"]:::note
+
+    subgraph NG["設定管理の機能を持たない案"]
+        DDB["DynamoDB"]:::alt
+        S3["S3"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"不要"| PS
+    PS --> PATH
+    PS --> SEC
+    Q -.->|"必要"| SM
+    Q -.->|"自前実装"| NG
+    PS -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec15.svg`](../../web/diagrams/sec15.svg)
+
+**解説**: Parameter Store は階層パス(/app/prod/db-url など)で設定値を管理でき、標準パラメータは無料です。SecureString タイプなら KMS 暗号化で軽微なシークレットも保管できます。自動ローテーションが必要な DB 認証情報などは Secrets Manager、それ以外の設定値は Parameter Store という使い分けが定石です。
+
+**確認事項**: DynamoDB・S3 は「ローテーションの要否」という軸の外側にある(そもそも設定管理の機能を持たない)。図では軸を 1 本に保つため同じ枝にまとめ、グループのラベルで理由を書き分けている。 / 解説には Parameter Store のアドバンストパラメータが有料である点への言及がないため、図では『標準パラメータは無料』にとどめている。
+
+---
+
+## sec16 — セキュリティ・IAM / level 1
+
+**問題**: ALB と CloudFront で使用する公開 TLS/SSL 証明書を無料で発行し、更新も自動化したい。どのサービスを使うか?
+
+**正解**: AWS Certificate Manager(ACM)
+
+**他の選択肢**: AWS KMS / AWS Secrets Manager / サードパーティー証明書を手動更新
+
+**図解の主メッセージ**: 公開証明書を無料で発行し、ALB・CloudFront に統合して自動更新まで行うのは ACM だけなので、ACM を使う。
+
+**採用パターン**: 分岐(判断フロー)。ライフサイクルの直列は『自動更新まで含めて任せられる』という価値をよく表せるが、KMS や Secrets Manager はそもそもライフサイクルに載らないため、3 つの誤答を同じ図に置くと段の意味が崩れる。担うか担わないかの 1 問に固定した。(候補: 分岐(判断フロー): 「発行から自動更新までを引き受けるか」の 1 問で ACM と他 3 案に振り分ける / 直列(証明書のライフサイクル): 発行 → 配備 → 期限前更新 の各段で誰が担うかを並べ、ACM だけが全段を埋めることを示す)
+
+```mermaid
+flowchart TB
+    REQ["ALB と CloudFront で使う公開 TLS/SSL 証明書を<br/>無料で発行し、更新も自動化したい"]:::req
+    Q{"公開証明書の発行から<br/>更新までを引き受けるか?"}:::judge
+    ACM["AWS Certificate Manager(ACM)"]:::best
+    ISSUE["パブリック証明書を無料で発行する"]:::best
+    ATTACH["ALB・CloudFront・API Gateway に統合し<br/>自動更新まで行う(期限切れ事故を構造的に防ぐ)"]:::best
+    NOTE["CloudFront で使う証明書は<br/>バージニア北部(us-east-1)で発行する"]:::note
+
+    subgraph NG["公開証明書の発行と自動更新を引き受けない案"]
+        KMS["AWS KMS<br/>データ暗号化の鍵管理"]:::alt
+        SM["AWS Secrets Manager<br/>シークレットの保管とローテーション"]:::alt
+        MANUAL["サードパーティー証明書を手動更新<br/>期限切れ事故が残る"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"引き受ける"| ACM
+    ACM --> ISSUE
+    ACM --> ATTACH
+    Q -.->|"引き受けない"| NG
+    ATTACH -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec16.svg`](../../web/diagrams/sec16.svg)
+
+**解説**: ACM はパブリック証明書を無料で発行し、ALB・CloudFront・API Gateway に統合して自動更新まで行います。証明書の期限切れ事故を構造的に防げます。CloudFront で使う証明書はバージニア北部(us-east-1)で発行する必要がある、という制約は頻出の引っかけです。
+
+**確認事項**: us-east-1 制約は設問の正解選択には効かないが解説が引っかけとして挙げているため、判断軸から外して注釈(note)に置いた。 / ACM のプライベート CA が有料である点は解説に書かれていないため、図では触れていない。
+
+---
+
+## sec17 — セキュリティ・IAM / level 2
+
+**問題**: 公開 Web アプリへの SQL インジェクションやクロスサイトスクリプティング(XSS)攻撃をアプリ改修なしでブロックしたい。どのサービスを使うか?
+
+**正解**: AWS WAF
+
+**他の選択肢**: AWS Shield Standard / Amazon GuardDuty / セキュリティグループ
+
+**図解の主メッセージ**: リクエストの中身を見て遮断できるのは WAF だけなので、アプリ改修なしで SQLi・XSS を止めるなら WAF を使う。
+
+**採用パターン**: 分岐(判断フロー)。マトリクスは 4 択の落ち方を 2 軸できれいに説明できるが、読み手に軸の意味を 2 つ読ませる負荷がかかる。『中身を見て遮断できるか』という 1 問に畳んでも誤答 3 つはすべて反対側に落ちるため、単純な分岐で足りる。(候補: 分岐(判断フロー): 「L7 の中身を見て遮断できるか」の 1 問で WAF と他 3 案に振り分ける / マトリクス: 縦軸に見るレイヤー(L3/L4 と L7)、横軸に検知か遮断かを取り、WAF だけが『L7 × 遮断』に入ることを示す)
+
+```mermaid
+flowchart TB
+    REQ["公開 Web アプリへの SQLi・XSS を<br/>アプリ改修なしでブロックしたい"]:::req
+    Q{"リクエストの中身(L7)を見て<br/>遮断できるか?"}:::judge
+    WAF["AWS WAF"]:::best
+    RULE["マネージドルールで SQLi・XSS を遮断<br/>レートベースルールで大量リクエストも制限"]:::best
+    ATTACH["CloudFront・ALB・API Gateway に適用する<br/>= アプリ改修が要らない"]:::best
+    NOTE["検知するだけ、L3/L4 を見るだけでは<br/>攻撃リクエストは止まらない"]:::note
+
+    subgraph NG["L7 の中身を見て遮断する役割を持たない案"]
+        GD["Amazon GuardDuty<br/>脅威を検知するが遮断はしない"]:::alt
+        SG["セキュリティグループ<br/>送信元とポートで許可。L7 の内容は判別不可"]:::alt
+        SHIELD["AWS Shield Standard<br/>L3/L4 の基本的な DDoS 保護"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"できる"| WAF
+    WAF --> RULE
+    WAF --> ATTACH
+    Q -.->|"できない"| NG
+    Q -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec17.svg`](../../web/diagrams/sec17.svg)
+
+**解説**: WAF は CloudFront・ALB・API Gateway に適用する Web アプリケーションファイアウォールで、マネージドルールにより SQLi・XSS などの一般的な攻撃を遮断できます。レートベースルールで大量リクエストの制限も可能です。GuardDuty は「検知」のみで遮断はせず、SG はレイヤー 7 の攻撃内容を判別できません。
+
+**確認事項**: GuardDuty が落ちる理由(検知のみ)とセキュリティグループが落ちる理由(L7 を判別できない)は本来別の軸だが、いずれも『中身を見て遮断する』を満たさない点で同じ枝にまとめている。個別の理由は各ノードのラベルに書いた。
+
+---
+
+## sec18 — セキュリティ・IAM / level 2
+
+**問題**: 大規模な DDoS 攻撃への対策として、24 時間の専門対応チーム(SRT)への相談や、攻撃によるコスト増の補償を受けたい。どのサービスを契約すべきか?
+
+**正解**: AWS Shield Advanced
+
+**他の選択肢**: AWS Shield Standard / AWS WAF のみ / Amazon Inspector
+
+**図解の主メッセージ**: SRT への 24 時間アクセスと DDoS 起因の費用補償が要件なら、それが付くのは Shield Advanced だけである。
+
+**採用パターン**: 分岐(判断フロー)。包含は Standard と Advanced の関係をよく表せるが、WAF のみ・Inspector という残り 2 案がその層構造に乗らず、図の外に浮いてしまう。設問が要件として挙げているのは SRT と補償の 2 点なので、その有無を問う 1 問に固定した。(候補: 分岐(判断フロー): 「SRT アクセスと費用補償が付くか」の 1 問で Advanced と他 3 案に振り分ける / 包含(Standard に Advanced が積み上がる階層): 無料の L3/L4 保護の上に、高度な検知・SRT・補償が乗る二層で示す)
+
+```mermaid
+flowchart TB
+    REQ["大規模 DDoS 対策として、24 時間の SRT 相談と<br/>攻撃によるコスト増の補償を受けたい"]:::req
+    Q{"SRT への 24 時間アクセスと<br/>費用補償が付くか?"}:::judge
+    ADV["AWS Shield Advanced(有料)"]:::best
+    SRT["Shield レスポンスチーム(SRT)へ<br/>24 時間アクセスできる"]:::best
+    CREDIT["DDoS 起因のスケーリング費用を補償<br/>WAF 利用料も込み"]:::best
+    NOTE["補償・専門チーム = Advanced"]:::note
+
+    subgraph NG["SRT アクセスと費用補償が付かない案"]
+        STD["AWS Shield Standard(無料)<br/>全ユーザーに提供される L3/L4 の基本保護"]:::alt
+        WAF["AWS WAF のみ<br/>L7 のルールによる遮断だけ"]:::alt
+        INS["Amazon Inspector<br/>脆弱性スキャン。DDoS 対策ではない"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"付く"| ADV
+    ADV --> SRT
+    ADV --> CREDIT
+    Q -.->|"付かない"| NG
+    ADV -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec18.svg`](../../web/diagrams/sec18.svg)
+
+**解説**: Shield Standard は全ユーザーに無料で提供される L3/L4 の基本的な DDoS 保護です。Shield Advanced(有料)はより高度な検知・緩和に加え、Shield レスポンスチーム(SRT)への 24 時間アクセス、DDoS 起因のスケーリング費用の補償、WAF 利用料の込みなどが得られます。「補償・専門チーム = Advanced」で判断します。
+
+**確認事項**: Advanced が Standard より高度な検知・緩和を持つ点は、設問の判断には効かない(要件は SRT と補償)ため、図では正解側のラベルに含めず簡潔に保っている。
+
+---
+
+## sec19 — セキュリティ・IAM / level 1
+
+**問題**: CloudTrail・VPC フローログ・DNS クエリログを機械学習で継続分析し、不正アクセスや悪意ある活動を自動検知するサービスはどれか?
+
+**正解**: Amazon GuardDuty
+
+**他の選択肢**: Amazon Macie / Amazon Inspector / AWS Config
+
+**図解の主メッセージ**: CloudTrail・VPC フローログ・DNS クエリログを入力に脅威を検出するのは GuardDuty である。
+
+**採用パターン**: 合流 + 分岐。3 点セットの対比も覚え方としては有効だが、設問がログソースを 3 つ列挙している以上、それが GuardDuty に集まる絵をそのまま描くほうが『なぜ GuardDuty か』に直結する。3 点セットは注釈に落とし、図の構造は入力から出力への一本道に保った。(候補: 合流 + 分岐: 3 つのログが GuardDuty に集まり脅威が出る流れを描き、対象の違う 3 案を別枝に落とす / 対比(3 点セット): GuardDuty・Inspector・Macie を横に並べ、見る対象と出す結果を突き合わせる)
+
+```mermaid
+flowchart TB
+    REQ["CloudTrail・VPC フローログ・DNS クエリログを<br/>機械学習で継続分析し、不正アクセスを自動検知したい"]:::req
+    Q{"入力はログで<br/>出力は脅威検知か?"}:::judge
+    GD["Amazon GuardDuty<br/>エージェント不要・ワンクリック有効化"]:::best
+    FIND["暗号通貨マイニング・認証情報の悪用・<br/>C&C 通信などの脅威を検出"]:::best
+    NOTE["脅威検知 = GuardDuty / 脆弱性診断 = Inspector<br/>機密データ発見 = Macie"]:::note
+
+    subgraph LOGS["自動収集されるログソース"]
+        CT["CloudTrail"]:::svc
+        FL["VPC フローログ"]:::svc
+        DNS["DNS クエリログ"]:::svc
+    end
+
+    subgraph NG["見ている対象が違う案"]
+        MACIE["Amazon Macie<br/>S3 内の機密データを発見"]:::alt
+        INS["Amazon Inspector<br/>既知の脆弱性を診断"]:::alt
+        CFG["AWS Config<br/>リソース設定の変更履歴と準拠評価"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"そう"| GD
+    LOGS -->|"自動収集"| GD
+    GD --> FIND
+    Q -.->|"違う"| NG
+    GD -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec19.svg`](../../web/diagrams/sec19.svg)
+
+**解説**: GuardDuty は脅威検知サービスで、複数のログソースを自動収集・分析し、暗号通貨マイニング・認証情報の悪用・C&C 通信などの脅威を検出します。エージェント不要でワンクリック有効化できます。「脅威検知 = GuardDuty、脆弱性診断 = Inspector、機密データ発見 = Macie」の 3 点セットで覚えます。
+
+**確認事項**: GuardDuty は S3 保護や EKS 保護など他のログソースも扱えるが、解説の範囲を超えるため図では設問に挙がった 3 つに限っている。
+
+---
+
+## sec20 — セキュリティ・IAM / level 2
+
+**問題**: EC2 インスタンスや ECR のコンテナイメージに含まれるソフトウェアの既知の脆弱性(CVE)を継続的にスキャンしたい。どのサービスを使うか?
+
+**正解**: Amazon Inspector
+
+**他の選択肢**: Amazon GuardDuty / AWS WAF / AWS Artifact
+
+**図解の主メッセージ**: 既知の CVE と突き合わせて EC2・ECR・Lambda を継続スキャンする役割を持つのは Inspector である。
+
+**採用パターン**: 分岐(判断フロー)。包含は Inspector の守備範囲を示せるが、他の 3 案がそのレイヤー図に置けず『なぜ他が落ちるか』を語れない。設問は 4 択の選び分けなので、CVE との突き合わせという役割の有無を 1 問に立て、対象の広さは正解側のラベルに書いた。(候補: 分岐(判断フロー): 「既知の CVE と突き合わせるか」の 1 問で Inspector と他 3 案に振り分ける / 包含(スキャン対象のレイヤー): EC2 / ECR イメージ / Lambda を Inspector が覆う範囲として描く)
+
+```mermaid
+flowchart TB
+    REQ["EC2 と ECR のコンテナイメージに含まれる<br/>既知の脆弱性(CVE)を継続的にスキャンしたい"]:::req
+    Q{"既知の CVE と<br/>突き合わせる役割か?"}:::judge
+    INS["Amazon Inspector"]:::best
+    TARGET["EC2(SSM エージェント経由)・ECR イメージ・<br/>Lambda 関数を継続スキャン"]:::best
+    OUT["重要度スコア付きの検出結果<br/>意図しないネットワーク露出も検査<br/>Security Hub に集約できる"]:::best
+    NOTE["パッチ漏れ・脆弱性の発見 = Inspector"]:::note
+
+    subgraph NG["CVE との突き合わせを行わない案"]
+        GD["Amazon GuardDuty<br/>ログから脅威を検知する"]:::alt
+        WAF["AWS WAF<br/>L7 リクエストをルールで遮断する"]:::alt
+        ART["AWS Artifact<br/>AWS の第三者監査レポートを入手する"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"そう"| INS
+    INS --> TARGET
+    TARGET --> OUT
+    Q -.->|"違う"| NG
+    INS -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec20.svg`](../../web/diagrams/sec20.svg)
+
+**解説**: Inspector は EC2(SSM エージェント経由)・ECR イメージ・Lambda 関数を対象に、CVE データベースと突き合わせた脆弱性スキャンと意図しないネットワーク露出の検査を継続実行します。検出結果は重要度スコア付きで Security Hub にも集約できます。「パッチ漏れ・脆弱性の発見 = Inspector」です。
+
+**確認事項**: EC2 のスキャンに SSM エージェントが要る点は前提条件だが、選択の判断軸ではないため正解側ノードの括弧書きにとどめている。
+
+---
+
+## sec21 — セキュリティ・IAM / level 2
+
+**問題**: S3 バケット群に個人情報(PII)やクレジットカード番号などの機密データが含まれていないか、機械学習で自動検出・報告させたい。どのサービスが適切か?
+
+**正解**: Amazon Macie
+
+**他の選択肢**: Amazon GuardDuty / AWS Shield / Amazon Detective
+
+**図解の主メッセージ**: S3 の中身を機械学習で調べて PII の所在を報告するのは Macie なので、機密データの棚卸しには Macie を使う。
+
+**採用パターン**: 分岐(判断フロー)。レイヤー図は 4 サービスの守備範囲の違いを一望できて魅力的だが、Detective のような『他サービスの検出結果を掘り下げる』役割が層のどこに入るか曖昧で誤読を生む。中身を調べるか否かの 1 問に固定し、各案の役割はラベルで書き分けた。(候補: 分岐(判断フロー): 「S3 オブジェクトの中身を調べるか」の 1 問で Macie と他 3 案に振り分ける / レイヤー(何を見ているか): ネットワーク / ログ / データの中身 の 3 層に 4 サービスを配置し、データ層にいるのが Macie だけであることを示す)
+
+```mermaid
+flowchart TB
+    REQ["S3 バケット群に PII やクレジットカード番号などの<br/>機密データが含まれていないか自動検出・報告させたい"]:::req
+    Q{"S3 オブジェクトの中身を<br/>調べる役割か?"}:::judge
+    MACIE["Amazon Macie"]:::best
+    SCAN["機械学習とパターンマッチで分析し<br/>PII・金融情報・認証情報の所在を報告"]:::best
+    RISK["公開・非暗号化などリスクある<br/>バケット設定も報告"]:::best
+    NOTE["まずどこに機密データがあるかを<br/>把握するフェーズの定番"]:::note
+
+    subgraph NG["データの中身ではなく別の観点を見る案"]
+        GD["Amazon GuardDuty<br/>ログから脅威を検知する"]:::alt
+        SHIELD["AWS Shield<br/>DDoS 攻撃から保護する"]:::alt
+        DET["Amazon Detective<br/>検出結果の原因を追跡調査する"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"そう"| MACIE
+    MACIE --> SCAN
+    MACIE --> RISK
+    Q -.->|"違う"| NG
+    MACIE -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec21.svg`](../../web/diagrams/sec21.svg)
+
+**解説**: Macie は S3 内のオブジェクトを機械学習とパターンマッチで分析し、PII・金融情報・認証情報などの機密データの所在と、公開・非暗号化などのリスクあるバケット設定を報告します。GDPR や個人情報保護対応での「まずどこに機密データがあるか把握する」フェーズの定番サービスです。
+
+**確認事項**: Macie の対象は S3 に限られる。図では設問どおり S3 前提で描いており、他ストレージへの適用可否には触れていない(解説の範囲外)。
+
+---
+
+## sec22 — セキュリティ・IAM / level 2
+
+**問題**: GuardDuty・Inspector・Macie など複数のセキュリティサービスの検出結果を一元的に集約し、CIS ベンチマーク等のセキュリティ標準への準拠状況も継続チェックしたい。どのサービスを使うか?
+
+**正解**: AWS Security Hub
+
+**他の選択肢**: AWS CloudTrail / Amazon CloudWatch / AWS Systems Manager
+
+**図解の主メッセージ**: 各サービスの検出結果の集約と、CIS 等の標準への自動チェックを併せ持つのは Security Hub である。
+
+**採用パターン**: 合流 + 分岐。マルチアカウントの階層はダッシュボードの価値を示せるが、設問が挙げているのは『複数サービスの検出結果』の集約であって複数アカウントではない。発生元から集約先へ集まる合流をそのまま描くほうが主メッセージに近く、マルチアカウント集約は集約ノードのラベルに添えた。(候補: 合流 + 分岐: 3 サービスの検出結果が Security Hub に集まり、集約と標準チェックの 2 つの出力になる形を描く / 階層(組織の可視化): 管理アカウントの下にメンバーアカウントを並べ、検出結果が上がっていく構造で示す)
+
+```mermaid
+flowchart TB
+    REQ["複数のセキュリティサービスの検出結果を一元集約し<br/>CIS 等の標準への準拠状況も継続チェックしたい"]:::req
+    Q{"検出結果の集約と<br/>標準チェックを担うか?"}:::judge
+    HUB["AWS Security Hub"]:::best
+    AGG["検出結果を標準フォーマットで集約したダッシュボード<br/>マルチアカウントを管理アカウントへ集約できる"]:::best
+    STD["AWS 基礎セキュリティベストプラクティス・CIS などの<br/>標準への自動チェックを実行"]:::best
+    NOTE["集約と標準準拠チェックの<br/>両方を持つのが Security Hub"]:::note
+
+    subgraph SRC["検出結果(Findings)の発生元"]
+        GD["Amazon GuardDuty"]:::svc
+        INS["Amazon Inspector"]:::svc
+        MACIE["Amazon Macie"]:::svc
+    end
+
+    subgraph NG["セキュリティ検出結果の集約先にはならない案"]
+        CT["AWS CloudTrail<br/>API 呼び出しの記録"]:::alt
+        CW["Amazon CloudWatch<br/>メトリクスとログの監視"]:::alt
+        SSM["AWS Systems Manager<br/>運用・構成管理"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"担う"| HUB
+    SRC -->|"検出結果"| HUB
+    HUB --> AGG
+    HUB --> STD
+    Q -.->|"担わない"| NG
+    HUB -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec22.svg`](../../web/diagrams/sec22.svg)
+
+**解説**: Security Hub は各種セキュリティサービスの検出結果(Findings)を標準フォーマットで集約するダッシュボードで、AWS 基礎セキュリティベストプラクティスや CIS などの標準に対する自動チェックも実行します。マルチアカウントの検出結果を管理アカウントへ集約でき、組織のセキュリティ態勢の可視化に使います。
+
+**確認事項**: CloudTrail・CloudWatch も情報が集まる場所ではあるが、集めているのが API 記録やメトリクスであって『セキュリティ検出結果』ではない。図ではグループのラベルでその線引きを明示している。
+
+---
+
+## sec23 — セキュリティ・IAM / level 2
+
+**問題**: 規制により FIPS 140-2 レベル 3 認定の専用ハードウェアで、AWS が一切アクセスできない形で暗号鍵を管理する必要がある。どのサービスを使うか?
+
+**正解**: AWS CloudHSM
+
+**他の選択肢**: AWS KMS(標準) / AWS Secrets Manager / S3 の SSE-S3
+
+**図解の主メッセージ**: FIPS 140-2 レベル 3 の専用ハードウェアで、AWS が鍵にアクセスできない形にする要件があるときだけ CloudHSM を選ぶ。
+
+**採用パターン**: 分岐(判断フロー)。KMS との対比は本質的な差をよく表せるが、Secrets Manager と SSE-S3 という残り 2 案が対比の軸に乗らない。設問が規制要件を先に与えているので、その要件の有無を問う 1 問に固定し、KMS との使い分けは注釈に置いた。(候補: 分岐(判断フロー): 「専用 HSM で鍵を完全に顧客管理下に置く必要があるか」の 1 問で CloudHSM と他 3 案に振り分ける / 対比(KMS と CloudHSM): マルチテナント/シングルテナント、AWS が鍵に触れるか触れないかを左右に並べて突き合わせる)
+
+```mermaid
+flowchart TB
+    REQ["規制により FIPS 140-2 レベル 3 認定の<br/>専用ハードウェアで、AWS が一切アクセスできない<br/>形で暗号鍵を管理する必要がある"]:::req
+    Q{"シングルテナントの専用 HSM で<br/>鍵を顧客管理下に置くか?"}:::judge
+    HSM["AWS CloudHSM"]:::best
+    TENANT["シングルテナントの専用 HSM<br/>鍵の生成・管理は完全に顧客の管理下<br/>(AWS は鍵にアクセスできない)"]:::best
+    FIPS["FIPS 140-2 レベル 3 の要件と<br/>独自の暗号アルゴリズム利用に対応"]:::best
+    NOTE["多くの用途は KMS で十分<br/>専用ハードウェアの要件が出たときだけ CloudHSM"]:::note
+
+    subgraph NG["AWS 側が管理に関与するマネージドな案"]
+        KMS["AWS KMS(標準)<br/>マルチテナントのマネージド鍵管理"]:::alt
+        SM["AWS Secrets Manager<br/>シークレットの保管とローテーション"]:::alt
+        SSE["S3 の SSE-S3<br/>S3 が管理する鍵での暗号化"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"必要"| HSM
+    HSM --> TENANT
+    HSM --> FIPS
+    Q -.->|"不要"| NG
+    HSM -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec23.svg`](../../web/diagrams/sec23.svg)
+
+**解説**: CloudHSM はシングルテナントの専用ハードウェアセキュリティモジュールを提供し、鍵の生成・管理を完全に顧客の管理下に置けます(AWS は鍵にアクセス不能)。FIPS 140-2 レベル 3 の要件や、独自の暗号アルゴリズム利用に対応します。KMS はマルチテナントのマネージドサービスで、多くの用途にはこちらで十分です。
+
+**確認事項**: CloudHSM が KMS より運用負荷とコストの高い選択である点は解説に書かれていないため、図では『多くの用途は KMS で十分』という解説どおりの表現にとどめている。
+
+---
+
+## sec24 — セキュリティ・IAM / level 2
+
+**問題**: モバイルアプリに、サインアップ/サインイン・パスワードリセット・Google などのソーシャルログインを提供したい。どのサービスが適切か?
+
+**正解**: Cognito ユーザープール
+
+**他の選択肢**: IAM ユーザーを一般ユーザーごとに発行 / IAM Identity Center / STS を直接呼び出す
+
+**図解の主メッセージ**: 認証する相手がアプリのエンドユーザーなら、ユーザーディレクトリは Cognito ユーザープールになる。
+
+**採用パターン**: 分岐(判断フロー)。対比は Cognito と IAM 系の住み分けを覚えるうえで有効だが、2 つの世界をどちらも同じ厚みで描くと『どちらを選ぶか』の答えが図の中心から外れる。相手が誰かを問う 1 問を頂点に置き、IAM 系 3 案はグループのラベルで住み分けを示した。(候補: 分岐(判断フロー): 「認証する相手はアプリのエンドユーザーか」の 1 問で Cognito と他 3 案に振り分ける / 対比(2 つの世界): 左にアプリのエンドユーザー、右に AWS を操作する人を置き、それぞれの認証手段を並べる)
+
+```mermaid
+flowchart TB
+    REQ["モバイルアプリにサインアップ/サインイン・<br/>パスワードリセット・Google などの<br/>ソーシャルログインを提供したい"]:::req
+    Q{"認証する相手は<br/>アプリのエンドユーザーか?"}:::judge
+    CUP["Cognito ユーザープール"]:::best
+    DIR["エンドユーザー向けのユーザーディレクトリ<br/>サインアップ・MFA・<br/>ソーシャル/SAML ログインも提供"]:::best
+    JWT["認証後に JWT トークンを発行する"]:::best
+    NOTE["一般ユーザーへの IAM ユーザー発行は<br/>スケーラビリティ・セキュリティ両面でアンチパターン"]:::note
+
+    subgraph NG["AWS を操作する人の認証・認可のための仕組み"]
+        IAMU["IAM ユーザーを一般ユーザーごとに発行"]:::alt
+        IDC["IAM Identity Center<br/>社内ユーザーの AWS アクセス管理"]:::alt
+        STS["STS を直接呼び出す<br/>一時認証情報の発行のみ"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"そう"| CUP
+    CUP --> DIR
+    CUP --> JWT
+    Q -.->|"違う"| NG
+    Q -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec24.svg`](../../web/diagrams/sec24.svg)
+
+**解説**: Cognito ユーザープールはアプリのエンドユーザー向けのユーザーディレクトリで、サインアップ・サインイン・MFA・ソーシャル/SAML ログインをマネージドで提供し、認証後に JWT トークンを発行します。一般ユーザーに IAM ユーザーを発行するのはスケーラビリティ・セキュリティの両面でアンチパターンです。
+
+**確認事項**: Cognito ID プール(認証済みユーザーに AWS 権限を渡す機能)は設問の対象外なので図に入れていない。ユーザープールとの違いは別問で扱う想定。

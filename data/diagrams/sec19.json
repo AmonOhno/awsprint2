@@ -1,0 +1,182 @@
+{
+  "question_id": "sec19",
+  "purpose": "脅威検知サービスの選択が「何を入力に、何を出すか」で決まることを示し、ログを入力に脅威を出すのは GuardDuty だけだと理解させる。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、GuardDuty・Inspector・Macie の 3 つを名前では知っているが、どれがどのログ・対象を見るか区別できない人。",
+  "message": "CloudTrail・VPC フローログ・DNS クエリログを入力に脅威を検出するのは GuardDuty である。",
+  "source_summary": "CloudTrail・VPC フローログ・DNS クエリログを機械学習で継続分析し、不正アクセスや悪意ある活動を自動検知したい。正解は Amazon GuardDuty。複数のログソースを自動収集・分析し、暗号通貨マイニング・認証情報の悪用・C&C 通信などの脅威を検出する。エージェント不要でワンクリック有効化できる。『脅威検知 = GuardDuty、脆弱性診断 = Inspector、機密データ発見 = Macie』の 3 点セットで覚える。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "複数のログを機械学習で継続分析し、不正アクセスを自動検知したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "入力はログで、出力は脅威検知か?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CT",
+      "label": "CloudTrail",
+      "type": "data",
+      "priority": "primary"
+    },
+    {
+      "id": "FL",
+      "label": "VPC フローログ",
+      "type": "data",
+      "priority": "primary"
+    },
+    {
+      "id": "DNS",
+      "label": "DNS クエリログ",
+      "type": "data",
+      "priority": "primary"
+    },
+    {
+      "id": "GD",
+      "label": "Amazon GuardDuty(エージェント不要・ワンクリック有効化)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "FIND",
+      "label": "暗号通貨マイニング・認証情報の悪用・C&C 通信などを検出",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "MACIE",
+      "label": "Amazon Macie",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "INS",
+      "label": "Amazon Inspector",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CFG",
+      "label": "AWS Config",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "脅威検知 = GuardDuty / 脆弱性診断 = Inspector / 機密データ発見 = Macie",
+      "type": "concept",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "GD",
+      "verb": "入力も出力も一致するので選ぶ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CT",
+      "to": "GD",
+      "verb": "自動収集される",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "FL",
+      "to": "GD",
+      "verb": "自動収集される",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "DNS",
+      "to": "GD",
+      "verb": "自動収集される",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "GD",
+      "to": "FIND",
+      "verb": "脅威として出力する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "MACIE",
+      "verb": "見ている対象が違う",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "INS",
+      "verb": "見ている対象が違う",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "CFG",
+      "verb": "見ている対象が違う",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "GD",
+      "to": "NOTE",
+      "verb": "3 点セットを補足する",
+      "direction": "none",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [
+    {
+      "id": "LOGS",
+      "label": "自動収集されるログソース",
+      "members": [
+        "CT",
+        "FL",
+        "DNS"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "入力(見る対象)が違う案",
+      "members": [
+        "MACIE",
+        "INS",
+        "CFG"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "合流 + 分岐: 3 つのログが GuardDuty に集まり脅威が出る流れを描き、対象の違う 3 案を別枝に落とす",
+    "対比(3 点セット): GuardDuty・Inspector・Macie を横に並べ、見る対象と出す結果を突き合わせる"
+  ],
+  "selected_pattern": "合流 + 分岐。3 点セットの対比も覚え方としては有効だが、設問がログソースを 3 つ列挙している以上、それが GuardDuty に集まる絵をそのまま描くほうが『なぜ GuardDuty か』に直結する。3 点セットは注釈に落とし、図の構造は入力から出力への一本道に保った。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "GuardDuty は S3 保護や EKS 保護など他のログソースも扱えるが、解説の範囲を超えるため図では設問に挙がった 3 つに限っている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"CloudTrail・VPC フローログ・DNS クエリログを<br/>機械学習で継続分析し、不正アクセスを自動検知したい\"]:::req\n    Q{\"入力はログで<br/>出力は脅威検知か?\"}:::judge\n    GD[\"Amazon GuardDuty<br/>エージェント不要・ワンクリック有効化\"]:::best\n    FIND[\"暗号通貨マイニング・認証情報の悪用・<br/>C&C 通信などの脅威を検出\"]:::best\n    NOTE[\"脅威検知 = GuardDuty / 脆弱性診断 = Inspector<br/>機密データ発見 = Macie\"]:::note\n\n    subgraph LOGS[\"自動収集されるログソース\"]\n        CT[\"CloudTrail\"]:::svc\n        FL[\"VPC フローログ\"]:::svc\n        DNS[\"DNS クエリログ\"]:::svc\n    end\n\n    subgraph NG[\"見ている対象が違う案\"]\n        MACIE[\"Amazon Macie<br/>S3 内の機密データを発見\"]:::alt\n        INS[\"Amazon Inspector<br/>既知の脆弱性を診断\"]:::alt\n        CFG[\"AWS Config<br/>リソース設定の変更履歴と準拠評価\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"そう\"| GD\n    LOGS -->|\"自動収集\"| GD\n    GD --> FIND\n    Q -.->|\"違う\"| NG\n    GD -.- NOTE"
+}

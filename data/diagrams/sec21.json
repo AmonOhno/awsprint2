@@ -1,0 +1,147 @@
+{
+  "question_id": "sec21",
+  "purpose": "機密データ発見の選択が「S3 オブジェクトの中身そのものを調べる役割かどうか」で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、セキュリティ系サービスが『何を見ているか』で分かれることを整理できていない人。",
+  "message": "S3 の中身を機械学習で調べて PII の所在を報告するのは Macie なので、機密データの棚卸しには Macie を使う。",
+  "source_summary": "S3 バケット群に個人情報(PII)やクレジットカード番号などの機密データが含まれていないか、機械学習で自動検出・報告させたい。正解は Amazon Macie。S3 内のオブジェクトを機械学習とパターンマッチで分析し、PII・金融情報・認証情報などの機密データの所在と、公開・非暗号化などのリスクあるバケット設定を報告する。GDPR や個人情報保護対応で『まずどこに機密データがあるか把握する』フェーズの定番サービス。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "S3 バケット群に PII やカード番号が含まれていないか自動検出・報告させたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "S3 オブジェクトの中身を調べる役割か?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "MACIE",
+      "label": "Amazon Macie",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "SCAN",
+      "label": "機械学習とパターンマッチで PII・金融情報・認証情報の所在を報告",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "RISK",
+      "label": "公開・非暗号化などリスクあるバケット設定も報告",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "GD",
+      "label": "Amazon GuardDuty",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SHIELD",
+      "label": "AWS Shield",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DET",
+      "label": "Amazon Detective",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "まずどこに機密データがあるかを把握するフェーズの定番",
+      "type": "concept",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "MACIE",
+      "verb": "中身を調べるので選ぶ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "MACIE",
+      "to": "SCAN",
+      "verb": "機密データの所在を報告する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "MACIE",
+      "to": "RISK",
+      "verb": "バケット設定のリスクを報告する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "GD",
+      "verb": "ログを見る別の役割",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SHIELD",
+      "verb": "攻撃を防ぐ別の役割",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "DET",
+      "verb": "検出結果を掘り下げる別の役割",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "MACIE",
+      "to": "NOTE",
+      "verb": "使いどころを補足する",
+      "direction": "none",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "データの中身ではなく別の観点を見る案",
+      "members": [
+        "GD",
+        "SHIELD",
+        "DET"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「S3 オブジェクトの中身を調べるか」の 1 問で Macie と他 3 案に振り分ける",
+    "レイヤー(何を見ているか): ネットワーク / ログ / データの中身 の 3 層に 4 サービスを配置し、データ層にいるのが Macie だけであることを示す"
+  ],
+  "selected_pattern": "分岐(判断フロー)。レイヤー図は 4 サービスの守備範囲の違いを一望できて魅力的だが、Detective のような『他サービスの検出結果を掘り下げる』役割が層のどこに入るか曖昧で誤読を生む。中身を調べるか否かの 1 問に固定し、各案の役割はラベルで書き分けた。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "Macie の対象は S3 に限られる。図では設問どおり S3 前提で描いており、他ストレージへの適用可否には触れていない(解説の範囲外)。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"S3 バケット群に PII やクレジットカード番号などの<br/>機密データが含まれていないか自動検出・報告させたい\"]:::req\n    Q{\"S3 オブジェクトの中身を<br/>調べる役割か?\"}:::judge\n    MACIE[\"Amazon Macie\"]:::best\n    SCAN[\"機械学習とパターンマッチで分析し<br/>PII・金融情報・認証情報の所在を報告\"]:::best\n    RISK[\"公開・非暗号化などリスクある<br/>バケット設定も報告\"]:::best\n    NOTE[\"まずどこに機密データがあるかを<br/>把握するフェーズの定番\"]:::note\n\n    subgraph NG[\"データの中身ではなく別の観点を見る案\"]\n        GD[\"Amazon GuardDuty<br/>ログから脅威を検知する\"]:::alt\n        SHIELD[\"AWS Shield<br/>DDoS 攻撃から保護する\"]:::alt\n        DET[\"Amazon Detective<br/>検出結果の原因を追跡調査する\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"そう\"| MACIE\n    MACIE --> SCAN\n    MACIE --> RISK\n    Q -.->|\"違う\"| NG\n    MACIE -.- NOTE"
+}

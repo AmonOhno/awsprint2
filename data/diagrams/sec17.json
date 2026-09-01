@@ -1,0 +1,147 @@
+{
+  "question_id": "sec17",
+  "purpose": "SQLi・XSS 対策の選択が「リクエストの中身(レイヤー7)を見て遮断できるか」で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、WAF・Shield・GuardDuty・セキュリティグループの守備範囲を混同している人。",
+  "message": "リクエストの中身を見て遮断できるのは WAF だけなので、アプリ改修なしで SQLi・XSS を止めるなら WAF を使う。",
+  "source_summary": "公開 Web アプリへの SQL インジェクション・XSS をアプリ改修なしでブロックしたい。正解は AWS WAF。CloudFront・ALB・API Gateway に適用する Web アプリケーションファイアウォールで、マネージドルールにより SQLi・XSS などの一般的な攻撃を遮断でき、レートベースルールで大量リクエストも制限できる。GuardDuty は検知のみで遮断はせず、セキュリティグループはレイヤー 7 の攻撃内容を判別できない。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "公開 Web アプリへの SQLi・XSS をアプリ改修なしでブロックしたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "リクエストの中身(L7)を見て遮断できるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "WAF",
+      "label": "AWS WAF",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "RULE",
+      "label": "マネージドルールで SQLi・XSS を遮断。レートベースルールで大量リクエストも制限",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ATTACH",
+      "label": "CloudFront・ALB・API Gateway に適用するのでアプリ改修が要らない",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "GD",
+      "label": "Amazon GuardDuty",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SG",
+      "label": "セキュリティグループ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SHIELD",
+      "label": "AWS Shield Standard",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "検知だけの GuardDuty では攻撃は止まらない",
+      "type": "concept",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "WAF",
+      "verb": "見て遮断できるので選ぶ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "WAF",
+      "to": "RULE",
+      "verb": "ルールで遮断する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "WAF",
+      "to": "ATTACH",
+      "verb": "手前に適用する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "GD",
+      "verb": "検知はするが遮断しない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SG",
+      "verb": "L7 の内容を判別できない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SHIELD",
+      "verb": "L3/L4 の DDoS 保護にとどまる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NOTE",
+      "verb": "誤読しやすい点を補足する",
+      "direction": "none",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "L7 の中身を見て遮断する役割を持たない案",
+      "members": [
+        "GD",
+        "SG",
+        "SHIELD"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「L7 の中身を見て遮断できるか」の 1 問で WAF と他 3 案に振り分ける",
+    "マトリクス: 縦軸に見るレイヤー(L3/L4 と L7)、横軸に検知か遮断かを取り、WAF だけが『L7 × 遮断』に入ることを示す"
+  ],
+  "selected_pattern": "分岐(判断フロー)。マトリクスは 4 択の落ち方を 2 軸できれいに説明できるが、読み手に軸の意味を 2 つ読ませる負荷がかかる。『中身を見て遮断できるか』という 1 問に畳んでも誤答 3 つはすべて反対側に落ちるため、単純な分岐で足りる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "GuardDuty が落ちる理由(検知のみ)とセキュリティグループが落ちる理由(L7 を判別できない)は本来別の軸だが、いずれも『中身を見て遮断する』を満たさない点で同じ枝にまとめている。個別の理由は各ノードのラベルに書いた。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"公開 Web アプリへの SQLi・XSS を<br/>アプリ改修なしでブロックしたい\"]:::req\n    Q{\"リクエストの中身(L7)を見て<br/>遮断できるか?\"}:::judge\n    WAF[\"AWS WAF\"]:::best\n    RULE[\"マネージドルールで SQLi・XSS を遮断<br/>レートベースルールで大量リクエストも制限\"]:::best\n    ATTACH[\"CloudFront・ALB・API Gateway に適用する<br/>= アプリ改修が要らない\"]:::best\n    NOTE[\"検知するだけ、L3/L4 を見るだけでは<br/>攻撃リクエストは止まらない\"]:::note\n\n    subgraph NG[\"L7 の中身を見て遮断する役割を持たない案\"]\n        GD[\"Amazon GuardDuty<br/>脅威を検知するが遮断はしない\"]:::alt\n        SG[\"セキュリティグループ<br/>送信元とポートで許可。L7 の内容は判別不可\"]:::alt\n        SHIELD[\"AWS Shield Standard<br/>L3/L4 の基本的な DDoS 保護\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"できる\"| WAF\n    WAF --> RULE\n    WAF --> ATTACH\n    Q -.->|\"できない\"| NG\n    Q -.- NOTE"
+}

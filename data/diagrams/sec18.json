@@ -1,0 +1,147 @@
+{
+  "question_id": "sec18",
+  "purpose": "DDoS 対策の選択が「技術的な保護の強さ」ではなく「SRT への 24 時間アクセスと費用補償という契約上の付加価値が付くか」で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Shield Standard が無料で全ユーザーに適用されることは知っているが、Advanced を契約する理由を説明できない人。",
+  "message": "SRT への 24 時間アクセスと DDoS 起因の費用補償が要件なら、それが付くのは Shield Advanced だけである。",
+  "source_summary": "大規模な DDoS 攻撃への対策として、24 時間の専門対応チーム(SRT)への相談や、攻撃によるコスト増の補償を受けたい。正解は AWS Shield Advanced(有料)。Standard は全ユーザーに無料で提供される L3/L4 の基本的な DDoS 保護。Advanced はより高度な検知・緩和に加え、SRT への 24 時間アクセス、DDoS 起因のスケーリング費用の補償、WAF 利用料込みなどが得られる。『補償・専門チーム = Advanced』で判断する。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "24 時間の SRT 相談と、攻撃によるコスト増の補償を受けたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "SRT への 24 時間アクセスと費用補償が付くか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ADV",
+      "label": "AWS Shield Advanced(有料)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "SRT",
+      "label": "Shield レスポンスチーム(SRT)へ 24 時間アクセスできる",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "CREDIT",
+      "label": "DDoS 起因のスケーリング費用を補償。WAF 利用料も込み",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "STD",
+      "label": "AWS Shield Standard(無料)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "WAF",
+      "label": "AWS WAF のみ",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "INS",
+      "label": "Amazon Inspector",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "補償・専門チーム = Advanced",
+      "type": "concept",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "ADV",
+      "verb": "付くので選ぶ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ADV",
+      "to": "SRT",
+      "verb": "相談窓口を得る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ADV",
+      "to": "CREDIT",
+      "verb": "費用面の保証を得る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "STD",
+      "verb": "保護はするが補償と SRT が付かない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "WAF",
+      "verb": "L7 のルール遮断にとどまる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "INS",
+      "verb": "そもそも DDoS 対策ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "ADV",
+      "to": "NOTE",
+      "verb": "判断の合言葉を補足する",
+      "direction": "none",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "SRT アクセスと費用補償が付かない案",
+      "members": [
+        "STD",
+        "WAF",
+        "INS"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「SRT アクセスと費用補償が付くか」の 1 問で Advanced と他 3 案に振り分ける",
+    "包含(Standard に Advanced が積み上がる階層): 無料の L3/L4 保護の上に、高度な検知・SRT・補償が乗る二層で示す"
+  ],
+  "selected_pattern": "分岐(判断フロー)。包含は Standard と Advanced の関係をよく表せるが、WAF のみ・Inspector という残り 2 案がその層構造に乗らず、図の外に浮いてしまう。設問が要件として挙げているのは SRT と補償の 2 点なので、その有無を問う 1 問に固定した。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "Advanced が Standard より高度な検知・緩和を持つ点は、設問の判断には効かない(要件は SRT と補償)ため、図では正解側のラベルに含めず簡潔に保っている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"大規模 DDoS 対策として、24 時間の SRT 相談と<br/>攻撃によるコスト増の補償を受けたい\"]:::req\n    Q{\"SRT への 24 時間アクセスと<br/>費用補償が付くか?\"}:::judge\n    ADV[\"AWS Shield Advanced(有料)\"]:::best\n    SRT[\"Shield レスポンスチーム(SRT)へ<br/>24 時間アクセスできる\"]:::best\n    CREDIT[\"DDoS 起因のスケーリング費用を補償<br/>WAF 利用料も込み\"]:::best\n    NOTE[\"補償・専門チーム = Advanced\"]:::note\n\n    subgraph NG[\"SRT アクセスと費用補償が付かない案\"]\n        STD[\"AWS Shield Standard(無料)<br/>全ユーザーに提供される L3/L4 の基本保護\"]:::alt\n        WAF[\"AWS WAF のみ<br/>L7 のルールによる遮断だけ\"]:::alt\n        INS[\"Amazon Inspector<br/>脆弱性スキャン。DDoS 対策ではない\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"付く\"| ADV\n    ADV --> SRT\n    ADV --> CREDIT\n    Q -.->|\"付かない\"| NG\n    ADV -.- NOTE"
+}

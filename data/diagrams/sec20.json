@@ -1,0 +1,147 @@
+{
+  "question_id": "sec20",
+  "purpose": "脆弱性スキャンの選択が「既知の CVE と突き合わせる役割かどうか」で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、GuardDuty と Inspector をどちらも『セキュリティの自動検査』と捉えて混同している人。",
+  "message": "既知の CVE と突き合わせて EC2・ECR・Lambda を継続スキャンする役割を持つのは Inspector である。",
+  "source_summary": "EC2 インスタンスや ECR のコンテナイメージに含まれるソフトウェアの既知の脆弱性(CVE)を継続的にスキャンしたい。正解は Amazon Inspector。EC2(SSM エージェント経由)・ECR イメージ・Lambda 関数を対象に、CVE データベースと突き合わせた脆弱性スキャンと意図しないネットワーク露出の検査を継続実行する。検出結果は重要度スコア付きで Security Hub にも集約できる。『パッチ漏れ・脆弱性の発見 = Inspector』。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "EC2 と ECR イメージに含まれる既知の脆弱性(CVE)を継続スキャンしたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "既知の CVE と突き合わせる役割か?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "INS",
+      "label": "Amazon Inspector",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "TARGET",
+      "label": "EC2(SSM エージェント経由)・ECR イメージ・Lambda 関数を継続スキャン",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "OUT",
+      "label": "重要度スコア付きの検出結果。意図しないネットワーク露出も検査し、Security Hub に集約できる",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "GD",
+      "label": "Amazon GuardDuty",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "WAF",
+      "label": "AWS WAF",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "ART",
+      "label": "AWS Artifact",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "パッチ漏れ・脆弱性の発見 = Inspector",
+      "type": "concept",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "INS",
+      "verb": "突き合わせるので選ぶ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "INS",
+      "to": "TARGET",
+      "verb": "対象を継続スキャンする",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "TARGET",
+      "to": "OUT",
+      "verb": "検出結果を出す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "GD",
+      "verb": "ログから脅威を見る別の役割",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "WAF",
+      "verb": "リクエストを遮断する別の役割",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "ART",
+      "verb": "監査レポートを入手する別の役割",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "INS",
+      "to": "NOTE",
+      "verb": "合言葉を補足する",
+      "direction": "none",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "CVE との突き合わせを行わない案",
+      "members": [
+        "GD",
+        "WAF",
+        "ART"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「既知の CVE と突き合わせるか」の 1 問で Inspector と他 3 案に振り分ける",
+    "包含(スキャン対象のレイヤー): EC2 / ECR イメージ / Lambda を Inspector が覆う範囲として描く"
+  ],
+  "selected_pattern": "分岐(判断フロー)。包含は Inspector の守備範囲を示せるが、他の 3 案がそのレイヤー図に置けず『なぜ他が落ちるか』を語れない。設問は 4 択の選び分けなので、CVE との突き合わせという役割の有無を 1 問に立て、対象の広さは正解側のラベルに書いた。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "EC2 のスキャンに SSM エージェントが要る点は前提条件だが、選択の判断軸ではないため正解側ノードの括弧書きにとどめている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"EC2 と ECR のコンテナイメージに含まれる<br/>既知の脆弱性(CVE)を継続的にスキャンしたい\"]:::req\n    Q{\"既知の CVE と<br/>突き合わせる役割か?\"}:::judge\n    INS[\"Amazon Inspector\"]:::best\n    TARGET[\"EC2(SSM エージェント経由)・ECR イメージ・<br/>Lambda 関数を継続スキャン\"]:::best\n    OUT[\"重要度スコア付きの検出結果<br/>意図しないネットワーク露出も検査<br/>Security Hub に集約できる\"]:::best\n    NOTE[\"パッチ漏れ・脆弱性の発見 = Inspector\"]:::note\n\n    subgraph NG[\"CVE との突き合わせを行わない案\"]\n        GD[\"Amazon GuardDuty<br/>ログから脅威を検知する\"]:::alt\n        WAF[\"AWS WAF<br/>L7 リクエストをルールで遮断する\"]:::alt\n        ART[\"AWS Artifact<br/>AWS の第三者監査レポートを入手する\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"そう\"| INS\n    INS --> TARGET\n    TARGET --> OUT\n    Q -.->|\"違う\"| NG\n    INS -.- NOTE"
+}

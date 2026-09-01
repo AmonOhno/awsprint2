@@ -1,0 +1,147 @@
+{
+  "question_id": "sec24",
+  "purpose": "認証の仕組みの選択が「認証する相手がアプリのエンドユーザーか、AWS を操作する人か」で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、IAM と Cognito のどちらがアプリのログイン機能を担うのか整理できていない人。",
+  "message": "認証する相手がアプリのエンドユーザーなら、ユーザーディレクトリは Cognito ユーザープールになる。",
+  "source_summary": "モバイルアプリにサインアップ/サインイン・パスワードリセット・Google などのソーシャルログインを提供したい。正解は Cognito ユーザープール。アプリのエンドユーザー向けのユーザーディレクトリで、サインアップ・サインイン・MFA・ソーシャル/SAML ログインをマネージドで提供し、認証後に JWT トークンを発行する。一般ユーザーに IAM ユーザーを発行するのはスケーラビリティ・セキュリティの両面でアンチパターン。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "モバイルアプリにサインアップ/サインイン・パスワードリセット・ソーシャルログインを提供したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "認証する相手はアプリのエンドユーザーか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "CUP",
+      "label": "Cognito ユーザープール",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "DIR",
+      "label": "エンドユーザー向けのユーザーディレクトリ。サインアップ・MFA・ソーシャル/SAML ログインをマネージド提供",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "JWT",
+      "label": "認証後に JWT トークンを発行",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "IAMU",
+      "label": "IAM ユーザーを一般ユーザーごとに発行",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "IDC",
+      "label": "IAM Identity Center",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "STS",
+      "label": "STS を直接呼び出す",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "一般ユーザーへの IAM ユーザー発行はスケーラビリティ・セキュリティ両面でアンチパターン",
+      "type": "concept",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "CUP",
+      "verb": "エンドユーザーなので選ぶ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CUP",
+      "to": "DIR",
+      "verb": "ログイン機能を提供する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "CUP",
+      "to": "JWT",
+      "verb": "認証結果を渡す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "IAMU",
+      "verb": "AWS 操作者向けの仕組みを流用してしまう",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "IDC",
+      "verb": "社内ユーザーの AWS アクセス管理",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "STS",
+      "verb": "一時認証情報の発行のみでログイン機能がない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NOTE",
+      "verb": "アンチパターンである理由を補足する",
+      "direction": "none",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "AWS を操作する人の認証・認可のための仕組み",
+      "members": [
+        "IAMU",
+        "IDC",
+        "STS"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「認証する相手はアプリのエンドユーザーか」の 1 問で Cognito と他 3 案に振り分ける",
+    "対比(2 つの世界): 左にアプリのエンドユーザー、右に AWS を操作する人を置き、それぞれの認証手段を並べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。対比は Cognito と IAM 系の住み分けを覚えるうえで有効だが、2 つの世界をどちらも同じ厚みで描くと『どちらを選ぶか』の答えが図の中心から外れる。相手が誰かを問う 1 問を頂点に置き、IAM 系 3 案はグループのラベルで住み分けを示した。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "Cognito ID プール(認証済みユーザーに AWS 権限を渡す機能)は設問の対象外なので図に入れていない。ユーザープールとの違いは別問で扱う想定。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"モバイルアプリにサインアップ/サインイン・<br/>パスワードリセット・Google などの<br/>ソーシャルログインを提供したい\"]:::req\n    Q{\"認証する相手は<br/>アプリのエンドユーザーか?\"}:::judge\n    CUP[\"Cognito ユーザープール\"]:::best\n    DIR[\"エンドユーザー向けのユーザーディレクトリ<br/>サインアップ・MFA・<br/>ソーシャル/SAML ログインも提供\"]:::best\n    JWT[\"認証後に JWT トークンを発行する\"]:::best\n    NOTE[\"一般ユーザーへの IAM ユーザー発行は<br/>スケーラビリティ・セキュリティ両面でアンチパターン\"]:::note\n\n    subgraph NG[\"AWS を操作する人の認証・認可のための仕組み\"]\n        IAMU[\"IAM ユーザーを一般ユーザーごとに発行\"]:::alt\n        IDC[\"IAM Identity Center<br/>社内ユーザーの AWS アクセス管理\"]:::alt\n        STS[\"STS を直接呼び出す<br/>一時認証情報の発行のみ\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"そう\"| CUP\n    CUP --> DIR\n    CUP --> JWT\n    Q -.->|\"違う\"| NG\n    Q -.- NOTE"
+}

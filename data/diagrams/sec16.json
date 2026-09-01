@@ -1,0 +1,148 @@
+{
+  "question_id": "sec16",
+  "purpose": "公開 TLS 証明書の選択が「発行から自動更新までを引き受けるサービスかどうか」で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、KMS・Secrets Manager・ACM がいずれも暗号や秘密情報を扱うため区別が曖昧な人。",
+  "message": "公開証明書を無料で発行し、ALB・CloudFront に統合して自動更新まで行うのは ACM だけなので、ACM を使う。",
+  "source_summary": "ALB と CloudFront で使う公開 TLS/SSL 証明書を無料で発行し、更新も自動化したい。正解は AWS Certificate Manager(ACM)。パブリック証明書を無料で発行し、ALB・CloudFront・API Gateway に統合して自動更新まで行うため、期限切れ事故を構造的に防げる。CloudFront で使う証明書はバージニア北部(us-east-1)で発行する必要があるという制約は頻出の引っかけ。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "ALB と CloudFront で使う公開 TLS/SSL 証明書を無料で発行し、更新も自動化したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "公開証明書の発行から更新までを引き受けるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ACM",
+      "label": "AWS Certificate Manager(ACM)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ISSUE",
+      "label": "パブリック証明書を無料で発行する",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ATTACH",
+      "label": "ALB・CloudFront・API Gateway に統合し、自動更新まで行う",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "KMS",
+      "label": "AWS KMS",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SM",
+      "label": "AWS Secrets Manager",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "MANUAL",
+      "label": "サードパーティー証明書を手動更新",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "CloudFront で使う証明書は us-east-1 で発行する",
+      "type": "concept",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "ACM",
+      "verb": "引き受けるので選ぶ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ACM",
+      "to": "ISSUE",
+      "verb": "無料で発行する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ACM",
+      "to": "ATTACH",
+      "verb": "統合して自動更新する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "KMS",
+      "verb": "証明書の発行・更新は担わない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SM",
+      "verb": "証明書の発行・更新は担わない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "MANUAL",
+      "verb": "自動更新にならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "ATTACH",
+      "to": "NOTE",
+      "verb": "リージョン制約を補足する",
+      "direction": "none",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "公開証明書の発行と自動更新を引き受けない案",
+      "members": [
+        "KMS",
+        "SM",
+        "MANUAL"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「発行から自動更新までを引き受けるか」の 1 問で ACM と他 3 案に振り分ける",
+    "直列(証明書のライフサイクル): 発行 → 配備 → 期限前更新 の各段で誰が担うかを並べ、ACM だけが全段を埋めることを示す"
+  ],
+  "selected_pattern": "分岐(判断フロー)。ライフサイクルの直列は『自動更新まで含めて任せられる』という価値をよく表せるが、KMS や Secrets Manager はそもそもライフサイクルに載らないため、3 つの誤答を同じ図に置くと段の意味が崩れる。担うか担わないかの 1 問に固定した。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "us-east-1 制約は設問の正解選択には効かないが解説が引っかけとして挙げているため、判断軸から外して注釈(note)に置いた。",
+    "ACM のプライベート CA が有料である点は解説に書かれていないため、図では触れていない。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"ALB と CloudFront で使う公開 TLS/SSL 証明書を<br/>無料で発行し、更新も自動化したい\"]:::req\n    Q{\"公開証明書の発行から<br/>更新までを引き受けるか?\"}:::judge\n    ACM[\"AWS Certificate Manager(ACM)\"]:::best\n    ISSUE[\"パブリック証明書を無料で発行する\"]:::best\n    ATTACH[\"ALB・CloudFront・API Gateway に統合し<br/>自動更新まで行う(期限切れ事故を構造的に防ぐ)\"]:::best\n    NOTE[\"CloudFront で使う証明書は<br/>バージニア北部(us-east-1)で発行する\"]:::note\n\n    subgraph NG[\"公開証明書の発行と自動更新を引き受けない案\"]\n        KMS[\"AWS KMS<br/>データ暗号化の鍵管理\"]:::alt\n        SM[\"AWS Secrets Manager<br/>シークレットの保管とローテーション\"]:::alt\n        MANUAL[\"サードパーティー証明書を手動更新<br/>期限切れ事故が残る\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"引き受ける\"| ACM\n    ACM --> ISSUE\n    ACM --> ATTACH\n    Q -.->|\"引き受けない\"| NG\n    ATTACH -.- NOTE"
+}

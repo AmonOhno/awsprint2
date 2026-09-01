@@ -1,0 +1,147 @@
+{
+  "question_id": "sec15",
+  "purpose": "設定値の置き場所の選択が「自動ローテーションが要るシークレットか、それ以外の設定値か」で決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、Parameter Store と Secrets Manager がどちらも値を保管できるため、どちらを使うべきか決められない人。",
+  "message": "ローテーション不要な設定値を階層パスで無料管理したいなら、置き場所は Parameter Store になる。",
+  "source_summary": "API の URL や機能フラグを階層構造で一元管理したく、追加コストは避けたい。正解は Systems Manager Parameter Store。/app/prod/db-url のような階層パスで管理でき、標準パラメータは無料。SecureString なら KMS 暗号化で軽微なシークレットも置ける。自動ローテーションが要る DB 認証情報は Secrets Manager、それ以外の設定値は Parameter Store という使い分けが定石。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "アプリの設定値を階層構造で一元管理したい。追加コストは避けたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "自動ローテーションが要るシークレットか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "PS",
+      "label": "Systems Manager Parameter Store",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "PATH",
+      "label": "/app/prod/db-url のような階層パスで管理でき、標準パラメータは無料",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "SEC",
+      "label": "SecureString なら KMS 暗号化で軽微なシークレットも置ける",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "SM",
+      "label": "AWS Secrets Manager(自動ローテーションが要る DB 認証情報向け)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DDB",
+      "label": "DynamoDB",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "S3",
+      "label": "S3",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "設定値 = Parameter Store / ローテーション要 = Secrets Manager",
+      "type": "concept",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "PS",
+      "verb": "ローテーション不要なら選ぶ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "PS",
+      "to": "PATH",
+      "verb": "階層パスで管理する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "PS",
+      "to": "SEC",
+      "verb": "暗号化して保管する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "SM",
+      "verb": "ローテーションが要るなら分かれる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "DDB",
+      "verb": "設定管理の機能を自前で作ることになる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "S3",
+      "verb": "設定管理の機能を自前で作ることになる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "PS",
+      "to": "NOTE",
+      "verb": "使い分けを補足する",
+      "direction": "none",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "設定管理の機能を持たない案(階層管理も暗号化も自前になる)",
+      "members": [
+        "DDB",
+        "S3"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「自動ローテーションが要るシークレットか」の 1 問で Parameter Store と他 3 案に振り分ける",
+    "テーブル: 4 サービス × 階層管理 / 暗号化 / 自動ローテーション / 料金 の比較表"
+  ],
+  "selected_pattern": "分岐(判断フロー)。テーブルは 4 サービスの機能差を網羅できるが、設問が問うているのは「どれを選ぶか」の 1 点であり、比較項目を並べると判断軸がどれか読み取る手間が増える。定石として与えられている『ローテーションの要否』を 1 問に立てれば、残りの案がまとめて反対側に落ちる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "DynamoDB・S3 は「ローテーションの要否」という軸の外側にある(そもそも設定管理の機能を持たない)。図では軸を 1 本に保つため同じ枝にまとめ、グループのラベルで理由を書き分けている。",
+    "解説には Parameter Store のアドバンストパラメータが有料である点への言及がないため、図では『標準パラメータは無料』にとどめている。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"アプリの設定値(API の URL・機能フラグ)を<br/>階層構造で一元管理したい<br/>追加コストは避けたい\"]:::req\n    Q{\"自動ローテーションが要る<br/>シークレットか?\"}:::judge\n    PS[\"Systems Manager Parameter Store\"]:::best\n    PATH[\"/app/prod/db-url のような階層パスで管理でき<br/>標準パラメータは無料\"]:::best\n    SEC[\"SecureString なら KMS 暗号化で<br/>軽微なシークレットも置ける\"]:::best\n    SM[\"AWS Secrets Manager<br/>自動ローテーションが要る DB 認証情報向け\"]:::alt\n    NOTE[\"設定値 = Parameter Store<br/>ローテーション要 = Secrets Manager\"]:::note\n\n    subgraph NG[\"設定管理の機能を持たない案\"]\n        DDB[\"DynamoDB\"]:::alt\n        S3[\"S3\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"不要\"| PS\n    PS --> PATH\n    PS --> SEC\n    Q -.->|\"必要\"| SM\n    Q -.->|\"自前実装\"| NG\n    PS -.- NOTE"
+}

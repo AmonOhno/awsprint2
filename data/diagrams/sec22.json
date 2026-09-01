@@ -1,0 +1,195 @@
+{
+  "question_id": "sec22",
+  "purpose": "検出結果の集約先の選択が「集約と標準準拠チェックの両方を担うか」で決まることを、複数サービスが 1 か所に集まる形で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、CloudWatch や CloudTrail も『いろいろ集まる場所』だと感じていて Security Hub との違いが曖昧な人。",
+  "message": "各サービスの検出結果の集約と、CIS 等の標準への自動チェックを併せ持つのは Security Hub である。",
+  "source_summary": "GuardDuty・Inspector・Macie など複数のセキュリティサービスの検出結果を一元的に集約し、CIS ベンチマーク等のセキュリティ標準への準拠状況も継続チェックしたい。正解は AWS Security Hub。検出結果(Findings)を標準フォーマットで集約するダッシュボードで、AWS 基礎セキュリティベストプラクティスや CIS などの標準に対する自動チェックも実行する。マルチアカウントの検出結果を管理アカウントへ集約でき、組織のセキュリティ態勢の可視化に使う。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "複数サービスの検出結果を一元集約し、標準への準拠状況も継続チェックしたい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "検出結果の集約と標準チェックを担うか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "GD",
+      "label": "Amazon GuardDuty",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "INS",
+      "label": "Amazon Inspector",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "MACIE",
+      "label": "Amazon Macie",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "HUB",
+      "label": "AWS Security Hub",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "AGG",
+      "label": "検出結果を標準フォーマットで集約。マルチアカウントを管理アカウントへ集約できる",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "STD",
+      "label": "AWS 基礎セキュリティベストプラクティス・CIS などへの自動チェックを実行",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "CT",
+      "label": "AWS CloudTrail",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CW",
+      "label": "Amazon CloudWatch",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SSM",
+      "label": "AWS Systems Manager",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "集約と標準準拠チェックの両方を持つのが Security Hub",
+      "type": "concept",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "HUB",
+      "verb": "両方を担うので選ぶ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "GD",
+      "to": "HUB",
+      "verb": "検出結果を送る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "INS",
+      "to": "HUB",
+      "verb": "検出結果を送る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "MACIE",
+      "to": "HUB",
+      "verb": "検出結果を送る",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "HUB",
+      "to": "AGG",
+      "verb": "一元的に可視化する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "HUB",
+      "to": "STD",
+      "verb": "標準準拠を継続チェックする",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "CT",
+      "verb": "集約先にはならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "CW",
+      "verb": "集約先にはならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SSM",
+      "verb": "集約先にはならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "HUB",
+      "to": "NOTE",
+      "verb": "判断の要点を補足する",
+      "direction": "none",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [
+    {
+      "id": "SRC",
+      "label": "検出結果(Findings)の発生元",
+      "members": [
+        "GD",
+        "INS",
+        "MACIE"
+      ]
+    },
+    {
+      "id": "NG",
+      "label": "セキュリティ検出結果の集約先にはならない案",
+      "members": [
+        "CT",
+        "CW",
+        "SSM"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "合流 + 分岐: 3 サービスの検出結果が Security Hub に集まり、集約と標準チェックの 2 つの出力になる形を描く",
+    "階層(組織の可視化): 管理アカウントの下にメンバーアカウントを並べ、検出結果が上がっていく構造で示す"
+  ],
+  "selected_pattern": "合流 + 分岐。マルチアカウントの階層はダッシュボードの価値を示せるが、設問が挙げているのは『複数サービスの検出結果』の集約であって複数アカウントではない。発生元から集約先へ集まる合流をそのまま描くほうが主メッセージに近く、マルチアカウント集約は集約ノードのラベルに添えた。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "CloudTrail・CloudWatch も情報が集まる場所ではあるが、集めているのが API 記録やメトリクスであって『セキュリティ検出結果』ではない。図ではグループのラベルでその線引きを明示している。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"複数のセキュリティサービスの検出結果を一元集約し<br/>CIS 等の標準への準拠状況も継続チェックしたい\"]:::req\n    Q{\"検出結果の集約と<br/>標準チェックを担うか?\"}:::judge\n    HUB[\"AWS Security Hub\"]:::best\n    AGG[\"検出結果を標準フォーマットで集約したダッシュボード<br/>マルチアカウントを管理アカウントへ集約できる\"]:::best\n    STD[\"AWS 基礎セキュリティベストプラクティス・CIS などの<br/>標準への自動チェックを実行\"]:::best\n    NOTE[\"集約と標準準拠チェックの<br/>両方を持つのが Security Hub\"]:::note\n\n    subgraph SRC[\"検出結果(Findings)の発生元\"]\n        GD[\"Amazon GuardDuty\"]:::svc\n        INS[\"Amazon Inspector\"]:::svc\n        MACIE[\"Amazon Macie\"]:::svc\n    end\n\n    subgraph NG[\"セキュリティ検出結果の集約先にはならない案\"]\n        CT[\"AWS CloudTrail<br/>API 呼び出しの記録\"]:::alt\n        CW[\"Amazon CloudWatch<br/>メトリクスとログの監視\"]:::alt\n        SSM[\"AWS Systems Manager<br/>運用・構成管理\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"担う\"| HUB\n    SRC -->|\"検出結果\"| HUB\n    HUB --> AGG\n    HUB --> STD\n    Q -.->|\"担わない\"| NG\n    HUB -.- NOTE"
+}
