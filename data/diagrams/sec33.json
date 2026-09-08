@@ -1,0 +1,146 @@
+{
+  "question_id": "sec33",
+  "purpose": "「作成者の設定漏れに関係なく必ず」という要件が、人手の運用ではなく仕組みでの強制を求めていることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、統制の手段として手順書・定期チェック・強制設定の強さの差を意識していない人。",
+  "message": "設定漏れに関係なく必ず暗号化したいなら、リージョンごとの「EBS デフォルト暗号化」で暗号化なしの作成自体をできなくする。",
+  "source_summary": "今後作成されるすべての EBS ボリュームとスナップショットを、作成者の設定漏れに関係なく必ず暗号化させたい。正解はリージョンごとの「EBS デフォルト暗号化」を有効にすること。EC2 のアカウント設定で有効にすると、そのリージョンで新規作成されるボリューム・スナップショットが指定した KMS キーで自動的に暗号化され、暗号化なしでの作成ができなくなる。手順書や事後チェックに頼る方法は人為ミスを防げない。リージョンごとの設定である点に注意。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "今後作成されるすべての EBS ボリューム・スナップショットを、作成者の設定漏れに関係なく必ず暗号化したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "暗号化を人手の運用に頼るか、仕組みで強制するか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "DEF",
+      "label": "EC2 のアカウント設定で「EBS デフォルト暗号化」を有効にする",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "AUTO",
+      "label": "新規のボリューム・スナップショットが指定した KMS キーで自動的に暗号化される",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "BLOCK",
+      "label": "暗号化なしでの作成ができなくなる",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "REGION",
+      "label": "リージョンごとの設定(使うリージョンそれぞれで有効にする)",
+      "type": "concept",
+      "priority": "support"
+    },
+    {
+      "id": "DOC",
+      "label": "作成手順書に暗号化を明記する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CHECK",
+      "label": "毎週手動で暗号化状況を確認する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "S3DEF",
+      "label": "S3 のデフォルト暗号化を有効にする",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "DEF",
+      "verb": "仕組みで強制する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "DEF",
+      "to": "AUTO",
+      "verb": "新規作成分に自動で効く",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "AUTO",
+      "to": "BLOCK",
+      "verb": "設定漏れの余地をなくす",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "DEF",
+      "to": "REGION",
+      "verb": "適用範囲を補足する",
+      "direction": "none",
+      "kind": "annotation"
+    },
+    {
+      "from": "Q",
+      "to": "DOC",
+      "verb": "事前の周知に頼るので人為ミスを防げない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "CHECK",
+      "verb": "事後の確認に頼るので人為ミスを防げない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "S3DEF",
+      "verb": "対象が EBS ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "人為ミスを防げない案(事前の周知・事後の確認)",
+      "members": [
+        "DOC",
+        "CHECK"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「人手の運用に頼るか、仕組みで強制するか」の 1 問でデフォルト暗号化と他案に振り分け、強制の効き方まで続ける",
+    "タイムライン(統制の効くタイミング): 作成前(手順書)・作成時(デフォルト暗号化)・作成後(定期チェック)の 3 点を時間軸に並べ、作成時に効く手段だけが漏れを防げることを示す"
+  ],
+  "selected_pattern": "分岐(判断フロー)。タイムラインは『いつ効くか』の違いを美しく説明できるが、時間軸という追加の読み解きを要求する。ここは 1 問(人手か仕組みか)に落として、選んだ先で『暗号化なしでの作成ができなくなる』という強制の効き方を示すほうが短く伝わる。効くタイミングの違いは、外した 2 案のグループのラベル(事前の周知・事後の確認)に残した。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "「S3 のデフォルト暗号化」は外した理由が他 2 案(人為ミスを防げない)と違うため、グループに入れず単独で置いている。既存ボリュームの扱い(この設定は新規作成分に効く)は解説の範囲を超えるので図に入れていない。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"今後作成されるすべての<br/>EBS ボリューム・スナップショットを<br/>作成者の設定漏れに関係なく必ず暗号化したい\"]:::req\n    Q{\"暗号化を人手の運用に頼るか<br/>仕組みで強制するか?\"}:::judge\n    DEF[\"EC2 のアカウント設定で<br/>「EBS デフォルト暗号化」を有効にする\"]:::best\n    AUTO[\"新規のボリューム・スナップショットが<br/>指定した KMS キーで自動的に暗号化される\"]:::best\n    BLOCK[\"暗号化なしでの作成ができなくなる\"]:::best\n    REGION[\"リージョンごとの設定<br/>(使うリージョンそれぞれで有効にする)\"]:::note\n    S3DEF[\"S3 のデフォルト暗号化を有効にする<br/>対象が EBS ではない\"]:::alt\n\n    subgraph NG[\"人為ミスを防げない案(事前の周知・事後の確認)\"]\n        DOC[\"作成手順書に暗号化を明記する\"]:::alt\n        CHECK[\"毎週手動で暗号化状況を確認する\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"仕組みで強制\"| DEF\n    DEF --> AUTO\n    AUTO --> BLOCK\n    DEF -.- REGION\n    Q -.->|\"人手に依存\"| NG\n    Q -.->|\"対象違い\"| S3DEF"
+}

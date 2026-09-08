@@ -1,0 +1,160 @@
+{
+  "question_id": "sec27",
+  "purpose": "「意図しない外部共有を見つけたい」という要件が、ポリシーそのものを解析する機能を求めていることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、IAM 系の点検機能(Access Analyzer・クレデンシャルレポート)の役割の違いが曖昧な人。",
+  "message": "調べたいのが「ポリシーが外部プリンシパルに開いているか」なら、リソースベースポリシーを論理的に解析する IAM Access Analyzer を使う。",
+  "source_summary": "S3 バケットや IAM ロールが意図せず外部アカウントやインターネットからアクセス可能になっていないかを継続的に検出したい。正解は IAM Access Analyzer。リソースベースポリシーを論理的に解析し、外部プリンシパルからアクセス可能なリソース(S3・IAM ロール・KMS キー・Lambda 等)を検出する。ポリシーの検証機能や、実際の利用実績に基づく最小権限ポリシーの生成機能もある。「意図しない外部共有の発見 = Access Analyzer」。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "S3 バケットや IAM ロールが意図せず外部アカウント・インターネットからアクセス可能になっていないか継続的に検出したい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "調べたいのはポリシーが外部プリンシパルに開いているかどうか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "AA",
+      "label": "IAM Access Analyzer",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "LOGIC",
+      "label": "リソースベースポリシーを論理的に解析する",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "FIND",
+      "label": "外部プリンシパルからアクセス可能なリソース(S3・IAM ロール・KMS キー・Lambda 等)を検出",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "EXTRA",
+      "label": "ポリシーの検証機能 / 利用実績に基づく最小権限ポリシーの生成",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CRED",
+      "label": "IAM クレデンシャルレポート",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CW",
+      "label": "CloudWatch アラーム",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CE",
+      "label": "Cost Explorer",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "意図しない外部共有の発見 = Access Analyzer",
+      "type": "concept",
+      "priority": "support"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "AA",
+      "verb": "ポリシーの解析なので選ぶ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "AA",
+      "to": "LOGIC",
+      "verb": "ポリシーを解析する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "LOGIC",
+      "to": "FIND",
+      "verb": "外部から届くリソースを挙げる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "AA",
+      "to": "EXTRA",
+      "verb": "同じ機能群として併せ持つ",
+      "direction": "one-way",
+      "kind": "other"
+    },
+    {
+      "from": "Q",
+      "to": "CRED",
+      "verb": "認証情報の棚卸しであってポリシーは見ない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "CW",
+      "verb": "メトリクスの監視でポリシーは見ない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "CE",
+      "verb": "費用の分析でポリシーは見ない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "FIND",
+      "to": "NOTE",
+      "verb": "覚え方を補足する",
+      "direction": "none",
+      "kind": "annotation"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "ポリシーの中身を解析しない機能(外部公開の有無は分からない)",
+      "members": [
+        "CRED",
+        "CW",
+        "CE"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「調べたいのはポリシーが外部に開いているかどうか」の 1 問で Access Analyzer と他 3 案に振り分ける",
+    "包含(点検対象の階層): 『アカウントの点検』の枠の中に 4 サービスを並べ、それぞれが見る対象(ポリシー・認証情報・メトリクス・費用)を子要素として置く"
+  ],
+  "selected_pattern": "分岐(判断フロー)。包含図は 4 つの守備範囲を一覧できるが、要件からどれを選ぶかという順序が図に現れない。『何を見る機能がほしいのか』の 1 問を頂点に置き、他 3 案はグループのラベルでまとめて外した。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "他 3 案の守備範囲(認証情報の棚卸し・メトリクス監視・費用分析)は選択肢名から読み取れる範囲にとどめ、ノードのラベルには機能名だけを書いてグループのラベルで外した理由を示している。各サービスの詳細を問う問題を追加する場合は個別の図が要る。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"S3 バケットや IAM ロールが意図せず<br/>外部アカウント・インターネットから<br/>アクセス可能になっていないか継続的に検出したい\"]:::req\n    Q{\"調べたいのはポリシーが<br/>外部プリンシパルに<br/>開いているかどうか?\"}:::judge\n    AA[\"IAM Access Analyzer\"]:::best\n    LOGIC[\"リソースベースポリシーを<br/>論理的に解析する\"]:::best\n    FIND[\"外部プリンシパルからアクセス可能な<br/>S3 / IAM ロール / KMS キー / Lambda 等を検出\"]:::best\n    EXTRA[\"ポリシーの検証機能<br/>利用実績に基づく最小権限ポリシーの生成\"]:::svc\n    NOTE[\"意図しない外部共有の発見 = Access Analyzer\"]:::note\n\n    subgraph NG[\"ポリシーの中身を解析しない機能(外部公開の有無は分からない)\"]\n        CRED[\"IAM クレデンシャルレポート\"]:::alt\n        CW[\"CloudWatch アラーム\"]:::alt\n        CE[\"Cost Explorer\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"そう\"| AA\n    AA --> LOGIC\n    LOGIC --> FIND\n    AA -.->|\"併せ持つ\"| EXTRA\n    Q -.->|\"違う\"| NG\n    FIND -.- NOTE"
+}

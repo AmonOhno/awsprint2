@@ -1,0 +1,147 @@
+{
+  "question_id": "sec32",
+  "purpose": "クロスアカウントの許可を「相手にロールを引き受けさせる」のではなく「リソース側で直接許可する」形にすると何が変わるかを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、クロスアカウントといえば AssumeRole しか思い浮かばない人。",
+  "message": "相手に AssumeRole させずにクロスアカウント許可を出すなら、リソース側のバケットポリシーで相手の ARN を Principal に指定する。",
+  "source_summary": "別アカウントのアプリケーションに自社の S3 バケットへの書き込みを許可したい。相手にロールを引き受けさせずに実現する方法を問う問題。正解はバケットポリシー(リソースベースポリシー)で相手アカウントを許可する。Principal に相手アカウントやロールの ARN を指定してクロスアカウントアクセスを直接許可でき、相手側は自分の認証情報のままアクセスできるので AssumeRole が不要。ただし相手側でも S3 への操作を許可する IAM ポリシーが必要。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "別アカウントのアプリに自社の S3 バケットへの書き込みを許可したい(相手にロールを引き受けさせない)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "許可をどちら側のポリシーで与えるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "BP",
+      "label": "S3 バケットポリシー(リソースベースポリシー)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "PRIN",
+      "label": "Principal に相手アカウント/ロールの ARN を指定する",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "KEEP",
+      "label": "相手は自分の認証情報のままアクセスできる(AssumeRole が不要)",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "PEER",
+      "label": "相手側でも S3 への操作を許可する IAM ポリシーが必要",
+      "type": "concept",
+      "priority": "support"
+    },
+    {
+      "id": "PUBLIC",
+      "label": "バケットを公開設定にする",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "KEY",
+      "label": "アクセスキーを発行して渡す",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NACL",
+      "label": "NACL で相手の IP を許可する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "BP",
+      "verb": "リソース側で与える",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "BP",
+      "to": "PRIN",
+      "verb": "相手を名指しで許可する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "PRIN",
+      "to": "KEEP",
+      "verb": "引き受けなしでアクセスできる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "KEEP",
+      "to": "PEER",
+      "verb": "相手側にも必要な設定を補足する",
+      "direction": "none",
+      "kind": "annotation"
+    },
+    {
+      "from": "Q",
+      "to": "PUBLIC",
+      "verb": "相手を特定せず誰にでも開いてしまう",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "KEY",
+      "verb": "長期の認証情報を渡してしまう",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "NACL",
+      "verb": "ネットワークの制御で S3 の許可にならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "相手を名指しで許可することにならない案",
+      "members": [
+        "PUBLIC",
+        "KEY",
+        "NACL"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「許可をどちら側のポリシーで与えるか」の 1 問でバケットポリシーと他 3 案に振り分け、AssumeRole が要らなくなる結果まで続ける",
+    "対比(2 方式): 左に AssumeRole 方式(相手がロールを引き受ける)、右にリソースベース方式(バケットポリシーで直接許可)を並べて手順の違いを見せる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。対比は 2 方式の違いを理解するには良いが、設問は AssumeRole を使わない前提を与えているので、2 方式を同じ厚みで描く必要がない。『許可をどちら側のポリシーで与えるか』の 1 問に絞り、相手側の IAM ポリシーも要るという落とし穴は注釈で残した。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "「相手側でも IAM ポリシーが必要」は注釈で置いている。両側の許可が必要という点を主題にするなら sec34 のような合流型の図が向くので、そちらとの描き分けを維持したい。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"別アカウントのアプリに<br/>自社の S3 バケットへの書き込みを許可したい<br/>(相手にロールを引き受けさせない)\"]:::req\n    Q{\"許可をどちら側の<br/>ポリシーで与えるか?\"}:::judge\n    BP[\"S3 バケットポリシー<br/>(リソースベースポリシー)\"]:::best\n    PRIN[\"Principal に相手アカウント/ロールの<br/>ARN を指定する\"]:::best\n    KEEP[\"相手は自分の認証情報のままアクセスできる<br/>= AssumeRole が不要\"]:::best\n    PEER[\"ただし相手側でも<br/>S3 への操作を許可する IAM ポリシーが必要\"]:::note\n\n    subgraph NG[\"相手を名指しで許可することにならない案\"]\n        PUBLIC[\"バケットを公開設定にする\"]:::alt\n        KEY[\"アクセスキーを発行して渡す\"]:::alt\n        NACL[\"NACL で相手の IP を許可する\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"リソース側\"| BP\n    BP --> PRIN\n    PRIN --> KEEP\n    KEEP -.- PEER\n    Q -.->|\"許可にならない\"| NG"
+}

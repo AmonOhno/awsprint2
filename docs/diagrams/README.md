@@ -4,7 +4,7 @@
 `data/diagrams/<問題ID>.json` を編集して `python3 scripts/build-diagrams.py` を実行すること
 (手順: [DIAGRAM-WORKFLOW.md](../DIAGRAM-WORKFLOW.md))。
 
-収録: 223 問 / 全 400 問
+収録: 233 問 / 全 400 問
 
 ---
 
@@ -11302,3 +11302,505 @@ flowchart TB
 **解説**: Cognito ユーザープールはアプリのエンドユーザー向けのユーザーディレクトリで、サインアップ・サインイン・MFA・ソーシャル/SAML ログインをマネージドで提供し、認証後に JWT トークンを発行します。一般ユーザーに IAM ユーザーを発行するのはスケーラビリティ・セキュリティの両面でアンチパターンです。
 
 **確認事項**: Cognito ID プール(認証済みユーザーに AWS 権限を渡す機能)は設問の対象外なので図に入れていない。ユーザープールとの違いは別問で扱う想定。
+
+---
+
+## sec25 — セキュリティ・IAM / level 2
+
+**問題**: モバイルアプリのログインユーザーに、自分専用の S3 プレフィックスへ直接アップロードさせたい。AWS の一時認証情報を安全に払い出す仕組みはどれか?
+
+**正解**: Cognito ID プール(フェデレーテッドアイデンティティ)
+
+**他の選択肢**: アプリにアクセスキーを埋め込む / 全ユーザー共通の IAM ユーザー / S3 バケットの公開
+
+**図解の主メッセージ**: ログイン済みユーザーに AWS リソースへ直接アクセスさせるなら、認証結果を IAM ロールの一時認証情報に引き換える Cognito ID プールを使う。
+
+**採用パターン**: 分岐(判断フロー)+ 採用側の直列。直列だけだと「なぜアクセスキー埋め込みではないのか」が図に残らず、判断軸が伝わらない。判断を頂点に 1 問だけ置き、その先で ID プールが認証結果を一時認証情報に引き換える流れをたどれるようにした。(候補: 分岐(判断フロー): 「長期の認証情報を配らずにユーザー単位の権限を渡せるか」の 1 問で ID プールと他 3 案に振り分け、採用側は発行の流れを直列で見せる / 直列(認証情報の受け渡し): ユーザー → ユーザープール → ID プール → 一時認証情報 → S3 の流れだけを描き、他の選択肢は描かない)
+
+```mermaid
+flowchart TB
+    REQ["モバイルアプリのログインユーザーに<br/>自分専用の S3 プレフィックスへ<br/>直接アップロードさせたい"]:::req
+    Q{"長期の認証情報を配らずに<br/>ユーザー単位の権限を渡せるか?"}:::judge
+    AUTHN["ユーザープールや外部 IdP の認証結果"]:::svc
+    IDP["Cognito ID プール<br/>(フェデレーテッドアイデンティティ)"]:::best
+    TEMP["IAM ロールに基づく<br/>一時的な AWS 認証情報"]:::best
+    VAR["ポリシー変数<br/>cognito-identity.amazonaws.com:sub で<br/>ユーザーごとのプレフィックスに限定"]:::best
+    S3["S3 のユーザー専用プレフィックス"]:::svc
+    NOTE["認証 = ユーザープール /<br/>AWS リソースへのアクセス権 = ID プール"]:::note
+
+    subgraph NG["認証情報の共有・公開に頼る案(ユーザーごとに絞れない)"]
+        EMBED["アプリにアクセスキーを埋め込む"]:::alt
+        SHARED["全ユーザー共通の IAM ユーザー"]:::alt
+        PUBLIC["S3 バケットの公開"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"渡せる"| IDP
+    AUTHN -->|"持ち込む"| IDP
+    IDP -->|"引き換え"| TEMP
+    TEMP --> VAR
+    VAR --> S3
+    Q -.->|"渡せない"| NG
+    IDP -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec25.svg`](../../web/diagrams/sec25.svg)
+
+**解説**: Cognito ID プールは、ユーザープールや外部 IdP の認証結果と引き換えに、IAM ロールに基づく一時的な AWS 認証情報を発行します。ポリシー変数(cognito-identity.amazonaws.com:sub)でユーザーごとのプレフィックスに限定できます。「認証 = ユーザープール、AWS リソースへのアクセス権 = ID プール」の役割分担が頻出です。
+
+**確認事項**: ユーザープールと ID プールの連携(認証 → 権限)は 1 本の矢印にまとめている。両者を別々に構成する手順を問う問題を追加する場合は分割が必要。
+
+---
+
+## sec26 — セキュリティ・IAM / level 1
+
+**問題**: AWS アカウントのルートユーザーに関するベストプラクティスとして正しいものはどれか?
+
+**正解**: MFA を有効化し、日常作業には使わず、アクセスキーは作成しない
+
+**他の選択肢**: 日常の管理作業にルートユーザーを使う / アクセスキーを発行してチームで共有する / パスワードを無効化して封印する
+
+**図解の主メッセージ**: ルートユーザーは権限を制限できない全権限なので、MFA で保護してルート限定の作業だけに使い、日常運用は最小権限の IAM 側で行う。
+
+**採用パターン**: 分岐(判断フロー)。対比 2 列は網羅的に見えるが「何を基準に左右へ分けたのか」が図に残らない。作業のたびに自分へ問う 1 問を頂点に置くほうが、試験でも実務でも同じ順序でたどれる。(候補: 分岐(判断フロー): 「ルートでしかできない作業か」の 1 問で、MFA 保護したルートと最小権限の IAM 運用に振り分ける / 対比(2 列): 左に「ルートでやること」、右に「ルートでやらないこと」を並べて置く)
+
+```mermaid
+flowchart TB
+    REQ["ルートユーザーは全権限を持ち<br/>権限の制限もほぼできない"]:::req
+    Q{"ルートユーザーでしか<br/>できない作業か?"}:::judge
+    ROOT["ハードウェア MFA 等で保護した<br/>ルートユーザーで実施する<br/>(アカウント設定の変更など)"]:::best
+    NOKEY["ルートのアクセスキーは作成しない<br/>(あれば削除する)"]:::best
+    DAILY["最小権限の IAM ロール /<br/>IAM Identity Center 経由で行う"]:::best
+
+    subgraph NG["採らない案(ルート運用の原則から外れる)"]
+        USE["日常の管理作業にルートユーザーを使う"]:::alt
+        SHARE["アクセスキーを発行してチームで共有する"]:::alt
+        SEAL["パスワードを無効化して封印する<br/>ルート限定の作業が残るため封印しきれない"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"はい"| ROOT
+    Q -->|"いいえ"| DAILY
+    ROOT -.- NOKEY
+    Q -.->|"採らない"| NG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec26.svg`](../../web/diagrams/sec26.svg)
+
+**解説**: ルートユーザーは全権限を持ち制限もほぼ不可能なため、ハードウェア MFA 等で保護した上で、アカウント設定変更などルートでしかできない作業に限定します。アクセスキーは作成しない(あれば削除する)のが原則です。日常運用は最小権限の IAM ロール/Identity Center 経由で行います。
+
+**確認事項**: 「パスワードを無効化して封印する」が不適な理由は、解説の『ルートでしかできない作業に限定する』(=ルートを使う場面は残る)からの導出として書いている。ルート認証情報の運用そのものを問う問題を追加する場合は、根拠を解説側に明記したい。
+
+---
+
+## sec27 — セキュリティ・IAM / level 2
+
+**問題**: S3 バケットや IAM ロールが、意図せず外部アカウントやインターネットからアクセス可能になっていないかを継続的に検出したい。どの機能を使うか?
+
+**正解**: IAM Access Analyzer
+
+**他の選択肢**: IAM クレデンシャルレポート / CloudWatch アラーム / Cost Explorer
+
+**図解の主メッセージ**: 調べたいのが「ポリシーが外部プリンシパルに開いているか」なら、リソースベースポリシーを論理的に解析する IAM Access Analyzer を使う。
+
+**採用パターン**: 分岐(判断フロー)。包含図は 4 つの守備範囲を一覧できるが、要件からどれを選ぶかという順序が図に現れない。『何を見る機能がほしいのか』の 1 問を頂点に置き、他 3 案はグループのラベルでまとめて外した。(候補: 分岐(判断フロー): 「調べたいのはポリシーが外部に開いているかどうか」の 1 問で Access Analyzer と他 3 案に振り分ける / 包含(点検対象の階層): 『アカウントの点検』の枠の中に 4 サービスを並べ、それぞれが見る対象(ポリシー・認証情報・メトリクス・費用)を子要素として置く)
+
+```mermaid
+flowchart TB
+    REQ["S3 バケットや IAM ロールが意図せず<br/>外部アカウント・インターネットから<br/>アクセス可能になっていないか継続的に検出したい"]:::req
+    Q{"調べたいのはポリシーが<br/>外部プリンシパルに<br/>開いているかどうか?"}:::judge
+    AA["IAM Access Analyzer"]:::best
+    LOGIC["リソースベースポリシーを<br/>論理的に解析する"]:::best
+    FIND["外部プリンシパルからアクセス可能な<br/>S3 / IAM ロール / KMS キー / Lambda 等を検出"]:::best
+    EXTRA["ポリシーの検証機能<br/>利用実績に基づく最小権限ポリシーの生成"]:::svc
+    NOTE["意図しない外部共有の発見 = Access Analyzer"]:::note
+
+    subgraph NG["ポリシーの中身を解析しない機能(外部公開の有無は分からない)"]
+        CRED["IAM クレデンシャルレポート"]:::alt
+        CW["CloudWatch アラーム"]:::alt
+        CE["Cost Explorer"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"そう"| AA
+    AA --> LOGIC
+    LOGIC --> FIND
+    AA -.->|"併せ持つ"| EXTRA
+    Q -.->|"違う"| NG
+    FIND -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec27.svg`](../../web/diagrams/sec27.svg)
+
+**解説**: IAM Access Analyzer はリソースベースポリシーを論理的に解析し、外部プリンシパルからアクセス可能なリソース(S3・IAM ロール・KMS キー・Lambda 等)を検出します。ポリシーの検証機能や、実際の利用実績に基づく最小権限ポリシーの生成機能もあります。「意図しない外部共有の発見 = Access Analyzer」です。
+
+**確認事項**: 他 3 案の守備範囲(認証情報の棚卸し・メトリクス監視・費用分析)は選択肢名から読み取れる範囲にとどめ、ノードのラベルには機能名だけを書いてグループのラベルで外した理由を示している。各サービスの詳細を問う問題を追加する場合は個別の図が要る。
+
+---
+
+## sec28 — セキュリティ・IAM / level 2
+
+**問題**: 「EBS ボリュームはすべて暗号化されていること」という社内基準への準拠を継続的に評価し、違反リソースを検出したら自動修復まで行いたい。どのサービスを使うか?
+
+**正解**: AWS Config ルール + 自動修復アクション
+
+**他の選択肢**: AWS CloudTrail / Amazon Inspector / AWS Budgets
+
+**図解の主メッセージ**: 評価したいのがリソースの設定状態なら AWS Config ルール、見たいのが API 呼び出しの履歴なら CloudTrail。
+
+**採用パターン**: 分岐(判断フロー)+ 直列。対比は 2 サービスの区別を覚えるには良いが、この設問は「自動修復まで」を含むので、検出したあと何が起きるかを続けて描ける直列のほうが要件を最後まで満たすことを示せる。CloudTrail との区別は注釈で残した。(候補: 分岐(判断フロー)+ 直列: 「評価したいのは設定状態か」の 1 問で Config を選び、記録 → 評価 → 検出 → 自動修復の流れを続ける / 対比(Config と CloudTrail): 左に「設定の状態を見る」、右に「API の履歴を見る」を置き、それぞれの用途を並べる)
+
+```mermaid
+flowchart TB
+    REQ["「EBS ボリュームはすべて暗号化」という<br/>社内基準への準拠を継続評価し、<br/>違反リソースを自動修復したい"]:::req
+    Q{"評価したいのは<br/>リソースの設定状態か?"}:::judge
+    CFG["AWS Config<br/>リソースの設定変更を記録する"]:::best
+    RULE["Config ルールで準拠状態を継続評価<br/>(暗号化されているか・タグが付いているか)"]:::best
+    NONCOMP["非準拠リソース"]:::best
+    REMEDY["SSM Automation による<br/>自動修復アクション"]:::best
+    NOTE["設定のコンプライアンス評価 = Config /<br/>API 履歴 = CloudTrail"]:::note
+
+    subgraph NG["設定の準拠状態を継続評価する役割ではない選択肢"]
+        CT["AWS CloudTrail<br/>API 呼び出しの履歴"]:::alt
+        INS["Amazon Inspector"]:::alt
+        BUD["AWS Budgets"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"そう"| CFG
+    CFG --> RULE
+    RULE -->|"検出"| NONCOMP
+    NONCOMP -->|"紐付ける"| REMEDY
+    Q -.->|"違う"| NG
+    CT -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec28.svg`](../../web/diagrams/sec28.svg)
+
+**解説**: AWS Config はリソースの設定変更を記録し、Config ルールで「暗号化されているか」「タグが付いているか」などの準拠状態を継続評価します。非準拠リソースには SSM Automation による自動修復アクションを紐付けられます。「設定のコンプライアンス評価 = Config、API 履歴 = CloudTrail」の区別が重要です。
+
+**確認事項**: Inspector と Budgets は解説で役割が説明されていないため、ノードには名前だけを書き、外した理由はグループのラベル(設定の準拠状態を継続評価する役割ではない)に寄せている。
+
+---
+
+## sec29 — セキュリティ・IAM / level 2
+
+**問題**: コスト最適化・セキュリティ・耐障害性・サービスクォータなどの観点で、アカウントの状況を AWS のベストプラクティスと照らし合わせてチェック・推奨してくれるサービスはどれか?
+
+**正解**: AWS Trusted Advisor
+
+**他の選択肢**: AWS Config / Amazon Inspector / AWS Health Dashboard
+
+**図解の主メッセージ**: 自分で基準を書かずに AWS のベストプラクティスとの照合と推奨がほしいなら Trusted Advisor を使う(全チェック項目はビジネス/エンタープライズサポート前提)。
+
+**採用パターン**: 分岐(判断フロー)。中心放射は観点の一覧としては読みやすいが、この設問で問われているのは「なぜ他の 3 つではなく Trusted Advisor か」なので、判断軸(基準を持つのが AWS 側か)を頂点に置いた。5 観点は 1 ノードにまとめて図の要素数を抑えた。(候補: 分岐(判断フロー): 「基準を持つのは AWS 側か自社側か」の 1 問で Trusted Advisor と他 3 案に振り分け、5 観点と指摘例を続ける / 中心放射(観点の展開): Trusted Advisor を中心に、コスト最適化・パフォーマンス・セキュリティ・耐障害性・サービス制限の 5 観点を放射状に並べる)
+
+```mermaid
+flowchart TB
+    REQ["コスト最適化・セキュリティ・耐障害性・<br/>サービスクォータの観点でアカウントを点検し<br/>推奨がほしい"]:::req
+    Q{"基準は AWS の<br/>ベストプラクティス側が<br/>持っているか?"}:::judge
+    TA["AWS Trusted Advisor"]:::best
+    AXIS["コスト最適化・パフォーマンス・セキュリティ・<br/>耐障害性・サービス制限の観点で自動チェック"]:::best
+    FIND["開放されたセキュリティグループ、<br/>低使用率の EC2 などを指摘"]:::best
+    PLAN["全チェック項目の利用には<br/>ビジネス/エンタープライズサポートプランが必要"]:::note
+
+    subgraph NG["AWS のベストプラクティスとの照合・推奨が役割ではない選択肢"]
+        CFG["AWS Config"]:::alt
+        INS["Amazon Inspector"]:::alt
+        HEALTH["AWS Health Dashboard"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"AWS 側"| TA
+    TA --> AXIS
+    AXIS -->|"指摘"| FIND
+    TA -.- PLAN
+    Q -.->|"違う"| NG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec29.svg`](../../web/diagrams/sec29.svg)
+
+**解説**: Trusted Advisor は「コスト最適化・パフォーマンス・セキュリティ・耐障害性・サービス制限」等の観点でアカウントを自動チェックし、開放されたセキュリティグループや低使用率の EC2 などを指摘します。全チェック項目の利用にはビジネス/エンタープライズサポートプランが必要という条件も頻出です。
+
+**確認事項**: 他 3 案は解説で役割が説明されていないため、ノードには名前だけを書いている。Config(自社基準の評価)や Health Dashboard(AWS 側の障害情報)との対比を問う問題を追加する場合は、それぞれの図で扱う。
+
+---
+
+## sec30 — セキュリティ・IAM / level 1
+
+**問題**: 監査人から SOC 2 や ISO 27001 など、AWS 自体のコンプライアンス認証レポートの提出を求められた。どこから入手するか?
+
+**正解**: AWS Artifact からダウンロードする
+
+**他の選択肢**: AWS サポートに個別依頼する / AWS Config のダッシュボード / Trusted Advisor のレポート
+
+**図解の主メッセージ**: 求められているのが AWS 自体(クラウド側)のコンプライアンス認証レポートなら、AWS Artifact からセルフサービスでダウンロードする。
+
+**採用パターン**: 分岐(判断フロー)+ 合流。レイヤー図は責任共有モデルそのものの説明には向くが、この設問の答えは『どこから入手するか』なので、判断 1 問から入手までをたどれる形を採った。責任共有モデルの構図は、Artifact 側と自社側の 2 本が監査対応に合流する形で残している。(候補: 分岐(判断フロー)+ 合流: 「AWS 側の証明か」の 1 問で Artifact を選び、自社側の証明と合流して監査対応になる形で描く / レイヤー(責任共有モデル): 上段に AWS 側のセキュリティ、下段に利用者側の統制を層で並べ、それぞれの証明の出どころを添える)
+
+```mermaid
+flowchart TB
+    REQ["監査人から SOC 2 / ISO 27001 など<br/>AWS 自体のコンプライアンス認証レポートを<br/>求められた"]:::req
+    Q{"求められているのは<br/>責任共有モデルの<br/>AWS 側(クラウド自体)の証明か?"}:::judge
+    ART["AWS Artifact<br/>無料のセルフサービスポータル"]:::best
+    DL["SOC・ISO・PCI DSS などの<br/>レポートをダウンロードする"]:::best
+    OWN["自社側の統制の証明<br/>(利用者の責任範囲)"]:::svc
+    AUDIT["監査への対応"]:::best
+
+    subgraph NG["AWS 自体の認証レポートの入手先ではない選択肢"]
+        SUP["AWS サポートに個別依頼する"]:::alt
+        CFG["AWS Config のダッシュボード"]:::alt
+        TA["Trusted Advisor のレポート"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"AWS 側"| ART
+    ART --> DL
+    DL -->|"提出"| AUDIT
+    OWN -->|"組み合わせ"| AUDIT
+    Q -.->|"違う"| NG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec30.svg`](../../web/diagrams/sec30.svg)
+
+**解説**: AWS Artifact は AWS の各種コンプライアンスレポート(SOC・ISO・PCI DSS など)をセルフサービスでダウンロードできる無料ポータルです。責任共有モデルにおける「AWS 側(クラウド自体)のセキュリティ」の証明書類はここから取得し、自社側の統制の証明と組み合わせて監査に対応します。
+
+**確認事項**: 自社側の統制の証明は、解説が具体的な手段に触れていないため 1 ノード(利用者の責任範囲)にとどめている。自社側の証明手段を問う問題を追加する場合は、そこを展開した別図が要る。
+
+---
+
+## sec31 — セキュリティ・IAM / level 2
+
+**問題**: 社内の SAML 2.0 対応 IdP で認証された社員に、IAM ユーザーを作らず AWS リソースへの一時的なアクセスを許可したい。この連携で中心となるサービスはどれか?
+
+**正解**: AWS STS(AssumeRoleWithSAML)
+
+**他の選択肢**: AWS KMS / Amazon Cognito ユーザープール / AWS Direct Connect
+
+**図解の主メッセージ**: 社内 IdP の SAML アサーションを AWS の権限に変換するのは STS の AssumeRoleWithSAML であり、そこを通すから IAM ユーザーを作らずに済む。
+
+**採用パターン**: 直列(認証情報の受け渡し)。この設問は「連携の中心はどれか」を問うており、答えは受け渡しの列のどこに STS が立つかで決まる。分岐にすると STS が『選ばれた箱』になるだけで、SAML アサーションが一時認証情報に変わる場所という肝心の位置関係が消える。他の 3 案は列の外にグループでまとめた。(候補: 直列(認証情報の受け渡し): 社員 → IdP → SAML アサーション → STS → 一時認証情報 → AWS リソース の一本道で、変換点が STS であることを位置で示す / 分岐(判断フロー): 「認証する相手は社内の社員か、アプリの一般ユーザーか」の 1 問で STS と Cognito に振り分ける)
+
+```mermaid
+flowchart TB
+    EMP["社員<br/>(IAM ユーザーは作らない)"]:::req
+    IDP["社内の SAML 2.0 対応 IdP"]:::svc
+    ASSERT["SAML アサーション"]:::best
+    STS["AWS STS<br/>AssumeRoleWithSAML"]:::best
+    TEMP["IAM ロールに紐づく一時認証情報<br/>(最大 12 時間)"]:::best
+    RES["AWS リソース"]:::svc
+    NOTE["IAM ユーザーの発行・管理が不要になり<br/>認証は既存 IdP に集約される"]:::note
+
+    subgraph NG["この SAML 連携の中心にはならない選択肢"]
+        COG["Amazon Cognito ユーザープール<br/>Web/モバイルの一般ユーザー向け"]:::alt
+        KMS["AWS KMS"]:::alt
+        DX["AWS Direct Connect"]:::alt
+    end
+
+    EMP -->|"認証"| IDP
+    IDP -->|"発行"| ASSERT
+    ASSERT -->|"渡す"| STS
+    STS -->|"払い出す"| TEMP
+    TEMP -->|"アクセス"| RES
+    STS -.- NOTE
+    EMP -.->|"対象が違う"| NG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec31.svg`](../../web/diagrams/sec31.svg)
+
+**解説**: ID フェデレーションでは、IdP が発行した SAML アサーションを STS の AssumeRoleWithSAML に渡し、IAM ロールに紐づく一時認証情報(最大 12 時間)を取得します。IAM ユーザーの発行・管理が不要になり、認証は既存 IdP に集約されます。Web/モバイルの一般ユーザー向けには Cognito を使う、という対比も押さえます。
+
+**確認事項**: 判断ポイント(菱形)を置かない構成にしている。判断軸は『認証は既存 IdP・AWS の権限は一時ロール』という受け渡しの位置そのもので表しているが、他の図と読み口が変わる点は要検討。 / IAM ロール側の信頼ポリシー(IdP を信頼する設定)は解説に記述がないため図に入れていない。
+
+---
+
+## sec32 — セキュリティ・IAM / level 2
+
+**問題**: 別アカウントのアプリケーションに自社の S3 バケットへの書き込みを許可したい。相手にロールを引き受けさせずに実現する方法はどれか?
+
+**正解**: バケットポリシー(リソースベースポリシー)で相手アカウントを許可する
+
+**他の選択肢**: バケットを公開設定にする / アクセスキーを発行して渡す / NACL で相手の IP を許可する
+
+**図解の主メッセージ**: 相手に AssumeRole させずにクロスアカウント許可を出すなら、リソース側のバケットポリシーで相手の ARN を Principal に指定する。
+
+**採用パターン**: 分岐(判断フロー)。対比は 2 方式の違いを理解するには良いが、設問は AssumeRole を使わない前提を与えているので、2 方式を同じ厚みで描く必要がない。『許可をどちら側のポリシーで与えるか』の 1 問に絞り、相手側の IAM ポリシーも要るという落とし穴は注釈で残した。(候補: 分岐(判断フロー): 「許可をどちら側のポリシーで与えるか」の 1 問でバケットポリシーと他 3 案に振り分け、AssumeRole が要らなくなる結果まで続ける / 対比(2 方式): 左に AssumeRole 方式(相手がロールを引き受ける)、右にリソースベース方式(バケットポリシーで直接許可)を並べて手順の違いを見せる)
+
+```mermaid
+flowchart TB
+    REQ["別アカウントのアプリに<br/>自社の S3 バケットへの書き込みを許可したい<br/>(相手にロールを引き受けさせない)"]:::req
+    Q{"許可をどちら側の<br/>ポリシーで与えるか?"}:::judge
+    BP["S3 バケットポリシー<br/>(リソースベースポリシー)"]:::best
+    PRIN["Principal に相手アカウント/ロールの<br/>ARN を指定する"]:::best
+    KEEP["相手は自分の認証情報のままアクセスできる<br/>= AssumeRole が不要"]:::best
+    PEER["ただし相手側でも<br/>S3 への操作を許可する IAM ポリシーが必要"]:::note
+
+    subgraph NG["相手を名指しで許可することにならない案"]
+        PUBLIC["バケットを公開設定にする"]:::alt
+        KEY["アクセスキーを発行して渡す"]:::alt
+        NACL["NACL で相手の IP を許可する"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"リソース側"| BP
+    BP --> PRIN
+    PRIN --> KEEP
+    KEEP -.- PEER
+    Q -.->|"許可にならない"| NG
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec32.svg`](../../web/diagrams/sec32.svg)
+
+**解説**: S3 バケットポリシーはリソースベースポリシーで、Principal に相手アカウントやロールの ARN を指定してクロスアカウントアクセスを直接許可できます。相手側は自分の認証情報のままアクセスでき、ロールの引き受け(AssumeRole)が不要です。ただし相手側でも S3 への操作を許可する IAM ポリシーが必要です。
+
+**確認事項**: 「相手側でも IAM ポリシーが必要」は注釈で置いている。両側の許可が必要という点を主題にするなら sec34 のような合流型の図が向くので、そちらとの描き分けを維持したい。
+
+---
+
+## sec33 — セキュリティ・IAM / level 2
+
+**問題**: 今後作成されるすべての EBS ボリュームとスナップショットを、作成者の設定漏れに関係なく必ず暗号化させたい。最も確実な方法はどれか?
+
+**正解**: リージョンごとの「EBS デフォルト暗号化」を有効にする
+
+**他の選択肢**: 作成手順書に暗号化を明記する / 毎週手動で暗号化状況を確認する / S3 のデフォルト暗号化を有効にする
+
+**図解の主メッセージ**: 設定漏れに関係なく必ず暗号化したいなら、リージョンごとの「EBS デフォルト暗号化」で暗号化なしの作成自体をできなくする。
+
+**採用パターン**: 分岐(判断フロー)。タイムラインは『いつ効くか』の違いを美しく説明できるが、時間軸という追加の読み解きを要求する。ここは 1 問(人手か仕組みか)に落として、選んだ先で『暗号化なしでの作成ができなくなる』という強制の効き方を示すほうが短く伝わる。効くタイミングの違いは、外した 2 案のグループのラベル(事前の周知・事後の確認)に残した。(候補: 分岐(判断フロー): 「人手の運用に頼るか、仕組みで強制するか」の 1 問でデフォルト暗号化と他案に振り分け、強制の効き方まで続ける / タイムライン(統制の効くタイミング): 作成前(手順書)・作成時(デフォルト暗号化)・作成後(定期チェック)の 3 点を時間軸に並べ、作成時に効く手段だけが漏れを防げることを示す)
+
+```mermaid
+flowchart TB
+    REQ["今後作成されるすべての<br/>EBS ボリューム・スナップショットを<br/>作成者の設定漏れに関係なく必ず暗号化したい"]:::req
+    Q{"暗号化を人手の運用に頼るか<br/>仕組みで強制するか?"}:::judge
+    DEF["EC2 のアカウント設定で<br/>「EBS デフォルト暗号化」を有効にする"]:::best
+    AUTO["新規のボリューム・スナップショットが<br/>指定した KMS キーで自動的に暗号化される"]:::best
+    BLOCK["暗号化なしでの作成ができなくなる"]:::best
+    REGION["リージョンごとの設定<br/>(使うリージョンそれぞれで有効にする)"]:::note
+    S3DEF["S3 のデフォルト暗号化を有効にする<br/>対象が EBS ではない"]:::alt
+
+    subgraph NG["人為ミスを防げない案(事前の周知・事後の確認)"]
+        DOC["作成手順書に暗号化を明記する"]:::alt
+        CHECK["毎週手動で暗号化状況を確認する"]:::alt
+    end
+
+    REQ --> Q
+    Q -->|"仕組みで強制"| DEF
+    DEF --> AUTO
+    AUTO --> BLOCK
+    DEF -.- REGION
+    Q -.->|"人手に依存"| NG
+    Q -.->|"対象違い"| S3DEF
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec33.svg`](../../web/diagrams/sec33.svg)
+
+**解説**: EC2 のアカウント設定で「EBS デフォルト暗号化」を有効にすると、そのリージョンで新規作成されるボリューム・スナップショットが指定した KMS キーで自動的に暗号化され、暗号化なしでの作成ができなくなります。手順書や事後チェックに頼る方法は人為ミスを防げません。リージョンごとの設定である点に注意します。
+
+**確認事項**: 「S3 のデフォルト暗号化」は外した理由が他 2 案(人為ミスを防げない)と違うため、グループに入れず単独で置いている。既存ボリュームの扱い(この設定は新規作成分に効く)は解説の範囲を超えるので図に入れていない。
+
+---
+
+## sec34 — セキュリティ・IAM / level 3
+
+**問題**: アカウント A の IAM ロールから、アカウント B の S3 バケット(SSE-KMS で暗号化、キーはアカウント B のカスタマーマネージドキー)のオブジェクトを読みたい。バケットポリシーでアカウント A のロールに s3:GetObject を許可したが AccessDenied になる。追加で必要な設定はどれか?
+
+**正解**: アカウント B の KMS キーポリシーでアカウント A のロールに kms:Decrypt を許可し、アカウント A 側の IAM ポリシーでも該当キー ARN への kms:Decrypt を許可する
+
+**他の選択肢**: アカウント A のロールの信頼ポリシーにアカウント B を追加する / バケットのブロックパブリックアクセスを無効化する / アカウント B のバケットで S3 バケットキーを有効化する
+
+**図解の主メッセージ**: SSE-KMS のオブジェクトを読むには S3 の許可に加えて、リソース側(キーポリシー)と呼び出し側(IAM ポリシー)の双方で kms:Decrypt が要る。
+
+**採用パターン**: 合流(2 つの許可が両方そろって成功)。直列の関門型でも「S3 の先に KMS がある」ことは示せるが、この設問の核心はキーポリシーと IAM ポリシーの『双方が要る』点にある。2 本の矢印が 1 つの成功ノードへ合流する形なら、片方だけでは線がつながらないことが一目で分かる。(候補: 合流(2 つの許可が両方そろって成功): キーポリシーと IAM ポリシーの 2 本を成功ノードへ合流させ、片方では足りないことを形で示す / 直列(リクエストの通過点): リクエストが S3 の許可 → KMS の復号権限と関門を順に通る形で描き、2 つ目の関門で止まっていることを示す)
+
+```mermaid
+flowchart TB
+    NOW["アカウント A のロールから<br/>アカウント B の S3(SSE-KMS)を読みたい<br/>バケットポリシーで s3:GetObject は許可済み"]:::req
+    DENY["それでも AccessDenied になる"]:::req
+    Q{"暗号化されたオブジェクトを<br/>復号する権限はあるか?"}:::judge
+    KEYPOL["リソース側<br/>アカウント B の KMS キーポリシーで<br/>アカウント A のロールに kms:Decrypt を許可"]:::best
+    IAMPOL["呼び出し側<br/>アカウント A の IAM ポリシーでも<br/>該当キー ARN への kms:Decrypt を許可"]:::best
+    OK["双方そろって復号でき<br/>読み取りが成功する"]:::best
+    NOTE["KMS の原則: クロスアカウントでは<br/>リソース側と呼び出し側の双方の許可が要る"]:::note
+
+    subgraph NG["復号権限の問題を解決しない案"]
+        TRUST["ロールの信頼ポリシーに<br/>アカウント B を追加する<br/>(AssumeRole の話)"]:::alt
+        BPA["ブロックパブリックアクセスを無効化する"]:::alt
+        BK["S3 バケットキーを有効化する"]:::alt
+    end
+
+    NOW --> DENY
+    DENY --> Q
+    Q -->|"足りない"| KEYPOL
+    Q -->|"足りない"| IAMPOL
+    KEYPOL --> OK
+    IAMPOL --> OK
+    Q -.->|"解決しない"| NG
+    OK -.- NOTE
+    classDef req fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#0d2b45
+    classDef judge fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2b45
+    classDef best fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#12331a
+    classDef alt fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,color:#3c3c3c
+    classDef svc fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#22303a
+    classDef note fill:#fffde7,stroke:#c0a03c,stroke-width:1px,color:#43380d
+```
+
+アプリ表示用の SVG: [`web/diagrams/sec34.svg`](../../web/diagrams/sec34.svg)
+
+**解説**: SSE-KMS のオブジェクトを読むには S3 の権限に加えて KMS キーへの復号権限が必要です。クロスアカウントでは「リソース側(キーポリシー)」と「呼び出し側(IAM ポリシー)」の双方で許可が必要という KMS の原則が効きます。信頼ポリシーは AssumeRole の話で今回は関係なく、ブロックパブリックアクセスやバケットキーは復号権限の問題を解決しません。
+
+**確認事項**: 「片方だけでは足りない」ことは 2 本の合流という形で表しており、線のラベルには書いていない(エッジラベルは 10 文字程度までという本リポジトリの制約による)。誤読が出るようなら注釈ノードを 1 つ足す。

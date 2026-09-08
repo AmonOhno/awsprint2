@@ -1,0 +1,134 @@
+{
+  "question_id": "sec26",
+  "purpose": "ルートユーザーの扱いが「ルートでしかできない作業かどうか」で決まり、それ以外はすべて IAM 側へ寄せるという一本の線で説明できることを示す。",
+  "audience": "AWS 認定(CLF/SAA レベル)を学習中で、ルートユーザーを「最初に作る管理者アカウント」と捉えたままの人。",
+  "message": "ルートユーザーは権限を制限できない全権限なので、MFA で保護してルート限定の作業だけに使い、日常運用は最小権限の IAM 側で行う。",
+  "source_summary": "ルートユーザーのベストプラクティスを問う問題。正解は「MFA を有効化し、日常作業には使わず、アクセスキーは作成しない」。ルートユーザーは全権限を持ち制限もほぼ不可能なため、ハードウェア MFA 等で保護した上で、アカウント設定変更などルートでしかできない作業に限定する。アクセスキーは作成しない(あれば削除する)。日常運用は最小権限の IAM ロール/Identity Center 経由で行う。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "ルートユーザーは全権限を持ち、権限の制限もほぼできない",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "ルートユーザーでしかできない作業か?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ROOT",
+      "label": "ハードウェア MFA 等で保護したルートユーザーで実施する(アカウント設定の変更など)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "NOKEY",
+      "label": "ルートのアクセスキーは作成しない(あれば削除する)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "DAILY",
+      "label": "最小権限の IAM ロール / IAM Identity Center 経由で行う",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "USE",
+      "label": "日常の管理作業にルートユーザーを使う",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SHARE",
+      "label": "アクセスキーを発行してチームで共有する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "SEAL",
+      "label": "パスワードを無効化して封印する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "ROOT",
+      "verb": "ルート限定なので使う",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "DAILY",
+      "verb": "それ以外は IAM 側で行う",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ROOT",
+      "to": "NOKEY",
+      "verb": "使う場合も守る原則",
+      "direction": "none",
+      "kind": "annotation"
+    },
+    {
+      "from": "Q",
+      "to": "USE",
+      "verb": "全権限を日常的に露出させる",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SHARE",
+      "verb": "そもそもキーを作らない原則に反する",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "SEAL",
+      "verb": "ルート限定の作業が残るため封印しきれない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "採らない案(ルート運用の原則から外れる)",
+      "members": [
+        "USE",
+        "SHARE",
+        "SEAL"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「ルートでしかできない作業か」の 1 問で、MFA 保護したルートと最小権限の IAM 運用に振り分ける",
+    "対比(2 列): 左に「ルートでやること」、右に「ルートでやらないこと」を並べて置く"
+  ],
+  "selected_pattern": "分岐(判断フロー)。対比 2 列は網羅的に見えるが「何を基準に左右へ分けたのか」が図に残らない。作業のたびに自分へ問う 1 問を頂点に置くほうが、試験でも実務でも同じ順序でたどれる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "「パスワードを無効化して封印する」が不適な理由は、解説の『ルートでしかできない作業に限定する』(=ルートを使う場面は残る)からの導出として書いている。ルート認証情報の運用そのものを問う問題を追加する場合は、根拠を解説側に明記したい。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"ルートユーザーは全権限を持ち<br/>権限の制限もほぼできない\"]:::req\n    Q{\"ルートユーザーでしか<br/>できない作業か?\"}:::judge\n    ROOT[\"ハードウェア MFA 等で保護した<br/>ルートユーザーで実施する<br/>(アカウント設定の変更など)\"]:::best\n    NOKEY[\"ルートのアクセスキーは作成しない<br/>(あれば削除する)\"]:::best\n    DAILY[\"最小権限の IAM ロール /<br/>IAM Identity Center 経由で行う\"]:::best\n\n    subgraph NG[\"採らない案(ルート運用の原則から外れる)\"]\n        USE[\"日常の管理作業にルートユーザーを使う\"]:::alt\n        SHARE[\"アクセスキーを発行してチームで共有する\"]:::alt\n        SEAL[\"パスワードを無効化して封印する<br/>ルート限定の作業が残るため封印しきれない\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"はい\"| ROOT\n    Q -->|\"いいえ\"| DAILY\n    ROOT -.- NOKEY\n    Q -.->|\"採らない\"| NG"
+}

@@ -1,0 +1,147 @@
+{
+  "question_id": "sec30",
+  "purpose": "監査で求められた証明が責任共有モデルのどちら側のものかを見分けると、入手先が Artifact に決まることを 1 枚で示す。",
+  "audience": "AWS 認定(CLF/SAA レベル)を学習中で、責任共有モデルは知っているが監査対応の実務での使い分けに落とせていない人。",
+  "message": "求められているのが AWS 自体(クラウド側)のコンプライアンス認証レポートなら、AWS Artifact からセルフサービスでダウンロードする。",
+  "source_summary": "監査人から SOC 2 や ISO 27001 など、AWS 自体のコンプライアンス認証レポートの提出を求められた場合の入手先を問う問題。正解は AWS Artifact。AWS の各種コンプライアンスレポート(SOC・ISO・PCI DSS など)をセルフサービスでダウンロードできる無料ポータル。責任共有モデルにおける「AWS 側(クラウド自体)のセキュリティ」の証明書類はここから取得し、自社側の統制の証明と組み合わせて監査に対応する。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "監査人から SOC 2 / ISO 27001 など AWS 自体のコンプライアンス認証レポートを求められた",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "求められているのは責任共有モデルの AWS 側(クラウド自体)の証明か?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "ART",
+      "label": "AWS Artifact(無料のセルフサービスポータル)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "DL",
+      "label": "SOC・ISO・PCI DSS などのレポートをダウンロードする",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "OWN",
+      "label": "自社側の統制の証明(利用者の責任範囲)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "AUDIT",
+      "label": "監査への対応",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "SUP",
+      "label": "AWS サポートに個別依頼する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "CFG",
+      "label": "AWS Config のダッシュボード",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "TA",
+      "label": "Trusted Advisor のレポート",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "ART",
+      "verb": "AWS 側の証明なので選ぶ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ART",
+      "to": "DL",
+      "verb": "自分でダウンロードする",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "DL",
+      "to": "AUDIT",
+      "verb": "AWS 側の証明として提出する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "OWN",
+      "to": "AUDIT",
+      "verb": "自社側の証明として組み合わせる",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "SUP",
+      "verb": "個別依頼は不要(セルフサービスで取得できる)",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "CFG",
+      "verb": "AWS 自体の認証レポートは置かれていない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "TA",
+      "verb": "AWS 自体の認証レポートは置かれていない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "AWS 自体の認証レポートの入手先ではない選択肢",
+      "members": [
+        "SUP",
+        "CFG",
+        "TA"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー)+ 合流: 「AWS 側の証明か」の 1 問で Artifact を選び、自社側の証明と合流して監査対応になる形で描く",
+    "レイヤー(責任共有モデル): 上段に AWS 側のセキュリティ、下段に利用者側の統制を層で並べ、それぞれの証明の出どころを添える"
+  ],
+  "selected_pattern": "分岐(判断フロー)+ 合流。レイヤー図は責任共有モデルそのものの説明には向くが、この設問の答えは『どこから入手するか』なので、判断 1 問から入手までをたどれる形を採った。責任共有モデルの構図は、Artifact 側と自社側の 2 本が監査対応に合流する形で残している。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス・利用者側の構成要素、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "自社側の統制の証明は、解説が具体的な手段に触れていないため 1 ノード(利用者の責任範囲)にとどめている。自社側の証明手段を問う問題を追加する場合は、そこを展開した別図が要る。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"監査人から SOC 2 / ISO 27001 など<br/>AWS 自体のコンプライアンス認証レポートを<br/>求められた\"]:::req\n    Q{\"求められているのは<br/>責任共有モデルの<br/>AWS 側(クラウド自体)の証明か?\"}:::judge\n    ART[\"AWS Artifact<br/>無料のセルフサービスポータル\"]:::best\n    DL[\"SOC・ISO・PCI DSS などの<br/>レポートをダウンロードする\"]:::best\n    OWN[\"自社側の統制の証明<br/>(利用者の責任範囲)\"]:::svc\n    AUDIT[\"監査への対応\"]:::best\n\n    subgraph NG[\"AWS 自体の認証レポートの入手先ではない選択肢\"]\n        SUP[\"AWS サポートに個別依頼する\"]:::alt\n        CFG[\"AWS Config のダッシュボード\"]:::alt\n        TA[\"Trusted Advisor のレポート\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"AWS 側\"| ART\n    ART --> DL\n    DL -->|\"提出\"| AUDIT\n    OWN -->|\"組み合わせ\"| AUDIT\n    Q -.->|\"違う\"| NG"
+}

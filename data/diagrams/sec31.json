@@ -1,0 +1,161 @@
+{
+  "question_id": "sec31",
+  "purpose": "SAML フェデレーションで「認証は既存 IdP、AWS の権限は一時ロール」と分かれること、その変換点が STS であることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、ID フェデレーションの登場人物(IdP・STS・IAM ロール)のつながりが追えていない人。",
+  "message": "社内 IdP の SAML アサーションを AWS の権限に変換するのは STS の AssumeRoleWithSAML であり、そこを通すから IAM ユーザーを作らずに済む。",
+  "source_summary": "社内の SAML 2.0 対応 IdP で認証された社員に、IAM ユーザーを作らず AWS リソースへの一時的なアクセスを許可したい。正解は AWS STS(AssumeRoleWithSAML)。IdP が発行した SAML アサーションを STS の AssumeRoleWithSAML に渡し、IAM ロールに紐づく一時認証情報(最大 12 時間)を取得する。IAM ユーザーの発行・管理が不要になり、認証は既存 IdP に集約される。Web/モバイルの一般ユーザー向けには Cognito を使う、という対比も押さえる。",
+  "elements": [
+    {
+      "id": "EMP",
+      "label": "社員(IAM ユーザーは作らない)",
+      "type": "actor",
+      "priority": "primary"
+    },
+    {
+      "id": "IDP",
+      "label": "社内の SAML 2.0 対応 IdP",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "ASSERT",
+      "label": "SAML アサーション",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "STS",
+      "label": "AWS STS(AssumeRoleWithSAML)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "TEMP",
+      "label": "IAM ロールに紐づく一時認証情報(最大 12 時間)",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "RES",
+      "label": "AWS リソース",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "NOTE",
+      "label": "IAM ユーザーの発行・管理が不要になり、認証は既存 IdP に集約される",
+      "type": "concept",
+      "priority": "support"
+    },
+    {
+      "id": "COG",
+      "label": "Amazon Cognito ユーザープール(Web/モバイルの一般ユーザー向け)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "KMS",
+      "label": "AWS KMS",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "DX",
+      "label": "AWS Direct Connect",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "EMP",
+      "to": "IDP",
+      "verb": "既存の社内 IdP で認証する",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "IDP",
+      "to": "ASSERT",
+      "verb": "認証結果を発行する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "ASSERT",
+      "to": "STS",
+      "verb": "AssumeRoleWithSAML に渡す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "STS",
+      "to": "TEMP",
+      "verb": "一時認証情報を払い出す",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "TEMP",
+      "to": "RES",
+      "verb": "ロールの権限でアクセスする",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "STS",
+      "to": "NOTE",
+      "verb": "この連携で得られることを補足する",
+      "direction": "none",
+      "kind": "annotation"
+    },
+    {
+      "from": "EMP",
+      "to": "COG",
+      "verb": "対象が違う(Web/モバイルの一般ユーザー向け)",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "EMP",
+      "to": "KMS",
+      "verb": "認証連携を担うサービスではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "EMP",
+      "to": "DX",
+      "verb": "認証連携を担うサービスではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "この SAML 連携の中心にはならない選択肢",
+      "members": [
+        "COG",
+        "KMS",
+        "DX"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "直列(認証情報の受け渡し): 社員 → IdP → SAML アサーション → STS → 一時認証情報 → AWS リソース の一本道で、変換点が STS であることを位置で示す",
+    "分岐(判断フロー): 「認証する相手は社内の社員か、アプリの一般ユーザーか」の 1 問で STS と Cognito に振り分ける"
+  ],
+  "selected_pattern": "直列(認証情報の受け渡し)。この設問は「連携の中心はどれか」を問うており、答えは受け渡しの列のどこに STS が立つかで決まる。分岐にすると STS が『選ばれた箱』になるだけで、SAML アサーションが一時認証情報に変わる場所という肝心の位置関係が消える。他の 3 案は列の外にグループでまとめた。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提(認証される社員)、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス・社内システム、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=認証情報の受け渡しの主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "判断ポイント(菱形)を置かない構成にしている。判断軸は『認証は既存 IdP・AWS の権限は一時ロール』という受け渡しの位置そのもので表しているが、他の図と読み口が変わる点は要検討。",
+    "IAM ロール側の信頼ポリシー(IdP を信頼する設定)は解説に記述がないため図に入れていない。"
+  ],
+  "mermaid": "flowchart TB\n    EMP[\"社員<br/>(IAM ユーザーは作らない)\"]:::req\n    IDP[\"社内の SAML 2.0 対応 IdP\"]:::svc\n    ASSERT[\"SAML アサーション\"]:::best\n    STS[\"AWS STS<br/>AssumeRoleWithSAML\"]:::best\n    TEMP[\"IAM ロールに紐づく一時認証情報<br/>(最大 12 時間)\"]:::best\n    RES[\"AWS リソース\"]:::svc\n    NOTE[\"IAM ユーザーの発行・管理が不要になり<br/>認証は既存 IdP に集約される\"]:::note\n\n    subgraph NG[\"この SAML 連携の中心にはならない選択肢\"]\n        COG[\"Amazon Cognito ユーザープール<br/>Web/モバイルの一般ユーザー向け\"]:::alt\n        KMS[\"AWS KMS\"]:::alt\n        DX[\"AWS Direct Connect\"]:::alt\n    end\n\n    EMP -->|\"認証\"| IDP\n    IDP -->|\"発行\"| ASSERT\n    ASSERT -->|\"渡す\"| STS\n    STS -->|\"払い出す\"| TEMP\n    TEMP -->|\"アクセス\"| RES\n    STS -.- NOTE\n    EMP -.->|\"対象が違う\"| NG"
+}

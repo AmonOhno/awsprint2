@@ -1,0 +1,147 @@
+{
+  "question_id": "sec29",
+  "purpose": "「AWS のベストプラクティスと照らし合わせて推奨がほしい」という要件が Trusted Advisor を指すこと、そしてサポートプランという前提条件が付くことを 1 枚で示す。",
+  "audience": "AWS 認定(CLF/SAA レベル)を学習中で、アカウントを点検してくれる各サービスの守備範囲を区別したい人。",
+  "message": "自分で基準を書かずに AWS のベストプラクティスとの照合と推奨がほしいなら Trusted Advisor を使う(全チェック項目はビジネス/エンタープライズサポート前提)。",
+  "source_summary": "コスト最適化・セキュリティ・耐障害性・サービスクォータなどの観点で、アカウントの状況を AWS のベストプラクティスと照らし合わせてチェック・推奨してくれるサービスを問う問題。正解は AWS Trusted Advisor。「コスト最適化・パフォーマンス・セキュリティ・耐障害性・サービス制限」等の観点でアカウントを自動チェックし、開放されたセキュリティグループや低使用率の EC2 などを指摘する。全チェック項目の利用にはビジネス/エンタープライズサポートプランが必要という条件も頻出。",
+  "elements": [
+    {
+      "id": "REQ",
+      "label": "コスト最適化・セキュリティ・耐障害性・サービスクォータの観点でアカウントの状況を点検し、推奨がほしい",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "基準は AWS のベストプラクティス側が持っているか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "TA",
+      "label": "AWS Trusted Advisor",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "AXIS",
+      "label": "コスト最適化・パフォーマンス・セキュリティ・耐障害性・サービス制限の観点で自動チェック",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "FIND",
+      "label": "開放されたセキュリティグループ、低使用率の EC2 などを指摘",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "PLAN",
+      "label": "全チェック項目の利用にはビジネス/エンタープライズサポートプランが必要",
+      "type": "concept",
+      "priority": "support"
+    },
+    {
+      "id": "CFG",
+      "label": "AWS Config",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "INS",
+      "label": "Amazon Inspector",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "HEALTH",
+      "label": "AWS Health Dashboard",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "REQ",
+      "to": "Q",
+      "verb": "まず問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "TA",
+      "verb": "AWS 側が基準を持つので選ぶ",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "TA",
+      "to": "AXIS",
+      "verb": "5 観点で自動チェックする",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "AXIS",
+      "to": "FIND",
+      "verb": "改善点を指摘する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "TA",
+      "to": "PLAN",
+      "verb": "利用の前提条件を補足する",
+      "direction": "none",
+      "kind": "annotation"
+    },
+    {
+      "from": "Q",
+      "to": "CFG",
+      "verb": "ベストプラクティスとの照合・推奨が役割ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "INS",
+      "verb": "ベストプラクティスとの照合・推奨が役割ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "HEALTH",
+      "verb": "ベストプラクティスとの照合・推奨が役割ではない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "AWS のベストプラクティスとの照合・推奨が役割ではない選択肢",
+      "members": [
+        "CFG",
+        "INS",
+        "HEALTH"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "分岐(判断フロー): 「基準を持つのは AWS 側か自社側か」の 1 問で Trusted Advisor と他 3 案に振り分け、5 観点と指摘例を続ける",
+    "中心放射(観点の展開): Trusted Advisor を中心に、コスト最適化・パフォーマンス・セキュリティ・耐障害性・サービス制限の 5 観点を放射状に並べる"
+  ],
+  "selected_pattern": "分岐(判断フロー)。中心放射は観点の一覧としては読みやすいが、この設問で問われているのは「なぜ他の 3 つではなく Trusted Advisor か」なので、判断軸(基準を持つのが AWS 側か)を頂点に置いた。5 観点は 1 ノードにまとめて図の要素数を抑えた。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが要件を満たさない選択肢、矩形(白)=AWSサービス、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "他 3 案は解説で役割が説明されていないため、ノードには名前だけを書いている。Config(自社基準の評価)や Health Dashboard(AWS 側の障害情報)との対比を問う問題を追加する場合は、それぞれの図で扱う。"
+  ],
+  "mermaid": "flowchart TB\n    REQ[\"コスト最適化・セキュリティ・耐障害性・<br/>サービスクォータの観点でアカウントを点検し<br/>推奨がほしい\"]:::req\n    Q{\"基準は AWS の<br/>ベストプラクティス側が<br/>持っているか?\"}:::judge\n    TA[\"AWS Trusted Advisor\"]:::best\n    AXIS[\"コスト最適化・パフォーマンス・セキュリティ・<br/>耐障害性・サービス制限の観点で自動チェック\"]:::best\n    FIND[\"開放されたセキュリティグループ、<br/>低使用率の EC2 などを指摘\"]:::best\n    PLAN[\"全チェック項目の利用には<br/>ビジネス/エンタープライズサポートプランが必要\"]:::note\n\n    subgraph NG[\"AWS のベストプラクティスとの照合・推奨が役割ではない選択肢\"]\n        CFG[\"AWS Config\"]:::alt\n        INS[\"Amazon Inspector\"]:::alt\n        HEALTH[\"AWS Health Dashboard\"]:::alt\n    end\n\n    REQ --> Q\n    Q -->|\"AWS 側\"| TA\n    TA --> AXIS\n    AXIS -->|\"指摘\"| FIND\n    TA -.- PLAN\n    Q -.->|\"違う\"| NG"
+}

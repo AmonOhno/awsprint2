@@ -1,0 +1,167 @@
+{
+  "question_id": "sec34",
+  "purpose": "SSE-KMS のクロスアカウント読み取りが「S3 の許可」と「KMS の復号許可(しかも両側)」の重ね合わせで決まることを 1 枚で示す。",
+  "audience": "AWS 認定(SAA レベル)を学習中で、S3 の権限は追えるが KMS の許可が別枠で要ることを見落としがちな人。",
+  "message": "SSE-KMS のオブジェクトを読むには S3 の許可に加えて、リソース側(キーポリシー)と呼び出し側(IAM ポリシー)の双方で kms:Decrypt が要る。",
+  "source_summary": "アカウント A の IAM ロールから、アカウント B の S3 バケット(SSE-KMS・キーはアカウント B のカスタマーマネージドキー)のオブジェクトを読みたい。バケットポリシーでアカウント A のロールに s3:GetObject を許可したが AccessDenied になる。正解は、アカウント B の KMS キーポリシーでアカウント A のロールに kms:Decrypt を許可し、アカウント A 側の IAM ポリシーでも該当キー ARN への kms:Decrypt を許可すること。クロスアカウントでは「リソース側(キーポリシー)」と「呼び出し側(IAM ポリシー)」の双方で許可が必要という KMS の原則が効く。信頼ポリシーは AssumeRole の話で今回は関係なく、ブロックパブリックアクセスやバケットキーは復号権限の問題を解決しない。",
+  "elements": [
+    {
+      "id": "NOW",
+      "label": "アカウント A のロールからアカウント B の S3(SSE-KMS)を読みたい。バケットポリシーで s3:GetObject は許可済み",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "DENY",
+      "label": "それでも AccessDenied になる",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "Q",
+      "label": "暗号化されたオブジェクトを復号する権限はあるか?",
+      "type": "process",
+      "priority": "primary"
+    },
+    {
+      "id": "KEYPOL",
+      "label": "リソース側: アカウント B の KMS キーポリシーでアカウント A のロールに kms:Decrypt を許可",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "IAMPOL",
+      "label": "呼び出し側: アカウント A の IAM ポリシーでも該当キー ARN への kms:Decrypt を許可",
+      "type": "artifact",
+      "priority": "primary"
+    },
+    {
+      "id": "OK",
+      "label": "双方そろって復号でき、読み取りが成功する",
+      "type": "state",
+      "priority": "primary"
+    },
+    {
+      "id": "NOTE",
+      "label": "KMS の原則: クロスアカウントではリソース側と呼び出し側の双方の許可が要る",
+      "type": "concept",
+      "priority": "support"
+    },
+    {
+      "id": "TRUST",
+      "label": "ロールの信頼ポリシーにアカウント B を追加する(AssumeRole の話で今回は関係ない)",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "BPA",
+      "label": "バケットのブロックパブリックアクセスを無効化する",
+      "type": "artifact",
+      "priority": "secondary"
+    },
+    {
+      "id": "BK",
+      "label": "S3 バケットキーを有効化する",
+      "type": "artifact",
+      "priority": "secondary"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "NOW",
+      "to": "DENY",
+      "verb": "S3 の許可だけでは通らない",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "DENY",
+      "to": "Q",
+      "verb": "不足している権限を問う",
+      "direction": "one-way",
+      "kind": "sequence"
+    },
+    {
+      "from": "Q",
+      "to": "KEYPOL",
+      "verb": "リソース側で許可する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "Q",
+      "to": "IAMPOL",
+      "verb": "呼び出し側でも許可する",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "KEYPOL",
+      "to": "OK",
+      "verb": "片方だけでは足りない",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "IAMPOL",
+      "to": "OK",
+      "verb": "片方だけでは足りない",
+      "direction": "one-way",
+      "kind": "flow"
+    },
+    {
+      "from": "OK",
+      "to": "NOTE",
+      "verb": "原則を補足する",
+      "direction": "none",
+      "kind": "annotation"
+    },
+    {
+      "from": "Q",
+      "to": "TRUST",
+      "verb": "AssumeRole の設定で復号権限にならない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "BPA",
+      "verb": "復号権限の問題を解決しない",
+      "direction": "one-way",
+      "kind": "contrast"
+    },
+    {
+      "from": "Q",
+      "to": "BK",
+      "verb": "復号権限の問題を解決しない",
+      "direction": "one-way",
+      "kind": "contrast"
+    }
+  ],
+  "groups": [
+    {
+      "id": "NG",
+      "label": "復号権限の問題を解決しない案",
+      "members": [
+        "TRUST",
+        "BPA",
+        "BK"
+      ]
+    }
+  ],
+  "candidate_patterns": [
+    "合流(2 つの許可が両方そろって成功): キーポリシーと IAM ポリシーの 2 本を成功ノードへ合流させ、片方では足りないことを形で示す",
+    "直列(リクエストの通過点): リクエストが S3 の許可 → KMS の復号権限と関門を順に通る形で描き、2 つ目の関門で止まっていることを示す"
+  ],
+  "selected_pattern": "合流(2 つの許可が両方そろって成功)。直列の関門型でも「S3 の先に KMS がある」ことは示せるが、この設問の核心はキーポリシーと IAM ポリシーの『双方が要る』点にある。2 本の矢印が 1 つの成功ノードへ合流する形なら、片方だけでは線がつながらないことが一目で分かる。",
+  "style_rules": {
+    "shape_semantics": "矩形(青)=要件・前提(現状と症状)、菱形(青)=判断ポイント、矩形(緑)=正解につながる構成要素、矩形(グレー)=実在するが問題を解決しない選択肢、矩形(白)=AWSサービス、破線枠(薄字)=注釈。docs/DIAGRAM-WORKFLOW.md 第4節の共通ルールに従う。",
+    "color_semantics": "緑=最適解の経路、グレー=非最適な選択肢、青=判断軸と要件、薄黄=補足注釈。",
+    "line_semantics": "実線矢印=判断の進行・主たる流れ、破線矢印=条件付き/弱い関係、破線の無向線=注釈の接続。",
+    "font_weight_rules": "太さは2種まで。主メッセージを担うノードのみ枠線を太くし、他は標準。"
+  },
+  "open_questions": [
+    "「片方だけでは足りない」ことは 2 本の合流という形で表しており、線のラベルには書いていない(エッジラベルは 10 文字程度までという本リポジトリの制約による)。誤読が出るようなら注釈ノードを 1 つ足す。"
+  ],
+  "mermaid": "flowchart TB\n    NOW[\"アカウント A のロールから<br/>アカウント B の S3(SSE-KMS)を読みたい<br/>バケットポリシーで s3:GetObject は許可済み\"]:::req\n    DENY[\"それでも AccessDenied になる\"]:::req\n    Q{\"暗号化されたオブジェクトを<br/>復号する権限はあるか?\"}:::judge\n    KEYPOL[\"リソース側<br/>アカウント B の KMS キーポリシーで<br/>アカウント A のロールに kms:Decrypt を許可\"]:::best\n    IAMPOL[\"呼び出し側<br/>アカウント A の IAM ポリシーでも<br/>該当キー ARN への kms:Decrypt を許可\"]:::best\n    OK[\"双方そろって復号でき<br/>読み取りが成功する\"]:::best\n    NOTE[\"KMS の原則: クロスアカウントでは<br/>リソース側と呼び出し側の双方の許可が要る\"]:::note\n\n    subgraph NG[\"復号権限の問題を解決しない案\"]\n        TRUST[\"ロールの信頼ポリシーに<br/>アカウント B を追加する<br/>(AssumeRole の話)\"]:::alt\n        BPA[\"ブロックパブリックアクセスを無効化する\"]:::alt\n        BK[\"S3 バケットキーを有効化する\"]:::alt\n    end\n\n    NOW --> DENY\n    DENY --> Q\n    Q -->|\"足りない\"| KEYPOL\n    Q -->|\"足りない\"| IAMPOL\n    KEYPOL --> OK\n    IAMPOL --> OK\n    Q -.->|\"解決しない\"| NG\n    OK -.- NOTE"
+}
