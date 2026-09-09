@@ -47,6 +47,7 @@
         <button class="action" id="btn-review">🔁 弱点復習 <span class="pill" id="review-count">0</span></button>
         <button class="action" id="btn-diagram-quiz">🗺 図解つき問題 <span class="pill" id="diagram-count">0</span></button>
         <button class="action" id="btn-flash">🃏 フラッシュカード</button>
+        <button class="action" id="btn-guide">📘 試験ガイド</button>
         <button class="action danger-ghost" id="btn-reset">進捗リセット</button>
       </div>
 
@@ -126,12 +127,45 @@
         </div>
       </div>
     </section>
+    <!-- 試験ガイド画面 -->
+    <section id="view-guide" class="view" hidden>
+      <div class="guide-head">
+        <div>
+          <span class="badge" id="guide-code"></span>
+          <h1 class="guide-title" id="guide-title"></h1>
+        </div>
+      </div>
+      <p class="guide-note" id="guide-note"></p>
+      <div class="guide-facts" id="guide-facts"></div>
+      <p class="guide-hint">💡 <span class="term-inline">オレンジの下線つき用語</span>をタップ / クリックすると説明が開きます。</p>
+      <nav class="guide-toc" id="guide-toc" aria-label="目次"></nav>
+      <div class="guide-body" id="guide-body"></div>
+      <div class="quiz-foot">
+        <button class="ghost" id="btn-guide-home">← ホームへ戻る</button>
+        <a class="action" id="guide-source" target="_blank" rel="noopener">AWS 公式ガイドを開く ↗</a>
+      </div>
+    </section>
   </main>
+
+  <!-- 用語説明ダイアログ(クリック/タップで開く) -->
+  <dialog id="term-dialog" class="term-dialog">
+    <div class="term-dialog-inner">
+      <div class="term-dialog-head">
+        <div>
+          <h3 id="term-dialog-title"></h3>
+          <p class="term-dialog-reading" id="term-dialog-reading"></p>
+        </div>
+        <button class="term-dialog-close" id="term-dialog-close" aria-label="閉じる">✕</button>
+      </div>
+      <p class="term-dialog-desc" id="term-dialog-desc"></p>
+    </div>
+  </dialog>
 
   <footer class="foot">ゼロコスト静的アプリ — データはこの端末の localStorage にのみ保存されます</footer>
 
   <script src="data/questions.js"></script>
   <script src="data/diagrams.js"></script>
+  <script src="data/exam-guide.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
