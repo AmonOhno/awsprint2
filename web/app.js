@@ -60,7 +60,7 @@
   }
 
   // ---- ビュー切り替え ---------------------------------------------------
-  const views = ["home", "quiz", "result", "flash"];
+  const views = ["home", "quiz", "result", "flash", "guide"];
   function show(name) {
     views.forEach((v) => {
       document.getElementById(`view-${v}`).hidden = v !== name;
@@ -245,6 +245,194 @@
     renderFlash();
   }
 
+  // ---- 試験ガイド閲覧 ---------------------------------------------------
+  // window.EXAM_GUIDE(data/exam-guide.js)を読み、覚えるべき用語をタップ可能にする。
+  const GUIDE = window.EXAM_GUIDE || null;
+  const GLOSSARY = (GUIDE && GUIDE.glossary) || {};
+
+  // 本文の [[termId|表示テキスト]] を、クリックで説明が開くチップに変換して container へ追加する。
+  // 未知の用語IDはそのまま文字として表示し、壊れないようにする(データ入力ミスに強く)。
+  function appendRichText(container, text) {
+    const re = /\[\[([^\]]+)\]\]/g;
+    let last = 0, m;
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > last) container.appendChild(document.createTextNode(text.slice(last, m.index)));
+      const [id, label] = m[1].split("|");
+      const entry = GLOSSARY[id];
+      if (entry) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "term";
+        btn.textContent = label || entry.term;
+        btn.setAttribute("aria-label", `${label || entry.term} の説明を開く`);
+        btn.addEventListener("click", () => openTermDialog(id));
+        container.appendChild(btn);
+      } else {
+        container.appendChild(document.createTextNode(label || id));
+      }
+      last = re.lastIndex;
+    }
+    if (last < text.length) container.appendChild(document.createTextNode(text.slice(last)));
+  }
+
+  // 用語説明ダイアログ。<dialog> のネイティブ機能(Esc・フォーカス管理)を活用する。
+  const termDialog = $("term-dialog");
+  function openTermDialog(id) {
+    const entry = GLOSSARY[id];
+    if (!entry) return;
+    $("term-dialog-title").textContent = entry.term;
+    const reading = $("term-dialog-reading");
+    reading.textContent = entry.reading || "";
+    reading.hidden = !entry.reading;
+    $("term-dialog-desc").textContent = entry.desc;
+    if (typeof termDialog.showModal === "function") termDialog.showModal();
+    else termDialog.setAttribute("open", ""); // 古い環境向けフォールバック
+  }
+  function closeTermDialog() {
+    if (typeof termDialog.close === "function") termDialog.close();
+    else termDialog.removeAttribute("open");
+  }
+
+  let guideRendered = false;
+  function renderGuide() {
+    if (!GUIDE) return;
+    if (!guideRendered) {
+      buildGuide();
+      guideRendered = true;
+    }
+    show("guide");
+  }
+
+  function buildGuide() {
+    const { meta, sections } = GUIDE;
+    $("guide-code").textContent = meta.code;
+    $("guide-title").textContent = meta.title;
+    $("guide-note").textContent = meta.updatedNote;
+    const src = $("guide-source");
+    src.href = meta.sourceUrl;
+
+    const facts = $("guide-facts");
+    facts.innerHTML = "";
+    meta.facts.forEach((f) => {
+      const el = document.createElement("div");
+      el.className = "fact";
+      el.innerHTML = `<div class="fact-label"></div><div class="fact-value"></div>`;
+      el.querySelector(".fact-label").textContent = f.label;
+      el.querySelector(".fact-value").textContent = f.value;
+      facts.appendChild(el);
+    });
+
+    const toc = $("guide-toc");
+    const body = $("guide-body");
+    toc.innerHTML = "";
+    body.innerHTML = "";
+
+    sections.forEach((sec) => {
+      const link = document.createElement("a");
+      link.className = "toc-link";
+      link.href = `#guide-${sec.id}`;
+      link.textContent = sec.title;
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        document.getElementById(`guide-${sec.id}`).scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      toc.appendChild(link);
+
+      const secEl = document.createElement("section");
+      secEl.className = "guide-section";
+      secEl.id = `guide-${sec.id}`;
+      const h = document.createElement("h2");
+      h.textContent = sec.title;
+      secEl.appendChild(h);
+      sec.blocks.forEach((b) => secEl.appendChild(renderBlock(b)));
+      body.appendChild(secEl);
+    });
+  }
+
+  function renderBlock(b) {
+    if (b.type === "p") {
+      const p = document.createElement("p");
+      p.className = "guide-p";
+      appendRichText(p, b.text);
+      return p;
+    }
+    if (b.type === "ul") {
+      const ul = document.createElement("ul");
+      ul.className = "guide-ul";
+      b.items.forEach((it) => {
+        const li = document.createElement("li");
+        appendRichText(li, it);
+        ul.appendChild(li);
+      });
+      return ul;
+    }
+    if (b.type === "domain") {
+      const card = document.createElement("div");
+      card.className = "domain-card";
+      const head = document.createElement("div");
+      head.className = "domain-head";
+      const title = document.createElement("div");
+      title.className = "domain-title";
+      title.textContent = `分野 ${b.num}: ${b.title}`;
+      const weight = document.createElement("span");
+      weight.className = "domain-weight";
+      weight.textContent = `${b.weight}%`;
+      head.appendChild(title);
+      head.appendChild(weight);
+      card.appendChild(head);
+
+      const bar = document.createElement("div");
+      bar.className = "domain-bar";
+      const fill = document.createElement("div");
+      fill.className = "domain-bar-fill";
+      fill.style.width = `${b.weight}%`;
+      bar.appendChild(fill);
+      card.appendChild(bar);
+
+      b.tasks.forEach((task) => {
+        const t = document.createElement("div");
+        t.className = "task";
+        const tt = document.createElement("div");
+        tt.className = "task-title";
+        tt.textContent = task.t;
+        const td = document.createElement("div");
+        td.className = "task-detail";
+        appendRichText(td, task.detail);
+        t.appendChild(tt);
+        t.appendChild(td);
+        card.appendChild(t);
+      });
+      return card;
+    }
+    if (b.type === "services") {
+      const wrap = document.createElement("div");
+      wrap.className = "service-groups";
+      b.groups.forEach((g) => {
+        const grp = document.createElement("div");
+        grp.className = "service-group";
+        const name = document.createElement("div");
+        name.className = "service-group-name";
+        name.textContent = g.name;
+        grp.appendChild(name);
+        const chips = document.createElement("div");
+        chips.className = "service-chips";
+        g.terms.forEach((id) => {
+          const entry = GLOSSARY[id];
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "term term-chip";
+          btn.textContent = entry ? entry.term : id;
+          btn.addEventListener("click", () => openTermDialog(id));
+          chips.appendChild(btn);
+        });
+        grp.appendChild(chips);
+        wrap.appendChild(grp);
+      });
+      return wrap;
+    }
+    return document.createElement("div");
+  }
+
   // ---- イベント登録 -----------------------------------------------------
   $("btn-home").addEventListener("click", renderHome);
   $("btn-random").addEventListener("click", () => startQuiz(shuffle(QUESTIONS).slice(0, 10), "ランダム10問"));
@@ -257,6 +445,14 @@
     startQuiz(shuffle(QUESTIONS.filter((q) => DIAGRAM_IDS.has(q.id))), "図解つき問題");
   });
   $("btn-flash").addEventListener("click", startFlash);
+  $("btn-guide").addEventListener("click", renderGuide);
+  $("btn-guide").disabled = !GUIDE;
+  $("btn-guide-home").addEventListener("click", renderHome);
+  // ダイアログ: ✕ ボタン / 背景クリックで閉じる(Esc はネイティブで対応)
+  $("term-dialog-close").addEventListener("click", closeTermDialog);
+  termDialog.addEventListener("click", (e) => {
+    if (e.target === termDialog) closeTermDialog(); // backdrop クリック
+  });
   $("btn-reset").addEventListener("click", () => {
     if (confirm("学習進捗をすべてリセットします。よろしいですか?")) {
       store.reset();
