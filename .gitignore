@@ -11,3 +11,7 @@ ios/AWSStudy.swiftpm/.swiftpm/
 
 # Claude Code のセッション生成物
 .claude/scheduled_tasks.lock
+
+# Playwright(E2E)の実行結果
+test-results/
+playwright-report/

@@ -1,0 +1,57 @@
+name: E2E
+
+# PR の作成・更新時に Web版(web/)のスモーク E2E を実行する。
+# 1件でも失敗すればジョブは失敗(NG)。retries=0 なので、リトライで通る flaky も不合格扱い。
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: e2e (web smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "1"
+      # mermaid-cli(図解ビルド用)が引き込む puppeteer の Chrome ダウンロードは E2E に不要
+      PUPPETEER_SKIP_DOWNLOAD: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      # 単一ソース(data/questions.json)と生成物の食い違いを検出する(docs/RULES.md 第3節)
+      - name: Check generated question data is in sync
+        run: |
+          bash scripts/sync-questions.sh
+          git diff --exit-code -- web/data/questions.js ios/AWSStudy.swiftpm/Resources/questions.json
+
+      - name: Run E2E (no retries)
+        run: npx playwright test --retries=0
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

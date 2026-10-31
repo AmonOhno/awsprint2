@@ -1,11 +1,13 @@
 {
   "name": "awsprint2",
   "private": true,
-  "description": "AWS Study — 図解ビルド用の開発依存のみ。アプリ本体(web/ ios/)は依存ゼロで動作する。",
+  "description": "AWS Study — 開発依存のみ(図解ビルド用 mermaid-cli / E2E 用 Playwright)。アプリ本体(web/ ios/)は依存ゼロで動作する。",
   "scripts": {
-    "build:diagrams": "python3 scripts/build-diagrams.py"
+    "build:diagrams": "python3 scripts/build-diagrams.py",
+    "test:e2e": "playwright test --retries=0"
   },
   "devDependencies": {
-    "@mermaid-js/mermaid-cli": "^11.4.2"
+    "@mermaid-js/mermaid-cli": "^11.4.2",
+    "@playwright/test": "1.63.0"
   }
 }

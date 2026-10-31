@@ -36,6 +36,9 @@ docs/architecture.md        アーキテクチャ図(毎時レビュー対象)
 docs/DIAGRAM-WORKFLOW.md    問題図解の作り方・スキーマ・共通スタイル
 docs/diagrams/README.md     問題図解ギャラリー(自動生成)
 docs/RULES.md               運用規約(ブランチ運用・データ管理・レビュールーチン)
+e2e/                        Web版のスモーク E2E(Playwright)
+playwright.config.mjs       E2E 設定(retries=0・web/ を http.server で配信)
+.github/workflows/          CI(E2E / Claude Code Review)
 docs/archive/               旧計画ドキュメント(2026-07-04 時点の未実装構想)
 ```
 
@@ -62,3 +65,52 @@ python3 scripts/build-diagrams.py  # 検証 → SVG生成 → Web・iOS へ配�
 
 手順とスタイルルールの詳細は [docs/DIAGRAM-WORKFLOW.md](docs/DIAGRAM-WORKFLOW.md)、
 できた図は[図解ギャラリー](docs/diagrams/README.md)で確認できる。
+
+## CI(GitHub Actions)
+
+PR の作成・更新(`opened` / `synchronize` / `reopened` / `ready_for_review`)で次の2つが動く。
+
+| ワークフロー | 内容 | 失敗条件 |
+| --- | --- | --- |
+| [`e2e.yml`](.github/workflows/e2e.yml)(ジョブ名 `e2e (web smoke)`) | 問題データの同期チェック + Web版のスモーク E2E(Playwright / Chromium) | 生成物が単一ソースと食い違う、または E2E が1件でも失敗 |
+| [`claude-code-review.yml`](.github/workflows/claude-code-review.yml) | Claude Code 公式 `code-review` プラグインで PR をレビューし、PR にコメント | (レビュー結果でマージは止めない) |
+
+### E2E
+
+```bash
+npm ci                                   # 初回のみ(PUPPETEER_SKIP_DOWNLOAD=true を付けると mermaid 用 Chrome の取得を省ける)
+npx playwright install chromium          # 初回のみ
+CI=1 npx playwright test --retries=0     # CI と同条件で実行(npm run test:e2e でも可)
+```
+
+- 対象: ホーム / ランダム10問(解答→解説→結果・進捗保存)/ キーボード操作 / 弱点復習 / 間違い直し /
+  図解つき問題(SVG 読み込み)/ フラッシュカード / 試験ガイド(用語ダイアログ)/ 進捗リセット。
+- 「全件パス」を厳密にするため `--retries=0` 固定。リトライで通った flaky も合格扱いにしない。
+  テストのスキップ・無効化(`test.skip` / `test.only` など)で緑にしないこと(CI では `test.only` があると失敗する)。
+- アプリはゼロコスト原則によりサーバー通信を持たないため、モックは不要。代わりに**外部へのリクエストやコンソールエラーが
+  発生したらテスト失敗**にしている。`web/` は Python 標準の `http.server` で配信する(追加サーバー不要)。
+- 失敗時はスクリーンショット・トレース入りのレポートが Actions の Artifacts(`playwright-report`)に残る。
+- **対象外: iOS版**。SwiftUI App Playground(`.swiftpm`)のビルド・UI テストには macOS + Xcode のランナーが必要で、
+  macOS ランナーは Linux の 10 倍の分数を消費する(ゼロコスト原則に反する)うえ、App Playground 形式は
+  `xcodebuild` での UI テスト実行が前提にしにくいため。iOS は従来どおり [docs/RULES.md](docs/RULES.md) 第6節の手動確認とする。
+  図解ビルド(mermaid-cli)も Chrome の取得が必要で E2E とは独立しているため、このワークフローでは実行しない。
+
+### Claude Code Review の初期設定(リポジトリ管理者が1回だけ行う)
+
+1. **Claude GitHub App をインストール**: <https://github.com/apps/claude> からこのリポジトリにインストールする
+   (Claude Code のターミナルで `/install-github-app` を実行しても可)。
+2. **Secrets を登録**: GitHub の Settings → Secrets and variables → Actions → New repository secret で、次の**どちらか一方**を登録する。
+   - `ANTHROPIC_API_KEY` — Anthropic Console で発行した API キー(従量課金)
+   - `CLAUDE_CODE_OAUTH_TOKEN` — Claude Pro / Max プランの場合。ローカルで `claude setup-token` を実行して発行する
+3. Draft PR と fork からの PR ではレビューは動かない(fork には Secrets が渡らないため)。Draft を Ready for review にすると動く。
+
+### E2E を必須チェックにする(ブランチ保護)
+
+1. 一度この PR などで `E2E` ワークフローを実行し、チェック名 `e2e (web smoke)` を GitHub に認識させる。
+2. Settings → Branches → Add branch ruleset(または Branch protection rule)で対象ブランチに `main` を指定。
+3. 「Require status checks to pass」を有効にし、`e2e (web smoke)` を追加する
+   (「Require branches to be up to date before merging」も有効にすると、最新の main で通ったものだけマージできる)。
+4. Claude Code Review はコメント用途のため必須チェックにはしない(API の一時障害でマージが止まるのを避ける)。
+
+> 注: [docs/RULES.md](docs/RULES.md) 第1節のとおり現フェーズは main への直接 push も許可されている。
+> 必須チェックは PR 経由の変更に効くため、直接 push する場合はローカルで E2E を実行してから push すること。

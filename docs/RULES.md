@@ -67,6 +67,8 @@
 ## 6. 変更時の確認事項
 
 - Web: `web/index.html` をブラウザで開き、クイズ1周・弱点復習・フラッシュカードの動作を確認。
+- E2E: `CI=1 npx playwright test --retries=0` で全件パスを確認する(PR では GitHub Actions の `E2E` が同条件で実行)。
+  画面・要素 ID を変えたら `e2e/smoke.spec.mjs` も同じコミットで更新する。テストのスキップ・無効化・リトライで緑にしない。
 - 図解: ホームの「図解つき問題」から出題し、解説の下に図が出ることを Web・iOS 両方で確認。
 - iOS: Xcode で `ios/AWSStudy.swiftpm` を開きシミュレータでビルド確認(Mac 上で可能な場合)。
 - 進捗データのスキーマ(`{attempts, correct, wrongStreak}`)を変更する場合は、Web と iOS の両方を同時に変更し、ストレージキーのバージョン(`awsstudy.progress.v1`)を上げる。
