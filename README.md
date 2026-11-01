@@ -1,5 +1,70 @@
 # AWS Study — ゼロコスト AWS 資格対策アプリ
 
+## アーキテクチャ概要
+
+サーバー・DB・外部 API を持たないゼロコスト構成。`data/` の単一ソースからビルドスクリプトで Web版・iOS版へ配布し、学習進捗は端末内にのみ保存する(C4モデル Level 2: Container 図)。
+
+```mermaid
+flowchart TB
+    learner["👤 <b>学習者</b><br/>[Person]"]
+    maintainer["👤 <b>メンテナ</b><br/>[Person]"]
+
+    subgraph boundary["AWS Study(本システム)"]
+        direction TB
+
+        subgraph sot["単一ソース(data/)"]
+            qjson[("<b>問題データ</b><br/>[Data Store: JSON]<br/>data/questions.json<br/>400問")]
+            briefs[("<b>図解ブリーフ</b><br/>[Data Store: JSON]<br/>data/diagrams/&lt;問題ID&gt;.json<br/>Mermaid 入り")]
+        end
+
+        subgraph build["ビルドツール(scripts/・開発時のみ)"]
+            sync["<b>問題同期スクリプト</b><br/>[Container: Bash]<br/>sync-questions.sh<br/>JSON 検証 + 各アプリへ配布"]
+            dbuild["<b>図解ビルド</b><br/>[Container: Python 3 + mermaid-cli]<br/>build-diagrams.py<br/>検証 → SVG 生成 → 配布 → ギャラリー"]
+        end
+
+        web["<b>Web アプリ</b><br/>[Container: HTML/CSS/Vanilla JS]<br/>web/<br/>クイズ・復習・フラッシュカード・<br/>図解・試験ガイド"]
+        ios["<b>iOS アプリ</b><br/>[Container: SwiftUI App Playground]<br/>ios/AWSStudy.swiftpm/<br/>クイズ・復習・フラッシュカード・図解"]
+
+        ls[("<b>localStorage</b><br/>[Data Store: ブラウザ]<br/>進捗・連続正解数")]
+        ud[("<b>UserDefaults</b><br/>[Data Store: iOS]<br/>進捗・連続正解数")]
+        gallery["<b>図解ギャラリー</b><br/>[Container: Markdown]<br/>docs/diagrams/README.md<br/>(自動生成)"]
+    end
+
+    pages["🌐 <b>GitHub Pages</b><br/>[External System]<br/>(任意・未確認)"]
+
+    maintainer -- "編集" --> qjson
+    maintainer -- "編集" --> briefs
+    qjson --> sync
+    briefs --> dbuild
+    qjson -- "問題文を参照" --> dbuild
+    sync -- "web/data/questions.js" --> web
+    sync -- "Resources/questions.json" --> ios
+    dbuild -- "web/diagrams/*.svg<br/>web/data/diagrams.js" --> web
+    dbuild -- "Resources/diagrams/*.svg<br/>Resources/diagram-index.json" --> ios
+    dbuild -- "生成" --> gallery
+    learner -- "ブラウザで開く<br/>(file:// または HTTPS)" --> web
+    learner -- "iPhone / iPad で起動" --> ios
+    web -- "読み書き" --> ls
+    ios -- "読み書き" --> ud
+    web -. "静的配信" .-> pages
+
+    classDef person fill:#08427b,stroke:#052e56,color:#ffffff
+    classDef container fill:#438dd5,stroke:#2e6295,color:#ffffff
+    classDef store fill:#438dd5,stroke:#2e6295,color:#ffffff
+    classDef tool fill:#85bbf0,stroke:#5d82a8,color:#0b2a4a
+    classDef ext fill:#999999,stroke:#6b6b6b,color:#ffffff
+    class learner,maintainer person
+    class web,ios container
+    class qjson,briefs,ls,ud store
+    class sync,dbuild,gallery tool
+    class pages ext
+    style boundary fill:none,stroke:#1168bd,stroke-dasharray:5 5
+```
+
+System Context / Component 図・データフロー・ディレクトリ構成の詳細は [docs/architecture.md](docs/architecture.md) を参照。
+
+---
+
 AWS 認定(SAA レベル)の勉強用クイズアプリ。**Web版**と**iOS版**の2つを同梱し、サーバー・課金要素なしで動作します。
 
 - 問題: 400問 / 6カテゴリ(コンピューティング・ストレージ・ネットワーク・セキュリティIAM・データベース・サーバーレス運用)、全問に詳しい解説付き
